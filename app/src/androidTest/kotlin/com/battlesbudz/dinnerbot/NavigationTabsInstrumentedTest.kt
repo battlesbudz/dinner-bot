@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -74,7 +75,9 @@ class NavigationTabsInstrumentedTest {
     private fun openTab(tag: String, heading: String) {
         composeRule.onNodeWithTag(tag).performClick()
         waitForText(heading)
-        composeRule.onNodeWithText(heading).assertIsDisplayed()
+        // onFirst: the selected tab's own label can duplicate a short
+        // heading (the Pantry tab label vs the Pantry screen title).
+        composeRule.onAllNodesWithText(heading).onFirst().assertIsDisplayed()
     }
 
     @Test fun everyTabIsReachableAndShowsItsScreen() {

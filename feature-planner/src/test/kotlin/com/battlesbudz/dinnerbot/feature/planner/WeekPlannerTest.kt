@@ -175,27 +175,30 @@ class WeekPlannerTest {
     }
 
     @Test fun essentialBlockedRecipeNeverAppearsInGeneratedWeeks() {
-        val eggBook = book
-        val eggRecipe = recipe(
-            "egg-night", "Egg Night",
+        // The blocked dinner needs ground turkey (essential) and the
+        // household won't eat turkey. The cheap dinners use neither turkey
+        // nor any turkey-named ingredient, so only this one blocks.
+        val turkeyNight = recipe(
+            "turkey-night", "Turkey Night",
             RecipeIngredient(
-                priceItemId = "eggs",
-                quantity = Quantity(6.0, MeasureUnit.COUNT),
+                priceItemId = "ground-turkey",
+                quantity = Quantity(1.0, MeasureUnit.POUND),
                 essential = true,
             ),
         )
         val others = (1..5).map { cheapDinner("c$it") }
         val s = settings(100_00, listOf("MON", "TUE", "WED", "THU", "FRI"))
-            .copy(wontEat = listOf("eggs"))
+            .copy(wontEat = listOf("turkey"))
         val adapted = com.battlesbudz.dinnerbot.core.model.RecipeAdaptation
-            .adapt(others + eggRecipe, s.wontEat, eggBook.associateBy { it.id })
-        assertEquals(setOf("egg-night"), adapted.blockedFromPlanning)
+            .adapt(others + turkeyNight, s.wontEat, book.associateBy { it.id })
+        assertEquals(setOf("turkey-night"), adapted.blockedFromPlanning)
         for (variation in 0..10) {
             val plan = WeekPlanner.generate(
-                s, adapted.plannable, eggBook, emptyMap(), emptySet(),
+                s, adapted.plannable, book, emptyMap(), emptySet(),
                 "2026-10-19", variation = variation,
             )
-            assertTrue(plan.nights.none { it.recipeId == "egg-night" })
+            assertTrue(plan.nights.none { it.recipeId == "turkey-night" })
+            assertEquals(5, plan.nights.size)
         }
     }
 

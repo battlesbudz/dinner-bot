@@ -158,7 +158,9 @@ class SeedLoader(private val db: DinnerBotDatabase) {
     suspend fun refreshSeedRecipes(recipesJson: String): Int {
         val bundled = SeedDataParser.parseRecipes(recipesJson)
         val stored = db.recipeDao().getAll().map { with(SeedMapper) { it.toModel() } }
-        if (stored == bundled) return 0
+        // Compare by id: the DAO returns rows ordered by title, the bundle
+        // is in file order, and list equality would never see them as equal.
+        if (stored.associateBy { it.id } == bundled.associateBy { it.id }) return 0
         db.recipeDao().deleteAll()
         db.recipeDao().insertAll(bundled.map { with(SeedMapper) { it.toEntity() } })
         return bundled.size
