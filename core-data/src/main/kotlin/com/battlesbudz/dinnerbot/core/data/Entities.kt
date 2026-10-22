@@ -85,6 +85,15 @@ data class GroceryItemEntity(
     val checkedOff: Boolean,
 )
 
+/** One thumbs rating per recipe (Phase V2-1); absence of a row means unrated. */
+@Entity(tableName = "recipe_ratings")
+data class RecipeRatingEntity(
+    @PrimaryKey val recipeId: String,
+    /** RecipeRating enum name: UP or DOWN. */
+    val rating: String,
+    val updatedAtMillis: Long,
+)
+
 @Entity(tableName = "settings")
 data class SettingsEntity(
     @PrimaryKey val id: Int = 1,

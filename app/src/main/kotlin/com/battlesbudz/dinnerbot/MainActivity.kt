@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.battlesbudz.dinnerbot.core.data.DinnerBotDatabase
 import com.battlesbudz.dinnerbot.core.data.PlanMapper
+import com.battlesbudz.dinnerbot.core.data.RecipeRatingEntity
 import com.battlesbudz.dinnerbot.core.data.SeedLoader
 import com.battlesbudz.dinnerbot.core.data.SeedMapper
 import com.battlesbudz.dinnerbot.core.model.BulkStock
@@ -51,7 +52,9 @@ import com.battlesbudz.dinnerbot.core.model.PantryItem
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeAdaptation
+import com.battlesbudz.dinnerbot.core.model.RecipeRating
 import com.battlesbudz.dinnerbot.feature.backup.BackupData
+import com.battlesbudz.dinnerbot.feature.backup.BackupRecipeRating
 import com.battlesbudz.dinnerbot.feature.backup.BackupEngine
 import com.battlesbudz.dinnerbot.feature.grocerylist.GroceryRow
 import com.battlesbudz.dinnerbot.feature.grocerylist.GroceryListScreen
@@ -126,6 +129,7 @@ private fun DinnerBotApp(
     var bulkStocks by remember { mutableStateOf<List<BulkStock>>(emptyList()) }
     var storedPlan by remember { mutableStateOf<PlanMapper.StoredPlan?>(null) }
     var groceryRows by remember { mutableStateOf<List<GroceryRow>>(emptyList()) }
+    var ratings by remember { mutableStateOf<Map<String, RecipeRating>>(emptyMap()) }
     var tab by remember { mutableStateOf(Tab.RECIPES) }
     var openRecipeId by remember { mutableStateOf<String?>(null) }
     var variation by remember { mutableStateOf(0) }
@@ -151,7 +155,11 @@ private fun DinnerBotApp(
                     GroceryRow(it.rowId, with(PlanMapper) { it.toModel() })
                 }
             } ?: emptyList()
-            LoadedState(s, r, p, pantry, stocks, plan, rows)
+            val loadedRatings = database.recipeRatingDao().getAll().mapNotNull { entity ->
+                runCatching { RecipeRating.valueOf(entity.rating) }.getOrNull()
+                    ?.let { entity.recipeId to it }
+            }.toMap()
+            LoadedState(s, r, p, pantry, stocks, plan, rows, loadedRatings)
         }
         settings = loaded.settings
         recipes = loaded.recipes
@@ -160,6 +168,7 @@ private fun DinnerBotApp(
         bulkStocks = loaded.bulkStocks
         storedPlan = loaded.plan
         groceryRows = loaded.groceryRows
+        ratings = loaded.ratings
         loading = false
     }
 
@@ -211,9 +220,26 @@ private fun DinnerBotApp(
             pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
             weekStart = currentWeekStart(),
             variation = variation,
+            ratings = ratings,
         )
         persistPlan(plan, keepId = null, forSettings = forSettings)
         tab = Tab.PLANNER
+    }
+
+    /** Set, change, or clear (null) one recipe's thumbs rating, then reload. */
+    fun rateRecipe(recipeId: String, rating: RecipeRating?) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                if (rating == null) {
+                    database.recipeRatingDao().delete(recipeId)
+                } else {
+                    database.recipeRatingDao().upsert(
+                        RecipeRatingEntity(recipeId, rating.name, System.currentTimeMillis()),
+                    )
+                }
+            }
+            refresh()
+        }
     }
 
     // ---- Backup through the system file picker (Storage Access Framework) ----
@@ -311,12 +337,15 @@ private fun DinnerBotApp(
                                     recipe = open,
                                     priceItems = priceItems,
                                     onBack = { openRecipeId = null },
+                                    rating = ratings[open.id],
+                                    onRate = { rateRecipe(open.id, it) },
                                 )
                             } else {
                                 RecipeListScreen(
                                     recipes = displayRecipes,
                                     priceItems = priceItems,
                                     onRecipeClick = { openRecipeId = it.id },
+                                    ratings = ratings,
                                 )
                             }
                         }
@@ -336,10 +365,14 @@ private fun DinnerBotApp(
                                         priceItems = priceItems,
                                         stockOnHand = PantryLogic.stockMap(bulkStocks),
                                         pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
+                                        ratings = ratings,
                                     )
                                     persistPlan(swapped, keepId = storedPlan!!.id, forSettings = currentSettings)
                                 }
                             },
+                            ratings = ratings,
+                            onRate = { recipeId, rating -> rateRecipe(recipeId, rating) },
+                            outOfRotationCount = ratings.values.count { it == RecipeRating.DOWN },
                         )
                         Tab.LIST -> GroceryListScreen(
                             rows = groceryRows,
@@ -446,6 +479,9 @@ private fun DinnerBotApp(
                                                 priceItems = priceItems,
                                                 pantryItems = pantryItems,
                                                 bulkStock = bulkStocks,
+                                                recipeRatings = ratings.map { (id, rating) ->
+                                                    BackupRecipeRating(id, rating)
+                                                },
                                             ),
                                         )
                                         exportLauncher.launch("dinner-bot-backup.json")
@@ -489,6 +525,7 @@ private data class LoadedState(
     val bulkStocks: List<BulkStock>,
     val plan: PlanMapper.StoredPlan?,
     val groceryRows: List<GroceryRow>,
+    val ratings: Map<String, RecipeRating>,
 )
 
 private fun currentWeekStart(): String =
@@ -543,6 +580,13 @@ private suspend fun applyBackup(database: DinnerBotDatabase, data: BackupData) {
     database.pantryDao().insertAll(data.pantryItems.map { with(SeedMapper) { it.toEntity() } })
     database.bulkStockDao().deleteAll()
     data.bulkStock.forEach { database.bulkStockDao().upsert(with(SeedMapper) { it.toEntity() }) }
+    // Ratings replace wholesale: a v1 backup has none, which clears them.
+    database.recipeRatingDao().deleteAll()
+    data.recipeRatings.forEach { saved ->
+        database.recipeRatingDao().upsert(
+            RecipeRatingEntity(saved.recipeId, saved.rating.name, System.currentTimeMillis()),
+        )
+    }
     // Plans were priced from the old book; clear them so nothing stale lingers.
     database.planDao().deleteAll()
     database.groceryDao().deleteAll()

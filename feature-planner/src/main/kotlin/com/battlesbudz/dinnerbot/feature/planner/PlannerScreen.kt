@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.Recipe
+import com.battlesbudz.dinnerbot.core.model.RecipeRating
 
 private val DAY_LABELS = mapOf(
     "MON" to "Monday", "TUE" to "Tuesday", "WED" to "Wednesday", "THU" to "Thursday",
@@ -38,6 +39,9 @@ fun PlannerScreen(
     onGenerate: () -> Unit,
     onSwap: (String) -> Unit,
     modifier: Modifier = Modifier,
+    ratings: Map<String, RecipeRating> = emptyMap(),
+    onRate: (String, RecipeRating?) -> Unit = { _, _ -> },
+    outOfRotationCount: Int = 0,
 ) {
     Column(
         modifier = modifier
@@ -90,21 +94,38 @@ fun PlannerScreen(
         plan.nights.forEach { night ->
             val recipe = recipesById[night.recipeId]
             Card(modifier = Modifier.fillMaxWidth()) {
-                Row(
+                Column(
                     modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(DAY_LABELS[night.day] ?: night.day, style = MaterialTheme.typography.titleSmall)
-                        Text(recipe?.title ?: night.recipeId, style = MaterialTheme.typography.titleMedium)
-                        if (recipe != null) {
-                            Text(
-                                "${recipe.mainProtein} · ${recipe.activeMinutes} min",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(DAY_LABELS[night.day] ?: night.day, style = MaterialTheme.typography.titleSmall)
+                            Text(recipe?.title ?: night.recipeId, style = MaterialTheme.typography.titleMedium)
+                            if (recipe != null) {
+                                Text(
+                                    "${recipe.mainProtein} · ${recipe.activeMinutes} min",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
                         }
+                        TextButton(onClick = { onSwap(night.day) }) { Text("Swap") }
                     }
-                    TextButton(onClick = { onSwap(night.day) }) { Text("Swap") }
+                    // Rate this dinner after cooking it. Tapping the active
+                    // thumb again clears the rating.
+                    val current = ratings[night.recipeId]
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(
+                            onClick = {
+                                onRate(night.recipeId, if (current == RecipeRating.UP) null else RecipeRating.UP)
+                            },
+                        ) { Text(if (current == RecipeRating.UP) "👍 Liked it ✓" else "👍 Liked it") }
+                        TextButton(
+                            onClick = {
+                                onRate(night.recipeId, if (current == RecipeRating.DOWN) null else RecipeRating.DOWN)
+                            },
+                        ) { Text(if (current == RecipeRating.DOWN) "👎 Not for us ✓" else "👎 Not for us") }
+                    }
                 }
             }
         }
@@ -112,6 +133,18 @@ fun PlannerScreen(
         plan.notes.forEach { note ->
             Card(modifier = Modifier.fillMaxWidth()) {
                 Text(note, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+
+        if (outOfRotationCount > 0) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "$outOfRotationCount ${if (outOfRotationCount == 1) "dinner is" else "dinners are"} " +
+                        "thumbed down and out of rotation. They stay in the recipe list; " +
+                        "clear the thumbs down there to bring one back.",
+                    modifier = Modifier.padding(12.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
         }
     }
