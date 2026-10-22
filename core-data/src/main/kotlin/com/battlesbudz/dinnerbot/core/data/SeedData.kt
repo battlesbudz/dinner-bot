@@ -12,6 +12,7 @@ import com.battlesbudz.dinnerbot.core.model.Quantity
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeIngredient
 import com.battlesbudz.dinnerbot.core.model.RecipesFile
+import com.battlesbudz.dinnerbot.core.model.ReminderSettings
 import com.battlesbudz.dinnerbot.core.model.Store
 import com.battlesbudz.dinnerbot.core.model.StorePrice
 import kotlinx.serialization.builtins.ListSerializer
@@ -118,6 +119,7 @@ object SeedMapper {
         dietNotes = dietNotes,
         pantryStaplesJson = json.encodeToString(stringList, pantryStaples),
         onboardingComplete = onboardingComplete,
+        remindersJson = json.encodeToString(ReminderSettings.serializer(), reminders),
     )
 
     fun SettingsEntity.toModel(): HouseholdSettings = HouseholdSettings(
@@ -130,6 +132,9 @@ object SeedMapper {
         dietNotes = dietNotes,
         pantryStaples = json.decodeFromString(stringList, pantryStaplesJson),
         onboardingComplete = onboardingComplete,
+        // A pre-V2-4 row (or a damaged blob) reads as every reminder off.
+        reminders = runCatching { json.decodeFromString(ReminderSettings.serializer(), remindersJson) }
+            .getOrDefault(ReminderSettings()),
     )
 }
 

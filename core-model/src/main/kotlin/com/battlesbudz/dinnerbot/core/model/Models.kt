@@ -163,6 +163,8 @@ data class HouseholdSettings(
     val dietNotes: String = "",
     val pantryStaples: List<String> = emptyList(),
     val onboardingComplete: Boolean = false,
+    /** Local on-device reminders (Phase V2-4); every reminder starts off. */
+    val reminders: ReminderSettings = ReminderSettings(),
 )
 
 object HouseholdRules {

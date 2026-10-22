@@ -1,5 +1,9 @@
 package com.battlesbudz.dinnerbot
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -39,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.battlesbudz.dinnerbot.core.data.DinnerBotDatabase
 import com.battlesbudz.dinnerbot.core.data.PlanMapper
@@ -75,8 +80,12 @@ import com.battlesbudz.dinnerbot.feature.pricebook.PriceBookScreen
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceCorrection
 import com.battlesbudz.dinnerbot.feature.recipes.RecipeDetailScreen
 import com.battlesbudz.dinnerbot.feature.recipes.RecipeListScreen
+import com.battlesbudz.dinnerbot.feature.reminders.ReminderPlanner
+import com.battlesbudz.dinnerbot.feature.reminders.ReminderScheduler
+import com.battlesbudz.dinnerbot.feature.reminders.ReminderWeek
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.temporal.TemporalAdjusters
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
@@ -145,6 +154,21 @@ private fun DinnerBotApp(
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var reloadKey by remember { mutableStateOf(0) }
     var showHowItWorks by remember { mutableStateOf(false) }
+
+    // ---- Notification permission (Phase V2-4) ----
+    // The effective state the settings form and the reminder planner
+    // read: granted outright on Android versions with no notification
+    // runtime permission. It is requested only at the moment a reminder
+    // is switched on in Settings; the launcher result lands here, and
+    // entering Settings re-reads it (it may have changed in Android's
+    // own settings screens).
+    var notificationsGranted by remember { mutableStateOf(hasNotificationPermission(context)) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> notificationsGranted = granted }
+    LaunchedEffect(tab) {
+        if (tab == Tab.SETTINGS) notificationsGranted = hasNotificationPermission(context)
+    }
 
     LaunchedEffect(reloadKey) {
         loading = true
@@ -356,6 +380,36 @@ private fun DinnerBotApp(
             }
             refresh()
         }
+    }
+
+    /**
+     * Reminders follow the stored state (Phase V2-4). Every reload after
+     * a plan change (generate, swap, night-off toggle, reprice), a pantry
+     * or stock change, a settings save, or a permission change replans
+     * the reminder set from the adapted recipes (what the household
+     * actually cooks) and replaces the scheduled work wholesale, so a
+     * reminder can never outlive the plan it was made from. WorkManager
+     * keeps the requests on the phone and across reboots.
+     */
+    LaunchedEffect(
+        settings, storedPlan, storedPlan2, recipes, priceItems, bulkStocks, presets, notificationsGranted,
+    ) {
+        val currentSettings = settings ?: return@LaunchedEffect
+        val weeks = listOfNotNull(storedPlan, storedPlan2).mapNotNull { plan ->
+            runCatching { LocalDate.parse(plan.weekStart) }.getOrNull()
+                ?.let { ReminderWeek(it, plan.nights) }
+        }
+        val planned = ReminderPlanner.plan(
+            settings = currentSettings.reminders,
+            householdSize = currentSettings.householdSize,
+            weeks = weeks,
+            recipesById = adaptationFor(currentSettings).recipes.associateBy { it.id },
+            itemsById = priceItems.associateBy { it.id },
+            stockOnHand = PantryLogic.stockMap(bulkStocks),
+            now = LocalDateTime.now(),
+            notificationsGranted = notificationsGranted,
+        )
+        ReminderScheduler.reschedule(context, planned)
     }
 
     // ---- Backup through the system file picker (Storage Access Framework) ----
@@ -772,6 +826,14 @@ private fun DinnerBotApp(
                                 SettingsScreen(
                                     initial = currentSettings,
                                     dietPresets = presets,
+                                    notificationsGranted = notificationsGranted,
+                                    onRequestNotificationPermission = {
+                                        if (Build.VERSION.SDK_INT >= 33) {
+                                            notificationPermissionLauncher.launch(
+                                                Manifest.permission.POST_NOTIFICATIONS,
+                                            )
+                                        }
+                                    },
                                     onSave = { saved ->
                                         scope.launch {
                                             withContext(Dispatchers.IO) {
@@ -854,6 +916,16 @@ private data class LoadedState(
 
 private fun currentWeekStart(): String =
     LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toString()
+
+/**
+ * The effective notification state (Phase V2-4): Android versions before
+ * 13 have no notification runtime permission, so notifications are
+ * simply available; from 13 on, the permission must have been granted.
+ */
+private fun hasNotificationPermission(context: Context): Boolean =
+    Build.VERSION.SDK_INT < 33 ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+        PackageManager.PERMISSION_GRANTED
 
 /** Keep settings.pantryStaples mirroring the pantry table's owned names. */
 private suspend fun syncPantryStaples(database: DinnerBotDatabase, settings: HouseholdSettings) {

@@ -16,6 +16,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -25,10 +26,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.DietPreset
 import com.battlesbudz.dinnerbot.core.model.HouseholdRules
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
+import com.battlesbudz.dinnerbot.core.model.ReminderLogic
+import com.battlesbudz.dinnerbot.core.model.ReminderSettings
+import com.battlesbudz.dinnerbot.core.model.ReminderTimes
+import java.time.LocalTime
 
 object OnboardingDefaults {
     val NIGHTS: List<Pair<String, String>> = listOf(
@@ -64,6 +70,18 @@ fun OnboardingForm(
     modifier: Modifier = Modifier,
     /** The diet preset definitions the household can switch on (Phase V2-2). */
     dietPresets: List<DietPreset> = emptyList(),
+    /**
+     * Whether notifications can appear right now (Phase V2-4): true on
+     * Android versions with no notification permission, or when the
+     * permission is granted. The caller owns the permission state.
+     */
+    notificationsGranted: Boolean = true,
+    /**
+     * Called at the moment a reminder is switched on while notifications
+     * are not granted, so the caller can ask for the permission then and
+     * never earlier.
+     */
+    onRequestNotificationPermission: () -> Unit = {},
 ) {
     var householdSize by remember { mutableStateOf(initial.householdSize) }
     var cookNights by remember { mutableStateOf(initial.cookNights.toSet()) }
@@ -74,6 +92,14 @@ fun OnboardingForm(
     var dietNotes by remember { mutableStateOf(initial.dietNotes) }
     var selectedPresets by remember { mutableStateOf(initial.dietPresets.toSet()) }
     var staples by remember { mutableStateOf(initial.pantryStaples.toSet()) }
+    var reminders by remember { mutableStateOf(initial.reminders) }
+
+    // Switching a reminder on is the one moment the permission is asked
+    // for: never at install, never at first run (Phase V2-4).
+    fun toggleReminder(on: Boolean, apply: (Boolean) -> ReminderSettings) {
+        if (on && !notificationsGranted) onRequestNotificationPermission()
+        reminders = apply(on)
+    }
 
     Column(
         modifier = modifier
@@ -164,6 +190,84 @@ fun OnboardingForm(
             }
         }
 
+        Text("Reminders", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Reminders are scheduled on this phone only. Nothing leaves the device. " +
+                "Dinner Bot asks for the notification permission only when you switch " +
+                "a reminder on, and everything else works the same if you say no.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        if (ReminderLogic.warningNeeded(reminders, notificationsGranted)) {
+            Text(
+                "Notifications are turned off for Dinner Bot, so these reminders " +
+                    "will not appear. To get them, allow notifications for Dinner Bot " +
+                    "in Android's settings (Apps, Dinner Bot, Notifications).",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.testTag("reminders-permission-warning"),
+            )
+        }
+
+        ReminderRow(
+            title = "Dinner reminder",
+            detail = "On each cook night, names tonight's dinner from your current plan.",
+            checked = reminders.dinnerEnabled,
+            switchTag = "reminder-dinner-switch",
+            onCheckedChange = { on ->
+                toggleReminder(on) { reminders.copy(dinnerEnabled = it) }
+            },
+        )
+        if (reminders.dinnerEnabled) {
+            ReminderTimeRow(
+                time = reminders.dinnerTime,
+                fallback = LocalTime.of(16, 30),
+                onChange = { reminders = reminders.copy(dinnerTime = it) },
+            )
+        }
+
+        ReminderRow(
+            title = "Shopping reminder",
+            detail = "On your shopping day, so the trip is not forgotten.",
+            checked = reminders.shoppingEnabled,
+            switchTag = "reminder-shopping-switch",
+            onCheckedChange = { on ->
+                toggleReminder(on) { reminders.copy(shoppingEnabled = it) }
+            },
+        )
+        if (reminders.shoppingEnabled) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OnboardingDefaults.NIGHTS.forEach { (code, label) ->
+                    FilterChip(
+                        selected = reminders.shoppingDay == code,
+                        onClick = { reminders = reminders.copy(shoppingDay = code) },
+                        label = { Text(label) },
+                    )
+                }
+            }
+            ReminderTimeRow(
+                time = reminders.shoppingTime,
+                fallback = LocalTime.of(9, 0),
+                onChange = { reminders = reminders.copy(shoppingTime = it) },
+            )
+        }
+
+        ReminderRow(
+            title = "Defrost reminder",
+            detail = "The evening before a dinner that uses frozen Sam's Club stock, " +
+                "naming what to move to the fridge.",
+            checked = reminders.defrostEnabled,
+            switchTag = "reminder-defrost-switch",
+            onCheckedChange = { on ->
+                toggleReminder(on) { reminders.copy(defrostEnabled = it) }
+            },
+        )
+        if (reminders.defrostEnabled) {
+            ReminderTimeRow(
+                time = reminders.defrostTime,
+                fallback = LocalTime.of(20, 0),
+                onChange = { reminders = reminders.copy(defrostTime = it) },
+            )
+        }
+
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text("Household substitution rule", style = MaterialTheme.typography.titleSmall)
@@ -198,6 +302,7 @@ fun OnboardingForm(
                         dietNotes = dietNotes.trim(),
                         pantryStaples = staples.toList(),
                         onboardingComplete = true,
+                        reminders = reminders,
                     )
                 )
             },
@@ -215,4 +320,59 @@ fun SettingsScreen(
     onSave: (HouseholdSettings) -> Unit,
     modifier: Modifier = Modifier,
     dietPresets: List<DietPreset> = emptyList(),
-) = OnboardingForm(initial = initial, onSave = onSave, modifier = modifier, dietPresets = dietPresets)
+    notificationsGranted: Boolean = true,
+    onRequestNotificationPermission: () -> Unit = {},
+) = OnboardingForm(
+    initial = initial,
+    onSave = onSave,
+    modifier = modifier,
+    dietPresets = dietPresets,
+    notificationsGranted = notificationsGranted,
+    onRequestNotificationPermission = onRequestNotificationPermission,
+)
+
+/** One reminder's switch row in the settings form's reminders block. */
+@Composable
+private fun ReminderRow(
+    title: String,
+    detail: String,
+    checked: Boolean,
+    switchTag: String,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(detail, style = MaterialTheme.typography.bodySmall)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.testTag(switchTag),
+        )
+    }
+}
+
+/** A reminder's time, stepped in 15-minute moves to match the form's other steppers. */
+@Composable
+private fun ReminderTimeRow(
+    time: String,
+    fallback: LocalTime,
+    onChange: (String) -> Unit,
+) {
+    val parsed = ReminderTimes.parseOrDefault(time, fallback)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Time", style = MaterialTheme.typography.bodyMedium)
+        TextButton(onClick = { onChange(ReminderTimes.format(parsed.minusMinutes(15))) }) {
+            Text("-15 min")
+        }
+        Text(ReminderTimes.display(parsed), style = MaterialTheme.typography.bodyLarge)
+        TextButton(onClick = { onChange(ReminderTimes.format(parsed.plusMinutes(15))) }) {
+            Text("+15 min")
+        }
+    }
+}
