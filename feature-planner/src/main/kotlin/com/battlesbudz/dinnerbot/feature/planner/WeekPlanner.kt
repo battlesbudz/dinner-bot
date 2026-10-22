@@ -90,7 +90,7 @@ object WeekPlanner {
                     val current = iterator.next()
                     if (recipeUses(current, itemId, itemsById) && replacements.isNotEmpty()) {
                         iterator.set(replacements.first())
-                        replacements.removeFirst()
+                        replacements.removeAt(0)
                         swapped = true
                     }
                 }
