@@ -38,7 +38,7 @@ class SeedDataFilesTest {
         val ids = priceBook.items.map { it.id }.toSet()
         assertTrue("ground-turkey" in ids)
         assertTrue("pork-tenderloin" in ids)
-        assertEquals(12, recipes.recipes.size)
+        assertEquals(36, recipes.recipes.size)
         assertTrue(recipes.recipes.none { it.title.contains("beef", ignoreCase = true) })
     }
 }

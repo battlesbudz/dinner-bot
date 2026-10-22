@@ -29,4 +29,5 @@ dependencies {
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.material3)
     testImplementation(libs.junit)
+    testImplementation(libs.serialization.json)
 }

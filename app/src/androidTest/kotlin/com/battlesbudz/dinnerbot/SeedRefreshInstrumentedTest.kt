@@ -56,7 +56,7 @@ class SeedRefreshInstrumentedTest {
             db.priceItemDao().updatePrice("yellow-onions", 999, 333.0)
 
             val refreshed = loader.refreshSeedRecipes(recipesJson)
-            assertEquals(12, refreshed)
+            assertEquals(36, refreshed)
 
             val after = db.recipeDao().getAll().map { with(SeedMapper) { it.toModel() } }
             val spaghetti = after.single { it.id == "turkey-spaghetti" }
