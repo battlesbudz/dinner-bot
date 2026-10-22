@@ -1,8 +1,13 @@
 package com.battlesbudz.dinnerbot.feature.grocerylist
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -23,13 +29,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import com.battlesbudz.dinnerbot.core.model.BarcodeLink
 import com.battlesbudz.dinnerbot.core.model.Costing
 import com.battlesbudz.dinnerbot.core.model.GroceryLine
 import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Store
+import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.BarcodeScanLogic
+import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.BarcodeScannerDialog
+import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.LinkBarcodeDialog
+import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.ScanPriceDialog
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceCorrection
 
 /** One persisted shopping row, as displayed. [rowId] is the Room row id. */
@@ -67,8 +81,153 @@ fun GroceryListScreen(
     topUpRows: List<GroceryRow> = emptyList(),
     /** True when the plan covers two weeks, even if nothing landed on the top-up. */
     twoWeekTrip: Boolean = false,
+    /** Learned barcode links (Phase V2-5); a scanned code resolves through these. */
+    barcodeLinks: List<BarcodeLink> = emptyList(),
+    /** A link Andrea just taught the app; the caller persists it as her data. */
+    onBarcodeLinkLearned: (BarcodeLink) -> Unit = {},
+    /**
+     * A price correction that arrived by scanning (Phase V2-5): the item
+     * already carries her shelf price through the same correction write as
+     * a typed fix; the caller saves it to the price book.
+     */
+    onScanPriceCorrected: (PriceItem) -> Unit = { _ -> },
+    /**
+     * A scan launched from a line, where the scanned code names that
+     * line's own item (Phase V2-5): the caller runs the line's own
+     * correction with the entered total, so a line bought at a non-home
+     * store corrects that store's price, never the home store's.
+     */
+    onScanLineCorrected: (GroceryRow, Int) -> Unit = { _, _ -> },
 ) {
     var editing by remember { mutableStateOf<GroceryRow?>(null) }
+
+    // ---- Barcode scanning (Phase V2-5) ----
+    // The CAMERA permission is asked for only at the moment a scan is
+    // tapped, never before; if it is declined, scanning quietly steps
+    // aside and tap-to-correct remains, exactly as before this phase.
+    val context = LocalContext.current
+    var cameraGranted by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    var scanning by remember { mutableStateOf(false) }
+    var scannedCode by remember { mutableStateOf<String?>(null) }
+    var scanRow by remember { mutableStateOf<GroceryRow?>(null) }
+    var scanPreferredItemId by remember { mutableStateOf<String?>(null) }
+    var pickedItem by remember { mutableStateOf<PriceItem?>(null) }
+    var relinking by remember { mutableStateOf(false) }
+    var cameraDeniedNote by remember { mutableStateOf(false) }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        cameraGranted = granted
+        if (granted) {
+            cameraDeniedNote = false
+            scanning = true
+        } else {
+            cameraDeniedNote = true
+        }
+    }
+
+    fun startScan(preferredItemId: String?, row: GroceryRow? = null) {
+        scanPreferredItemId = preferredItemId
+        scanRow = row
+        pickedItem = null
+        relinking = false
+        if (cameraGranted) {
+            scanning = true
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    fun clearScan() {
+        scannedCode = null
+        pickedItem = null
+        relinking = false
+        scanPreferredItemId = null
+        scanRow = null
+    }
+
+    val priceItemsById = remember(priceItems) { priceItems.associateBy { it.id } }
+    val scanResolution = remember(scannedCode, barcodeLinks, priceItemsById) {
+        scannedCode?.let { BarcodeScanLogic.resolve(it, barcodeLinks, priceItemsById) }
+    }
+
+    if (scanning) {
+        BarcodeScannerDialog(
+            onBarcode = { code ->
+                scanning = false
+                scannedCode = code
+            },
+            onDismiss = { scanning = false },
+        )
+    }
+    val activeCode = scannedCode
+    if (activeCode != null) {
+        val resolved = scanResolution
+        val displayItem = pickedItem ?: (resolved as? BarcodeScanLogic.Resolution.Linked)?.item
+        when {
+            relinking || displayItem == null -> LinkBarcodeDialog(
+                barcode = activeCode,
+                candidates = BarcodeScanLogic.linkCandidates(
+                    allItems = priceItems,
+                    listItemIds = (rows + topUpRows).map { it.line.itemId },
+                    preferredItemId = scanPreferredItemId,
+                ),
+                onPick = { item ->
+                    onBarcodeLinkLearned(
+                        BarcodeLink(activeCode, item.id, System.currentTimeMillis()),
+                    )
+                    relinking = false
+                    pickedItem = item
+                },
+                onSkip = { clearScan() },
+            )
+            else -> {
+                // A scan launched from a line, naming that line's own
+                // item, corrects the line itself: the row's store
+                // governs the write, like a tap on the line's price. Any
+                // other scan corrects the item's book pack price.
+                val lineRow = scanRow?.takeIf {
+                    BarcodeScanLogic.scanTargetsRow(displayItem.id, it.line.itemId)
+                }
+                if (lineRow != null) {
+                    val lineCash = GroceryListBuilder.lineCashCents(lineRow.line)
+                    ScanPriceDialog(
+                        item = displayItem,
+                        headerText = "Scanned from your ${storeLabel(lineRow.line.store)} line, " +
+                            "priced at ${Money(lineCash).format()} right now. Type what this " +
+                            "line actually cost; your number is saved to the price book, the " +
+                            "same as tapping the price.",
+                        initialCents = lineCash,
+                        onConfirm = { cents ->
+                            onScanLineCorrected(lineRow, cents)
+                            clearScan()
+                        },
+                        onDismiss = { clearScan() },
+                        onRelink = if (pickedItem == null) ({ relinking = true }) else null,
+                    )
+                } else {
+                    ScanPriceDialog(
+                        item = displayItem,
+                        headerText = "The price book says ${Money(displayItem.packPriceCents).format()} " +
+                            "for ${displayItem.packDescription}. Type the shelf price for the " +
+                            "pack; your number is saved to the price book.",
+                        initialCents = displayItem.packPriceCents,
+                        onConfirm = { cents ->
+                            onScanPriceCorrected(BarcodeScanLogic.scanCorrection(displayItem, cents))
+                            clearScan()
+                        },
+                        onDismiss = { clearScan() },
+                        onRelink = if (pickedItem == null) ({ relinking = true }) else null,
+                    )
+                }
+            }
+        }
+    }
 
     if (rows.isEmpty() && topUpRows.isEmpty()) {
         Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
@@ -77,11 +236,13 @@ fun GroceryListScreen(
                 "No list yet. Plan a week first and the list builds itself from the dinners.",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            ScanBarcodeButton(modifier = Modifier.padding(top = 16.dp)) { startScan(null) }
+            if (cameraDeniedNote) {
+                CameraDeniedNote(modifier = Modifier.padding(top = 8.dp))
+            }
         }
         return
     }
-
-    val priceItemsById = remember(priceItems) { priceItems.associateBy { it.id } }
     val total = (rows + topUpRows).sumOf { GroceryListBuilder.lineCashCents(it.line) }
     val bigTripTotal = rows.sumOf { GroceryListBuilder.lineCashCents(it.line) }
     val topUpTotal = topUpRows.sumOf { GroceryListBuilder.lineCashCents(it.line) }
@@ -104,6 +265,10 @@ fun GroceryListScreen(
                 },
                 style = MaterialTheme.typography.bodyMedium,
             )
+            ScanBarcodeButton(modifier = Modifier.padding(top = 12.dp)) { startScan(null) }
+            if (cameraDeniedNote) {
+                CameraDeniedNote(modifier = Modifier.padding(top = 8.dp))
+            }
         }
         if (twoWeekTrip) {
             item {
@@ -118,7 +283,9 @@ fun GroceryListScreen(
                 )
             }
         }
-        storeSections(rows, priceItemsById, onToggleChecked) { editing = it }
+        storeSections(rows, priceItemsById, onToggleChecked, onScanRow = { row ->
+            startScan(row.line.itemId, row)
+        }) { editing = it }
         if (topUpRows.isNotEmpty()) {
             item {
                 Text(
@@ -131,7 +298,9 @@ fun GroceryListScreen(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            storeSections(topUpRows, priceItemsById, onToggleChecked) { editing = it }
+            storeSections(topUpRows, priceItemsById, onToggleChecked, onScanRow = { row ->
+                startScan(row.line.itemId, row)
+            }) { editing = it }
         }
     }
 
@@ -153,6 +322,7 @@ private fun LazyListScope.storeSections(
     rows: List<GroceryRow>,
     priceItemsById: Map<String, PriceItem>,
     onToggleChecked: (GroceryRow, Boolean) -> Unit,
+    onScanRow: (GroceryRow) -> Unit,
     onEditPrice: (GroceryRow) -> Unit,
 ) {
     val byStore = rows.groupBy { it.line.store }
@@ -167,9 +337,27 @@ private fun LazyListScope.storeSections(
             )
         }
         items(storeRows, key = { it.rowId }) { row ->
-            GroceryRowView(row, priceItemsById, onToggleChecked, onEditPrice)
+            GroceryRowView(row, priceItemsById, onToggleChecked, onScanRow, onEditPrice)
         }
     }
+}
+
+@Composable
+private fun ScanBarcodeButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.testTag("scan-barcode-button"),
+    ) { Text("Scan a barcode") }
+}
+
+@Composable
+private fun CameraDeniedNote(modifier: Modifier = Modifier) {
+    Text(
+        "The camera is off, so scanning is unavailable. You can still tap any " +
+            "price to fix it, exactly as before.",
+        style = MaterialTheme.typography.bodySmall,
+        modifier = modifier.testTag("camera-denied-note"),
+    )
 }
 
 @Composable
@@ -177,6 +365,7 @@ private fun GroceryRowView(
     row: GroceryRow,
     priceItemsById: Map<String, PriceItem>,
     onToggleChecked: (GroceryRow, Boolean) -> Unit,
+    onScanRow: (GroceryRow) -> Unit,
     onEditPrice: (GroceryRow) -> Unit,
 ) {
     val line = row.line
@@ -213,11 +402,17 @@ private fun GroceryRowView(
                 )
             }
         }
-        Text(
-            Money(GroceryListBuilder.lineCashCents(line)).format(),
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.clickable { onEditPrice(row) }.padding(8.dp),
-        )
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                Money(GroceryListBuilder.lineCashCents(line)).format(),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.clickable { onEditPrice(row) }.padding(8.dp),
+            )
+            TextButton(
+                onClick = { onScanRow(row) },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            ) { Text("Scan", style = MaterialTheme.typography.bodySmall) }
+        }
     }
 }
 

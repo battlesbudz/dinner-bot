@@ -45,12 +45,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.battlesbudz.dinnerbot.core.data.BarcodeLinkEntity
 import com.battlesbudz.dinnerbot.core.data.DinnerBotDatabase
 import com.battlesbudz.dinnerbot.core.data.PlanMapper
 import com.battlesbudz.dinnerbot.core.data.RecipeRatingEntity
 import com.battlesbudz.dinnerbot.core.data.SeedDataParser
 import com.battlesbudz.dinnerbot.core.data.SeedLoader
 import com.battlesbudz.dinnerbot.core.data.SeedMapper
+import com.battlesbudz.dinnerbot.core.model.BarcodeLink
 import com.battlesbudz.dinnerbot.core.model.BulkStock
 import com.battlesbudz.dinnerbot.core.model.Costing
 import com.battlesbudz.dinnerbot.core.model.DietPreset
@@ -62,6 +64,7 @@ import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeAdaptation
 import com.battlesbudz.dinnerbot.core.model.RecipeRating
+import com.battlesbudz.dinnerbot.feature.backup.BackupBarcodeLink
 import com.battlesbudz.dinnerbot.feature.backup.BackupData
 import com.battlesbudz.dinnerbot.feature.backup.BackupRecipeRating
 import com.battlesbudz.dinnerbot.feature.backup.BackupEngine
@@ -147,6 +150,7 @@ private fun DinnerBotApp(
     var storedPlan2 by remember { mutableStateOf<PlanMapper.StoredPlan?>(null) }
     var groceryRows2 by remember { mutableStateOf<List<GroceryRow>>(emptyList()) }
     var ratings by remember { mutableStateOf<Map<String, RecipeRating>>(emptyMap()) }
+    var barcodeLinks by remember { mutableStateOf<List<BarcodeLink>>(emptyList()) }
     var presets by remember { mutableStateOf<List<DietPreset>>(emptyList()) }
     var tab by remember { mutableStateOf(Tab.RECIPES) }
     var openRecipeId by remember { mutableStateOf<String?>(null) }
@@ -211,7 +215,12 @@ private fun DinnerBotApp(
                 runCatching { RecipeRating.valueOf(entity.rating) }.getOrNull()
                     ?.let { entity.recipeId to it }
             }.toMap()
-            LoadedState(s, r, p, pantry, stocks, plan, rows, plan2, rows2, loadedRatings, loadedPresets)
+            val loadedLinks = database.barcodeLinkDao().getAll()
+                .map { with(SeedMapper) { it.toModel() } }
+            LoadedState(
+                s, r, p, pantry, stocks, plan, rows, plan2, rows2,
+                loadedRatings, loadedPresets, loadedLinks,
+            )
         }
         settings = loaded.settings
         recipes = loaded.recipes
@@ -224,6 +233,7 @@ private fun DinnerBotApp(
         groceryRows2 = loaded.groceryRows2
         ratings = loaded.ratings
         presets = loaded.presets
+        barcodeLinks = loaded.barcodeLinks
         loading = false
     }
 
@@ -759,6 +769,50 @@ private fun DinnerBotApp(
                                     refresh()
                                 }
                             },
+                            barcodeLinks = barcodeLinks,
+                            onBarcodeLinkLearned = { link ->
+                                scope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        database.barcodeLinkDao().upsert(
+                                            with(SeedMapper) { link.toEntity() },
+                                        )
+                                    }
+                                    refresh()
+                                }
+                            },
+                            onScanLineCorrected = { row, totalCents ->
+                                // A scan from a line, naming that line's item,
+                                // is that line's correction: same path as a tap
+                                // on its price, the row's store included.
+                                scope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        correctLinePrice(database, row, totalCents)
+                                    }
+                                    refresh()
+                                }
+                            },
+                            onScanPriceCorrected = { corrected ->
+                                scope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        database.priceItemDao().upsert(
+                                            with(SeedMapper) { corrected.toEntity() },
+                                        )
+                                        // This week's rows for the item at its
+                                        // home store show the new pack price,
+                                        // the same update a tap correction makes.
+                                        (groceryRows + groceryRows2)
+                                            .filter {
+                                                it.line.itemId == corrected.id &&
+                                                    it.line.store == corrected.homeStore
+                                            }
+                                            .forEach { row ->
+                                                database.groceryDao()
+                                                    .updatePackPrice(row.rowId, corrected.packPriceCents)
+                                            }
+                                    }
+                                    refresh()
+                                }
+                            },
                             )
                         }
                         Tab.PANTRY -> PantryScreen(
@@ -865,6 +919,9 @@ private fun DinnerBotApp(
                                                 recipeRatings = ratings.map { (id, rating) ->
                                                     BackupRecipeRating(id, rating)
                                                 },
+                                                barcodeLinks = barcodeLinks.map { link ->
+                                                    BackupBarcodeLink(link.barcode, link.itemId)
+                                                },
                                             ),
                                         )
                                         exportLauncher.launch("dinner-bot-backup.json")
@@ -912,6 +969,7 @@ private data class LoadedState(
     val groceryRows2: List<GroceryRow>,
     val ratings: Map<String, RecipeRating>,
     val presets: List<DietPreset>,
+    val barcodeLinks: List<BarcodeLink>,
 )
 
 private fun currentWeekStart(): String =
@@ -981,6 +1039,13 @@ private suspend fun applyBackup(database: DinnerBotDatabase, data: BackupData) {
     data.recipeRatings.forEach { saved ->
         database.recipeRatingDao().upsert(
             RecipeRatingEntity(saved.recipeId, saved.rating.name, System.currentTimeMillis()),
+        )
+    }
+    // Barcode links replace wholesale: a pre-v3 backup has none, which clears them.
+    database.barcodeLinkDao().deleteAll()
+    data.barcodeLinks.forEach { saved ->
+        database.barcodeLinkDao().upsert(
+            BarcodeLinkEntity(saved.barcode, saved.itemId, System.currentTimeMillis()),
         )
     }
     // Plans were priced from the old book; clear them so nothing stale lingers.

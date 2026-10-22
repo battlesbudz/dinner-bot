@@ -154,6 +154,24 @@ interface RecipeRatingDao {
 }
 
 @Dao
+interface BarcodeLinkDao {
+    @Query("SELECT * FROM barcode_links ORDER BY barcode")
+    suspend fun getAll(): List<BarcodeLinkEntity>
+
+    @Query("SELECT * FROM barcode_links WHERE barcode = :barcode")
+    suspend fun getByBarcode(barcode: String): BarcodeLinkEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(link: BarcodeLinkEntity)
+
+    @Query("DELETE FROM barcode_links WHERE barcode = :barcode")
+    suspend fun delete(barcode: String)
+
+    @Query("DELETE FROM barcode_links")
+    suspend fun deleteAll()
+}
+
+@Dao
 interface SettingsDao {
     @Query("SELECT * FROM settings WHERE id = 1")
     suspend fun get(): SettingsEntity?

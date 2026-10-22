@@ -4,7 +4,7 @@ Dinner Bot is a local-first budget dinner planner for one household. It plans a 
 
 ## Design
 
-- **Local-first, no server.** Everything lives on the phone in a local database. No account, no sign-in, no subscription, no ads, no tracking. The app does not even request the network permission.
+- **Local-first, no server.** Everything lives on the phone in a local database. No account, no sign-in, no subscription, no ads, no tracking. Since v0.3.0 the app holds the INTERNET permission for exactly one optional assist: suggesting a product name from the public Open Food Facts database while a scanned barcode is being linked. There is no Dinner Bot server, nothing about the household is ever sent, and every feature works fully offline.
 - **Clean room.** Dinner Bot does the job of subscription budget meal planners, with new code, new words, and its own recipes and price data.
 - **Seed data is data, not code.** Recipes and the price book live in `seed-data/` as JSON and are the single source of truth: the app bundles them as assets and the `data-seed` module validates them in tests (every recipe ingredient maps to a priced item, no zero prices, pack sizes present).
 - **Money is integer cents** everywhere. The weekly budget caps **cash spent** each week across all three stores combined; Sam's Club bulk packs charge their full price in the week they are bought and $0 in weeks that eat from home stock, and portion cost is tracked as information.
@@ -26,8 +26,8 @@ Phase 2 is the working app:
 - **Grocery list** (`feature-grocerylist`): aggregates the plan's ingredients scaled to servings, subtracts pantry-owned staples and bulk-stock-covered amounts, splits into Aldi / Walmart / Sam's Club sections with per-store cash subtotals, and persists check-offs in Room. Tapping a price corrects it, and the correction writes back to the price book.
 - **Price book** (`feature-pricebook`): every item with its store and pack price, editable; corrected prices are flagged and always win over seed data.
 - **Pantry** (`feature-pantry`): the owned/not-owned staple checklist plus quantity-tracked Sam's bulk stock.
-- **Backup** (`feature-backup`): settings, price book (with corrections), pantry, and bulk stock export/import as one JSON file through the Android system file picker. No network is involved; the app still has no INTERNET permission.
-- Plans and grocery lists persist in Room (database version 2; pre-1.0, schema bumps use destructive migration and the seed loader refills).
+- **Backup** (`feature-backup`): settings, price book (with corrections), pantry, bulk stock, recipe ratings, and learned barcode links export/import as one JSON file through the Android system file picker.
+- **Barcode scanning** (`feature-grocerylist`, barcode package; v0.3.0): while shopping, scan an item's barcode to correct its price. ML Kit decodes on the device; a code is linked to a price book item once, learned locally, and remembered; the shelf price Andrea types then writes into the price book through the same correction path as tapping a price. The CAMERA permission is requested only when a scan is first tapped.
 
 CI runs per-package JVM unit tests, Android lint, and instrumented tests on an API 34 emulator. Releases are built only from version tags by `release.yml`, signed from repository secrets, and published as GitHub Releases.
 

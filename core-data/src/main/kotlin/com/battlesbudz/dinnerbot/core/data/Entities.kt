@@ -88,6 +88,14 @@ data class GroceryItemEntity(
     val checkedOff: Boolean,
 )
 
+/** One learned barcode link per barcode (Phase V2-5); the barcode is the key. */
+@Entity(tableName = "barcode_links")
+data class BarcodeLinkEntity(
+    @PrimaryKey val barcode: String,
+    val itemId: String,
+    val createdAtMillis: Long,
+)
+
 /** One thumbs rating per recipe (Phase V2-1); absence of a row means unrated. */
 @Entity(tableName = "recipe_ratings")
 data class RecipeRatingEntity(
