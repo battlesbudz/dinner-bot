@@ -114,6 +114,6 @@ data class SettingsEntity(
     val pantryStaplesJson: String,
     val onboardingComplete: Boolean,
     /** JSON-encoded ReminderSettings (Phase V2-4); "{}" decodes to every reminder off. */
-    @ColumnInfo(defaultValue = "{}")
+    @ColumnInfo(defaultValue = "'{}'")
     val remindersJson: String = "{}",
 )
