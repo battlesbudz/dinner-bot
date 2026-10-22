@@ -53,11 +53,15 @@ fun BarcodeScannerDialog(
     val lifecycleOwner = LocalLifecycleOwner.current
     val scanner = remember { BarcodeScanning.getClient() }
     val delivered = remember { AtomicBoolean(false) }
+    // One analyzer executor per scanner session, shut down with it so
+    // repeated scans never accumulate idle camera threads.
+    val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
 
-    DisposableEffect(scanner) {
+    DisposableEffect(scanner, analysisExecutor) {
         onDispose {
             runCatching { ProcessCameraProvider.getInstance(context).get().unbindAll() }
             runCatching { scanner.close() }
+            analysisExecutor.shutdown()
         }
     }
 
@@ -82,7 +86,7 @@ fun BarcodeScannerDialog(
                             val analysis = ImageAnalysis.Builder()
                                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                                 .build()
-                            analysis.setAnalyzer(Executors.newSingleThreadExecutor()) { proxy ->
+                            analysis.setAnalyzer(analysisExecutor) { proxy ->
                                 analyzeFrame(scanner, proxy, delivered) { value ->
                                     ContextCompat.getMainExecutor(ctx).execute { onBarcode(value) }
                                 }

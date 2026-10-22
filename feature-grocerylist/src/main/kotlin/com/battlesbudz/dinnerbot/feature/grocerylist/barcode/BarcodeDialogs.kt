@@ -27,21 +27,26 @@ import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceCorrection
 
 /**
- * A scanned code resolved to [item]: show the price the book currently
- * holds and take the shelf price Andrea is looking at. Confirming hands
- * the cents back; the caller writes them through the price book's
- * correction path, so a scan correction and a typed correction land
- * identically. [onRelink] offers a way out when the link points at the
- * wrong item.
+ * A scanned code resolved to [item]: show the price currently held and
+ * take the shelf price Andrea is looking at. [headerText] and
+ * [initialCents] carry whichever context applies: the book's pack price
+ * for a general scan, or the scanned line's total when the scan came
+ * from that very item's shopping line (the caller then runs that line's
+ * correction, store and all). Confirming hands the cents back; the
+ * caller writes them through the price book's correction paths, so a
+ * scan correction and a typed correction land identically. [onRelink]
+ * offers a way out when the link points at the wrong item.
  */
 @Composable
 fun ScanPriceDialog(
     item: PriceItem,
+    headerText: String,
+    initialCents: Int,
     onConfirm: (Int) -> Unit,
     onDismiss: () -> Unit,
     onRelink: (() -> Unit)? = null,
 ) {
-    var text by remember(item.id) { mutableStateOf((item.packPriceCents / 100.0).toString()) }
+    var text by remember(item.id, initialCents) { mutableStateOf((initialCents / 100.0).toString()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.testTag("scan-price-dialog"),
@@ -49,9 +54,7 @@ fun ScanPriceDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "The price book says ${Money(item.packPriceCents).format()} for " +
-                        "${item.packDescription}. Type the shelf price for the pack; " +
-                        "your number is saved to the price book.",
+                    headerText,
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 OutlinedTextField(

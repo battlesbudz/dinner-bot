@@ -91,6 +91,13 @@ fun GroceryListScreen(
      * a typed fix; the caller saves it to the price book.
      */
     onScanPriceCorrected: (PriceItem) -> Unit = { _ -> },
+    /**
+     * A scan launched from a line, where the scanned code names that
+     * line's own item (Phase V2-5): the caller runs the line's own
+     * correction with the entered total, so a line bought at a non-home
+     * store corrects that store's price, never the home store's.
+     */
+    onScanLineCorrected: (GroceryRow, Int) -> Unit = { _, _ -> },
 ) {
     var editing by remember { mutableStateOf<GroceryRow?>(null) }
 
@@ -107,6 +114,7 @@ fun GroceryListScreen(
     }
     var scanning by remember { mutableStateOf(false) }
     var scannedCode by remember { mutableStateOf<String?>(null) }
+    var scanRow by remember { mutableStateOf<GroceryRow?>(null) }
     var scanPreferredItemId by remember { mutableStateOf<String?>(null) }
     var pickedItem by remember { mutableStateOf<PriceItem?>(null) }
     var relinking by remember { mutableStateOf(false) }
@@ -123,8 +131,9 @@ fun GroceryListScreen(
         }
     }
 
-    fun startScan(preferredItemId: String?) {
+    fun startScan(preferredItemId: String?, row: GroceryRow? = null) {
         scanPreferredItemId = preferredItemId
+        scanRow = row
         pickedItem = null
         relinking = false
         if (cameraGranted) {
@@ -139,6 +148,7 @@ fun GroceryListScreen(
         pickedItem = null
         relinking = false
         scanPreferredItemId = null
+        scanRow = null
     }
 
     val priceItemsById = remember(priceItems) { priceItems.associateBy { it.id } }
@@ -157,18 +167,10 @@ fun GroceryListScreen(
     }
     val activeCode = scannedCode
     if (activeCode != null) {
-        val picked = pickedItem
         val resolved = scanResolution
+        val displayItem = pickedItem ?: (resolved as? BarcodeScanLogic.Resolution.Linked)?.item
         when {
-            picked != null -> ScanPriceDialog(
-                item = picked,
-                onConfirm = { cents ->
-                    onScanPriceCorrected(BarcodeScanLogic.scanCorrection(picked, cents))
-                    clearScan()
-                },
-                onDismiss = { clearScan() },
-            )
-            relinking || resolved is BarcodeScanLogic.Resolution.Unlinked -> LinkBarcodeDialog(
+            relinking || displayItem == null -> LinkBarcodeDialog(
                 barcode = activeCode,
                 candidates = BarcodeScanLogic.linkCandidates(
                     allItems = priceItems,
@@ -184,15 +186,46 @@ fun GroceryListScreen(
                 },
                 onSkip = { clearScan() },
             )
-            resolved is BarcodeScanLogic.Resolution.Linked -> ScanPriceDialog(
-                item = resolved.item,
-                onConfirm = { cents ->
-                    onScanPriceCorrected(BarcodeScanLogic.scanCorrection(resolved.item, cents))
-                    clearScan()
-                },
-                onDismiss = { clearScan() },
-                onRelink = { relinking = true },
-            )
+            else -> {
+                // A scan launched from a line, naming that line's own
+                // item, corrects the line itself: the row's store
+                // governs the write, like a tap on the line's price. Any
+                // other scan corrects the item's book pack price.
+                val lineRow = scanRow?.takeIf {
+                    BarcodeScanLogic.scanTargetsRow(displayItem.id, it.line.itemId)
+                }
+                if (lineRow != null) {
+                    val lineCash = GroceryListBuilder.lineCashCents(lineRow.line)
+                    ScanPriceDialog(
+                        item = displayItem,
+                        headerText = "Scanned from your ${storeLabel(lineRow.line.store)} line, " +
+                            "priced at ${Money(lineCash).format()} right now. Type what this " +
+                            "line actually cost; your number is saved to the price book, the " +
+                            "same as tapping the price.",
+                        initialCents = lineCash,
+                        onConfirm = { cents ->
+                            onScanLineCorrected(lineRow, cents)
+                            clearScan()
+                        },
+                        onDismiss = { clearScan() },
+                        onRelink = if (pickedItem == null) ({ relinking = true }) else null,
+                    )
+                } else {
+                    ScanPriceDialog(
+                        item = displayItem,
+                        headerText = "The price book says ${Money(displayItem.packPriceCents).format()} " +
+                            "for ${displayItem.packDescription}. Type the shelf price for the " +
+                            "pack; your number is saved to the price book.",
+                        initialCents = displayItem.packPriceCents,
+                        onConfirm = { cents ->
+                            onScanPriceCorrected(BarcodeScanLogic.scanCorrection(displayItem, cents))
+                            clearScan()
+                        },
+                        onDismiss = { clearScan() },
+                        onRelink = if (pickedItem == null) ({ relinking = true }) else null,
+                    )
+                }
+            }
         }
     }
 
@@ -251,7 +284,7 @@ fun GroceryListScreen(
             }
         }
         storeSections(rows, priceItemsById, onToggleChecked, onScanRow = { row ->
-            startScan(row.line.itemId)
+            startScan(row.line.itemId, row)
         }) { editing = it }
         if (topUpRows.isNotEmpty()) {
             item {
@@ -266,7 +299,7 @@ fun GroceryListScreen(
                 )
             }
             storeSections(topUpRows, priceItemsById, onToggleChecked, onScanRow = { row ->
-                startScan(row.line.itemId)
+                startScan(row.line.itemId, row)
             }) { editing = it }
         }
     }

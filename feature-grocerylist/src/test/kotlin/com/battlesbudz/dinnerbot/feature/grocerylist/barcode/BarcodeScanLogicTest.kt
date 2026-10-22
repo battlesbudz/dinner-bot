@@ -83,6 +83,15 @@ class BarcodeScanLogicTest {
         assertTrue(viaScan.userCorrected)
     }
 
+    @Test fun scanFromALineTargetsThatLineOnlyWhenTheCodeNamesItsItem() {
+        // A per-line scan corrects the line (its store governs) only
+        // when the code names the line's own item; anything else is a
+        // book correction for the scanned item, the line untouched.
+        assertTrue(BarcodeScanLogic.scanTargetsRow("rotini", "rotini"))
+        assertEquals(false, BarcodeScanLogic.scanTargetsRow("pasta-sauce", "rotini"))
+        assertEquals(false, BarcodeScanLogic.scanTargetsRow("rotini", null))
+    }
+
     @Test fun offNameComesFromTheProductRecord() {
         val body = """{"status":1,"code":"3017620422003","product":{"product_name":"Nutella","brands":"Ferrero"}}"""
         assertEquals("Nutella", BarcodeScanLogic.parseOffProductName(body))

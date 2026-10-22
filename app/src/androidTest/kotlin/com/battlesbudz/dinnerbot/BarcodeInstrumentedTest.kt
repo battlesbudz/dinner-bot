@@ -90,7 +90,7 @@ class BarcodeInstrumentedTest {
     private fun shell(command: String) {
         val fd = InstrumentationRegistry.getInstrumentation().uiAutomation
             .executeShellCommand(command)
-        fd.autoCloseInputStream().use { it.readBytes() }
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(fd).use { it.readBytes() }
     }
 
     private fun waitForTag(tag: String) {

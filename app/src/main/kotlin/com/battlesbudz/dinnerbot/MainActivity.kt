@@ -780,6 +780,17 @@ private fun DinnerBotApp(
                                     refresh()
                                 }
                             },
+                            onScanLineCorrected = { row, totalCents ->
+                                // A scan from a line, naming that line's item,
+                                // is that line's correction: same path as a tap
+                                // on its price, the row's store included.
+                                scope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        correctLinePrice(database, row, totalCents)
+                                    }
+                                    refresh()
+                                }
+                            },
                             onScanPriceCorrected = { corrected ->
                                 scope.launch {
                                     withContext(Dispatchers.IO) {

@@ -72,6 +72,18 @@ object BarcodeScanLogic {
         PriceCorrection.applyPackPrice(item, shelfPriceCents, source = SCAN_SOURCE)
 
     /**
+     * Whether a scan launched from a shopping line corrects that line
+     * (rather than the item's book pack price directly): only when the
+     * scanned code names the very item the line buys. Then the row's
+     * store governs the write, exactly as a tap on that line's price
+     * does — a rerouted line (bought at a non-home store) corrects that
+     * store's alternate price; a code naming any other item corrects
+     * that item's own book price and leaves the line alone.
+     */
+    fun scanTargetsRow(scannedItemId: String, rowItemId: String?): Boolean =
+        rowItemId != null && rowItemId == scannedItemId
+
+    /**
      * Pull a product name out of an Open Food Facts product response, or
      * null when the response holds none. The lookup is only ever a naming
      * hint for the link-now picker; a name found here is shown to Andrea
