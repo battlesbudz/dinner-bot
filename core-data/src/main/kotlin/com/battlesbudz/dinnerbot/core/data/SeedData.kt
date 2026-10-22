@@ -1,7 +1,9 @@
 package com.battlesbudz.dinnerbot.core.data
 
+import com.battlesbudz.dinnerbot.core.model.BulkStock
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
 import com.battlesbudz.dinnerbot.core.model.MeasureUnit
+import com.battlesbudz.dinnerbot.core.model.PantryItem
 import com.battlesbudz.dinnerbot.core.model.PriceBookFile
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Quantity
@@ -9,6 +11,7 @@ import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeIngredient
 import com.battlesbudz.dinnerbot.core.model.RecipesFile
 import com.battlesbudz.dinnerbot.core.model.Store
+import com.battlesbudz.dinnerbot.core.model.StorePrice
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -26,6 +29,7 @@ object SeedMapper {
     private val json = Json { ignoreUnknownKeys = true }
     private val stringList = ListSerializer(String.serializer())
     private val ingredientList = ListSerializer(RecipeIngredient.serializer())
+    private val storePriceList = ListSerializer(StorePrice.serializer())
 
     fun PriceItem.toEntity(): PriceItemEntity = PriceItemEntity(
         id = id,
@@ -40,6 +44,7 @@ object SeedMapper {
         checkedDate = checkedDate,
         source = source,
         userCorrected = userCorrected,
+        alternatesJson = json.encodeToString(storePriceList, alternates),
     )
 
     fun PriceItemEntity.toModel(): PriceItem = PriceItem(
@@ -54,6 +59,23 @@ object SeedMapper {
         checkedDate = checkedDate,
         source = source,
         userCorrected = userCorrected,
+        alternates = runCatching { json.decodeFromString(storePriceList, alternatesJson) }
+            .getOrDefault(emptyList()),
+    )
+
+    fun PantryItem.toEntity(): PantryItemEntity = PantryItemEntity(id = id, name = name, owned = owned)
+
+    fun PantryItemEntity.toModel(): PantryItem = PantryItem(id = id, name = name, owned = owned)
+
+    fun BulkStock.toEntity(): BulkStockEntity = BulkStockEntity(
+        itemId = itemId,
+        amount = onHand.amount,
+        unit = onHand.unit.name,
+    )
+
+    fun BulkStockEntity.toModel(): BulkStock = BulkStock(
+        itemId = itemId,
+        onHand = Quantity(amount, MeasureUnit.valueOf(unit)),
     )
 
     fun Recipe.toEntity(): RecipeEntity = RecipeEntity(
@@ -120,5 +142,24 @@ class SeedLoader(private val db: DinnerBotDatabase) {
             recipes = parsed.size
         }
         return Result(items, recipes)
+    }
+
+    /**
+     * First-run pantry seeding: every known staple name becomes a pantry row,
+     * owned when its name is in [ownedNames]. Ids are slugs of the name.
+     */
+    suspend fun seedPantryIfEmpty(allStapleNames: List<String>, ownedNames: Collection<String>): Int {
+        if (db.pantryDao().count() > 0) return 0
+        val owned = ownedNames.map { it.lowercase() }.toSet()
+        val rows = allStapleNames.map { name ->
+            PantryItemEntity(id = slug(name), name = name, owned = name.lowercase() in owned)
+        }
+        db.pantryDao().insertAll(rows)
+        return rows.size
+    }
+
+    companion object {
+        fun slug(name: String): String =
+            name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
     }
 }

@@ -5,7 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Unit tests ONLY. No assemble tasks, no APK is built or uploaded anywhere.
+# Engineering SOP: tests run per package, lint separately, instrumented tests
+# on an emulator. No APK is published from CI; releases come from release.yml
+# on a version tag, signed from repository secrets.
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -20,3 +22,37 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
       - name: Run unit tests
         run: ./gradlew test --stacktrace
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Run Android lint
+        run: ./gradlew lintDebug --stacktrace
+
+  emulator:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Run instrumented tests on emulator (API 34)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: default
+          arch: x86_64
+          profile: pixel_6
+          script: ./gradlew :app:connectedDebugAndroidTest --stacktrace

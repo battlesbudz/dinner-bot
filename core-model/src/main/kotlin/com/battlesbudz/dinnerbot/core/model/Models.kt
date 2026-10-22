@@ -5,6 +5,14 @@ import kotlinx.serialization.Serializable
 @Serializable
 enum class Store { ALDI, WALMART, SAMS_CLUB }
 
+/** A per-unit price for the same item at a store other than its home store. */
+@Serializable
+data class StorePrice(
+    val store: Store,
+    /** Cents per 1.0 of the item's pack unit (same unit basis as [PriceItem.pricePerUnitCents]). */
+    val pricePerUnitCents: Double,
+)
+
 /** One purchasable pack of one grocery item at its home store. */
 @Serializable
 data class PriceItem(
@@ -21,7 +29,17 @@ data class PriceItem(
     val source: String,
     /** True when Andrea has corrected this price in the app; her number always wins over seed data. */
     val userCorrected: Boolean = false,
-)
+    /** Known per-unit prices at other stores, used by the Sam's Club savings gate. */
+    val alternates: List<StorePrice> = emptyList(),
+) {
+    /** Cents per 1.0 of [packQuantity]'s unit; derived from the pack price when not stored. */
+    val perUnitCents: Double
+        get() = pricePerUnitCents ?: (packPriceCents.toDouble() / packQuantity.amount)
+
+    /** Cheapest known non-Sam's per-unit price, or null when no alternate is known. */
+    fun cheapestRegularAlternate(): StorePrice? =
+        alternates.filter { it.store != Store.SAMS_CLUB }.minByOrNull { it.pricePerUnitCents }
+}
 
 @Serializable
 data class PriceBookFile(val version: Int, val items: List<PriceItem>)

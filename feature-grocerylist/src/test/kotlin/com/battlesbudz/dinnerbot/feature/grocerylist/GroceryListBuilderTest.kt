@@ -1,0 +1,93 @@
+package com.battlesbudz.dinnerbot.feature.grocerylist
+
+import com.battlesbudz.dinnerbot.core.model.MealPlan
+import com.battlesbudz.dinnerbot.core.model.MeasureUnit
+import com.battlesbudz.dinnerbot.core.model.PlannedNight
+import com.battlesbudz.dinnerbot.core.model.PriceItem
+import com.battlesbudz.dinnerbot.core.model.Quantity
+import com.battlesbudz.dinnerbot.core.model.Recipe
+import com.battlesbudz.dinnerbot.core.model.RecipeIngredient
+import com.battlesbudz.dinnerbot.core.model.Store
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class GroceryListBuilderTest {
+
+    private fun item(id: String, store: Store, packAmount: Double, unit: MeasureUnit, packPrice: Int) =
+        PriceItem(
+            id = id, name = id, category = "Test", homeStore = store, packDescription = "pack",
+            packQuantity = Quantity(packAmount, unit), packPriceCents = packPrice,
+            pricePerUnitCents = packPrice / packAmount, checkedDate = "2026-10-22", source = "test",
+        )
+
+    private val turkey = item("ground-turkey", Store.WALMART, 1.0, MeasureUnit.POUND, 198)
+    private val tenderloin = item("pork-tenderloin", Store.SAMS_CLUB, 9.0, MeasureUnit.POUND, 2168)
+    private val spaghetti = item("spaghetti", Store.ALDI, 32.0, MeasureUnit.OUNCE, 209)
+    private val sauce = item("pasta-sauce", Store.ALDI, 24.0, MeasureUnit.OUNCE, 185)
+    private val eggs = item("eggs", Store.ALDI, 12.0, MeasureUnit.COUNT, 185)
+    private val book = listOf(turkey, tenderloin, spaghetti, sauce, eggs)
+
+    private fun recipe(id: String, vararg ingredients: RecipeIngredient) = Recipe(
+        id = id, title = id, servings = 4, activeMinutes = 10, cuisine = "Test",
+        mainProtein = "Test", ingredients = ingredients.toList(), steps = listOf("Cook."),
+    )
+
+    private fun priced(itemId: String, amount: Double, unit: MeasureUnit) =
+        RecipeIngredient(priceItemId = itemId, quantity = Quantity(amount, unit))
+
+    private val spaghettiNight = recipe(
+        "spaghetti-night",
+        priced("ground-turkey", 1.0, MeasureUnit.POUND),
+        priced("spaghetti", 16.0, MeasureUnit.OUNCE),
+        priced("pasta-sauce", 24.0, MeasureUnit.OUNCE),
+        RecipeIngredient(pantryItem = "Salt", quantity = Quantity(1.0, MeasureUnit.TEASPOON)),
+    )
+    private val eggNight = recipe(
+        "egg-night",
+        priced("eggs", 6.0, MeasureUnit.COUNT),
+        priced("spaghetti", 16.0, MeasureUnit.OUNCE),
+    )
+    private val porkNight = recipe(
+        "pork-night",
+        priced("pork-tenderloin", 1.25, MeasureUnit.POUND),
+    )
+
+    private fun planOf(vararg recipeIds: String) = MealPlan(
+        id = "p1", weekStart = "2026-10-19", budgetCents = 100_00,
+        nights = recipeIds.mapIndexed { i, id -> PlannedNight("D$i", id) },
+    )
+
+    private val recipesById = listOf(spaghettiNight, eggNight, porkNight).associateBy { it.id }
+
+    @Test fun listSplitsByStoreWithSubtotalsAndTotal() {
+        val built = GroceryListBuilder.build(
+            planOf("spaghetti-night", "egg-night"), recipesById, book, emptyMap(), servings = 4,
+        )
+        // Aldi: spaghetti 32 oz total = 1 pack 209, sauce 185, eggs 185 -> 579.
+        assertEquals(579, built.cashByStoreCents[Store.ALDI])
+        // Walmart: turkey 1 lb = 198.
+        assertEquals(198, built.cashByStoreCents[Store.WALMART])
+        assertEquals(579 + 198, built.totalCashCents)
+        assertTrue(built.lines.none { it.displayName.contains("Salt") })
+    }
+
+    @Test fun scalingDoublesPackCounts() {
+        val built = GroceryListBuilder.build(
+            planOf("spaghetti-night", "egg-night"), recipesById, book, emptyMap(), servings = 8,
+        )
+        val spaghettiLine = built.lines.single { it.itemId == "spaghetti" }
+        assertEquals(2, spaghettiLine.packsToBuy)
+        val turkeyLine = built.lines.single { it.itemId == "ground-turkey" }
+        assertEquals(2, turkeyLine.packsToBuy)
+    }
+
+    @Test fun bulkStockSubtractsFromTheList() {
+        val stock = mapOf("pork-tenderloin" to Quantity.pounds(9.0))
+        val built = GroceryListBuilder.build(
+            planOf("pork-night"), recipesById, book, stock, servings = 4,
+        )
+        assertTrue(built.lines.none { it.itemId == "pork-tenderloin" })
+        assertEquals(0, built.totalCashCents)
+    }
+}

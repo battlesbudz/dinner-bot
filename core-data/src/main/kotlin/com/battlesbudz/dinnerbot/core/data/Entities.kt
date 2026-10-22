@@ -17,6 +17,8 @@ data class PriceItemEntity(
     val checkedDate: String,
     val source: String,
     val userCorrected: Boolean,
+    /** JSON-encoded List<StorePrice>; alternate per-unit prices at other stores. */
+    val alternatesJson: String = "[]",
 )
 
 @Entity(tableName = "recipes")
@@ -33,6 +35,54 @@ data class RecipeEntity(
     val ingredientsJson: String,
     /** JSON-encoded List<String>. */
     val stepsJson: String,
+)
+
+@Entity(tableName = "pantry_items")
+data class PantryItemEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val owned: Boolean,
+)
+
+/** Quantity-tracked stock for Sam's Club bulk items only. One row per price item. */
+@Entity(tableName = "bulk_stock")
+data class BulkStockEntity(
+    @PrimaryKey val itemId: String,
+    val amount: Double,
+    val unit: String,
+)
+
+/** A generated week plan. Nights are JSON-encoded List<PlannedNight>. */
+@Entity(tableName = "plans")
+data class PlanEntity(
+    @PrimaryKey val id: String,
+    val weekStart: String,
+    val budgetCents: Int,
+    val cashNeededCents: Int,
+    val foodCostCents: Int,
+    val samsMonthlySavingsCents: Int,
+    /** JSON-encoded List<PlannedNight>. */
+    val nightsJson: String,
+    /** JSON-encoded List<String>: plain-language planner notes and named restocks. */
+    val notesJson: String,
+    val createdAtMillis: Long,
+)
+
+/** One shopping line belonging to a plan, with persisted shopping state. */
+@Entity(tableName = "grocery_items")
+data class GroceryItemEntity(
+    @PrimaryKey(autoGenerate = true) val rowId: Long = 0,
+    val planId: String,
+    val itemId: String,
+    val displayName: String,
+    val store: String,
+    val neededAmount: Double,
+    val neededUnit: String,
+    val packsToBuy: Int,
+    /** Estimated price of ONE pack (or of the whole rerouted quantity when packsToBuy is 1 by weight). */
+    val packPriceCents: Int,
+    val portionCostCents: Int?,
+    val checkedOff: Boolean,
 )
 
 @Entity(tableName = "settings")

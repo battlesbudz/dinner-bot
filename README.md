@@ -16,13 +16,20 @@ Dinner Bot is a local-first budget dinner planner for one household. It plans a 
 - **Sam's Club has to earn the trip.** Bulk buying is only planned when projected Sam's savings for the month reach at least $15 against regular packs elsewhere.
 - Prices are estimates. The target is that a quoted week lands within $10 of what is actually spent on those items; per-store calibration and in-app price corrections (later phases) are how that stays true.
 
-## Status: Phase 1
+Phase 1 was the skeleton: project structure in isolated packages with per-package unit tests, the Room database, the seed loader and validator, onboarding/settings, and recipe browsing with serving scaling and estimated cost per serving.
 
-Phase 1 is the skeleton: project structure in isolated packages with per-package unit tests, the Room database, the seed loader and validator, onboarding/settings, and recipe browsing with serving scaling and estimated cost per serving.
+## Status: v0.1.0 (Phase 2)
 
-Later phases (not built yet): the budget planner/solver and grocery list (Phase 2), shopping mode and price learning (Phase 3), backup export/import and the home trial (Phase 4), and the four-week accuracy trial (Phase 5). The modules `feature-pricebook`, `feature-pantry`, `feature-planner`, `feature-grocerylist`, and `feature-backup` exist as stubs.
+Phase 2 is the working app:
 
-CI runs unit tests only (`./gradlew test`). No APK is assembled in CI.
+- **Planner** (`feature-planner`): generates a week of dinners for the household's cook nights, prices it with the shared costing engine in `core-model`, prefers dinners covered by Sam's bulk stock at home, and keeps the week's cash under the budget cap. A Sam's restock that cannot fit is deferred and named in plain language in the plan, never quietly charged over the cap. The week view shows cash needed and attributed food cost as two separate numbers, plus the "Sam's Club saves about $X this month" line from the $15 gate.
+- **Grocery list** (`feature-grocerylist`): aggregates the plan's ingredients scaled to servings, subtracts pantry-owned staples and bulk-stock-covered amounts, splits into Aldi / Walmart / Sam's Club sections with per-store cash subtotals, and persists check-offs in Room. Tapping a price corrects it, and the correction writes back to the price book.
+- **Price book** (`feature-pricebook`): every item with its store and pack price, editable; corrected prices are flagged and always win over seed data.
+- **Pantry** (`feature-pantry`): the owned/not-owned staple checklist plus quantity-tracked Sam's bulk stock.
+- **Backup** (`feature-backup`): settings, price book (with corrections), pantry, and bulk stock export/import as one JSON file through the Android system file picker. No network is involved; the app still has no INTERNET permission.
+- Plans and grocery lists persist in Room (database version 2; pre-1.0, schema bumps use destructive migration and the seed loader refills).
+
+CI runs per-package JVM unit tests, Android lint, and instrumented tests on an API 34 emulator. Releases are built only from version tags by `release.yml`, signed from repository secrets, and published as GitHub Releases.
 
 ## License
 
