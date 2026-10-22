@@ -90,4 +90,72 @@ class GroceryListBuilderTest {
         assertTrue(built.lines.none { it.itemId == "pork-tenderloin" })
         assertEquals(0, built.totalCashCents)
     }
+
+    // ---- Pantry-owned priced items (hotfix, Battles 2026-10-22) ------------
+    // The reported bug: "Potatoes" added to the pantry, and the list still
+    // said to buy russet potatoes. An owned pantry entry matching a priced
+    // item means the item is already home: off the list, $0 cash.
+
+    private val russetPotatoes = PriceItem(
+        id = "russet-potatoes", name = "Russet potatoes", category = "Produce",
+        homeStore = Store.ALDI, packDescription = "5 lb bag",
+        packQuantity = Quantity(5.0, MeasureUnit.POUND), packPriceCents = 349,
+        pricePerUnitCents = 69.8, checkedDate = "2026-10-22", source = "test",
+    )
+    private val potatoNight = recipe(
+        "potato-night",
+        priced("russet-potatoes", 2.0, MeasureUnit.POUND),
+        priced("eggs", 6.0, MeasureUnit.COUNT),
+    )
+    private val bookWithPotatoes = book + russetPotatoes
+    private val recipesWithPotatoes = recipesById + ("potato-night" to potatoNight)
+
+    @Test fun ownedPotatoesStayOffTheList() {
+        val built = GroceryListBuilder.build(
+            planOf("potato-night"), recipesWithPotatoes, bookWithPotatoes, emptyMap(),
+            servings = 4, pantryOwnedNames = setOf("Potatoes"),
+        )
+        assertTrue(built.lines.none { it.itemId == "russet-potatoes" })
+        // The eggs are unaffected: one pack at 185, all of the cash.
+        assertEquals(185, built.totalCashCents)
+        assertEquals(185, built.cashByStoreCents[Store.ALDI])
+        assertEquals(listOf("eggs"), built.lines.map { it.itemId })
+    }
+
+    @Test fun singularPotatoEntryAlsoCovers() {
+        val built = GroceryListBuilder.build(
+            planOf("potato-night"), recipesWithPotatoes, bookWithPotatoes, emptyMap(),
+            servings = 4, pantryOwnedNames = setOf("Potato"),
+        )
+        assertTrue(built.lines.none { it.itemId == "russet-potatoes" })
+        assertEquals(185, built.totalCashCents)
+    }
+
+    @Test fun potatoesNotOwnedAreBoughtAgain() {
+        val built = GroceryListBuilder.build(
+            planOf("potato-night"), recipesWithPotatoes, bookWithPotatoes, emptyMap(),
+            servings = 4, pantryOwnedNames = emptySet(),
+        )
+        val line = built.lines.single { it.itemId == "russet-potatoes" }
+        assertEquals(1, line.packsToBuy)
+        assertEquals(349 + 185, built.totalCashCents)
+    }
+
+    @Test fun partialWordStapleDoesNotSuppressTheItem() {
+        val built = GroceryListBuilder.build(
+            planOf("potato-night"), recipesWithPotatoes, bookWithPotatoes, emptyMap(),
+            servings = 4, pantryOwnedNames = setOf("Pot"),
+        )
+        assertTrue(built.lines.any { it.itemId == "russet-potatoes" })
+        assertEquals(349 + 185, built.totalCashCents)
+    }
+
+    @Test fun unrelatedStapleChangesNothing() {
+        val built = GroceryListBuilder.build(
+            planOf("potato-night"), recipesWithPotatoes, bookWithPotatoes, emptyMap(),
+            servings = 4, pantryOwnedNames = setOf("Rice"),
+        )
+        assertTrue(built.lines.any { it.itemId == "russet-potatoes" })
+        assertEquals(349 + 185, built.totalCashCents)
+    }
 }

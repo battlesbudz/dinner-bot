@@ -26,13 +26,19 @@ import com.battlesbudz.dinnerbot.core.model.Store
  *    cost or budget; unrated recipes stay in normal rotation.
  * 2. Prefer dinners whose Sam's bulk ingredients are already covered by stock
  *    at home (they cost $0 cash for that ingredient), then cheaper dinners.
- * 3. Price the week with [Costing]: cash is what the budget sees.
+ * 3. Price the week with [Costing]: cash is what the budget sees. A priced
+ *    item an owned pantry entry matches by name (see
+ *    [Costing.pantryCoveredItemIds]) is already home: it prices at $0 cash
+ *    and stays off the list, the same on-hand treatment as Sam's stock.
  * 4. If cash is over the weekly cap, first try swapping dinners for cheaper
  *    ones. A Sam's restock that cannot fit is DEFERRED: dinners depending on
  *    it are swapped away and the restock is named plainly in [WeekPlan.notes]
  *    instead of quietly going over the cap.
  */
 object WeekPlanner {
+
+    /** Prefix of the note [addPantryNotes] writes; [recost] drops stale ones by it. */
+    private const val PANTRY_GAP_NOTE_PREFIX = "Pantry staples these dinners use that are not marked owned:"
 
     data class WeekPlan(
         val weekStart: String,
@@ -103,7 +109,7 @@ object WeekPlanner {
                 chosenIds.add(candidate.id)
             }
         }
-        var costed = cost(settings, chosen, itemsById, stockOnHand)
+        var costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames)
         val notes = mutableListOf<String>()
         val deferred = mutableListOf<String>()
 
@@ -135,7 +141,7 @@ object WeekPlanner {
                     notes += "${item.name}: the ${Money(item.packPriceCents).format()} Sam's Club restock " +
                         "does not fit under this week's ${Money(cap).format()} budget, so it is moved to a " +
                         "later week and this week's dinners were swapped to ones that do not need it."
-                    costed = cost(settings, chosen, itemsById, stockOnHand)
+                    costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames)
                 }
             }
             // Step 2: greedily swap the most expensive dinner for the cheapest
@@ -150,7 +156,7 @@ object WeekPlanner {
                 val cheapestUnused = unused.minByOrNull { dinnerFoodCost(it, settings, itemsById) } ?: break
                 if (dinnerFoodCost(cheapestUnused, settings, itemsById) >= dinnerFoodCost(mostExpensive, settings, itemsById)) break
                 chosen[chosen.indexOf(mostExpensive)] = cheapestUnused
-                costed = cost(settings, chosen, itemsById, stockOnHand)
+                costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames)
             }
             if (costed.cashNeededCents > cap) {
                 notes += "Even the cheapest week Dinner Bot can build from these recipes costs " +
@@ -167,7 +173,7 @@ object WeekPlanner {
         // short list around (the v0.1.0 bug: index % size repeated dinners).
         val distinctChosen = chosen.distinctBy { it.id }
         if (distinctChosen.size < chosen.size) {
-            costed = cost(settings, distinctChosen, itemsById, stockOnHand)
+            costed = cost(settings, distinctChosen, itemsById, stockOnHand, pantryOwnedNames)
         }
         if (distinctChosen.size < nightsNeeded) {
             notes += "There are not enough different dinners available to fill every cook " +
@@ -231,7 +237,7 @@ object WeekPlanner {
         for (candidate in candidates) {
             val trial = baseChosen.toMutableList()
             trial[trialSlot] = candidate
-            val costed = cost(settings, trial, itemsById, stockOnHand)
+            val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames)
             val cap = settings.weeklyBudgetCents
             if (cap <= 0 || costed.cashNeededCents <= cap) {
                 val notes = current.notes.toMutableList()
@@ -253,7 +259,7 @@ object WeekPlanner {
         val fallback = candidates.first()
         val trial = baseChosen.toMutableList()
         trial[trialSlot] = fallback
-        val costed = cost(settings, trial, itemsById, stockOnHand)
+        val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames)
         return current.copy(
             nights = current.nights.mapIndexed { i, night ->
                 if (i == nightIndex) night.copy(recipeId = fallback.id) else night
@@ -309,7 +315,7 @@ object WeekPlanner {
                 if (i == nightIndex) night.copy(notCooking = true, notCookingReason = reason) else night
             }
             val chosen = nights.filterNot { it.notCooking }.mapNotNull { recipesById[it.recipeId] }
-            val costed = cost(settings, chosen, itemsById, stockOnHand)
+            val costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames)
             val notes = current.notes.toMutableList()
             addPantryNotes(settings, chosen, pantryOwnedNames, notes)
             return current.copy(
@@ -342,7 +348,7 @@ object WeekPlanner {
         val cap = settings.weeklyBudgetCents
         for (candidate in candidates) {
             val trial = baseChosen + candidate
-            val costed = cost(settings, trial, itemsById, stockOnHand)
+            val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames)
             if (cap <= 0 || costed.cashNeededCents <= cap) {
                 return restoredNight(current, nightIndex, candidate, trial, costed, settings, pantryOwnedNames)
             }
@@ -351,12 +357,50 @@ object WeekPlanner {
         // and say so, the same fallback swapDinner uses.
         val fallback = candidates.first()
         val trial = baseChosen + fallback
-        val costed = cost(settings, trial, itemsById, stockOnHand)
+        val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames)
         val restored = restoredNight(current, nightIndex, fallback, trial, costed, settings, pantryOwnedNames)
         return restored.copy(
             notes = (restored.notes + "Cooking that night again puts the week at " +
                 "${Money(costed.cashNeededCents).format()}, over the ${Money(cap).format()} budget; " +
                 "no cheaper dinner was available.").distinct(),
+        )
+    }
+
+    /**
+     * Reprice an already-generated week in place after pantry ownership
+     * changed. The dinners do not change; only the costing is redone with
+     * the new [pantryOwnedNames], so an item an owned pantry entry matches
+     * leaves the list and the week's cash the moment it is marked owned,
+     * and comes back when it is marked not owned. Nights marked not cooking
+     * stay out of the costing, exactly as the other flows price them.
+     * Check-offs carry over by item: repricing the same dinners must not
+     * uncheck what Andrea already shopped. The pantry-gap note is rebuilt
+     * from the new ownership so a stale one never lingers.
+     */
+    fun recost(
+        settings: HouseholdSettings,
+        current: WeekPlan,
+        recipes: List<Recipe>,
+        priceItems: List<PriceItem>,
+        stockOnHand: Map<String, Quantity>,
+        pantryOwnedNames: Set<String>,
+    ): WeekPlan {
+        val itemsById = priceItems.associateBy { it.id }
+        val recipesById = recipes.associateBy { it.id }
+        val chosen = current.nights.filterNot { it.notCooking }.mapNotNull { recipesById[it.recipeId] }
+        val costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames)
+        val checkedItemIds = current.lines.filter { it.checkedOff }.map { it.itemId }.toSet()
+        val notes = current.notes.filterNot { it.startsWith(PANTRY_GAP_NOTE_PREFIX) }.toMutableList()
+        addPantryNotes(settings, chosen, pantryOwnedNames, notes)
+        return current.copy(
+            lines = costed.lines.map { line ->
+                if (line.itemId in checkedItemIds) line.copy(checkedOff = true) else line
+            },
+            cashNeededCents = costed.cashNeededCents,
+            foodCostCents = costed.foodCostCents,
+            samsMonthlySavingsCents = costed.gate.projectedMonthlySavingsCents,
+            samsGateMet = costed.gate.useSams,
+            notes = notes.distinct(),
         )
     }
 
@@ -408,7 +452,14 @@ object WeekPlanner {
         chosen: List<Recipe>,
         itemsById: Map<String, PriceItem>,
         stockOnHand: Map<String, Quantity>,
-    ): Costing.CostedWeek = Costing.costRecipes(chosen, settings.householdSize, itemsById, stockOnHand)
+        pantryOwnedNames: Set<String>,
+    ): Costing.CostedWeek = Costing.costRecipes(
+        chosen,
+        settings.householdSize,
+        itemsById,
+        stockOnHand,
+        pantryCoveredItemIds = Costing.pantryCoveredItemIds(pantryOwnedNames, itemsById.values),
+    )
 
     private fun dinnerFoodCost(recipe: Recipe, settings: HouseholdSettings, itemsById: Map<String, PriceItem>): Int =
         Costing.costRecipes(listOf(recipe), settings.householdSize, itemsById, emptyMap()).foodCostCents
@@ -482,7 +533,7 @@ object WeekPlanner {
             .filter { it.lowercase() !in owned }
             .distinct()
         if (missing.isNotEmpty()) {
-            notes += "Pantry staples these dinners use that are not marked owned: " +
+            notes += "$PANTRY_GAP_NOTE_PREFIX " +
                 missing.joinToString(", ") + ". They are not priced in the price book, so they are not " +
                 "on the shopping list; check the pantry before you shop."
         }

@@ -355,6 +355,28 @@ private fun DinnerBotApp(
                     )
                 }
             }
+            /**
+             * Pantry ownership feeds costing: when a staple is marked owned,
+             * added, or marked not owned, the current week is repriced in
+             * place (same dinners, new costing) and persisted, so its list
+             * and cash total immediately reflect what is already home.
+             * Skipped when the reprice changes nothing.
+             */
+            fun repriceStoredPlan(forPantryItems: List<PantryItem>) {
+                val sp = storedPlan ?: return
+                val view = weekPlanView ?: return
+                val repriced = WeekPlanner.recost(
+                    settings = currentSettings,
+                    current = view,
+                    recipes = adaptation.recipes,
+                    priceItems = priceItems,
+                    stockOnHand = PantryLogic.stockMap(bulkStocks),
+                    pantryOwnedNames = PantryLogic.ownedNames(forPantryItems),
+                )
+                if (repriced.lines != view.lines || repriced.cashNeededCents != view.cashNeededCents) {
+                    persistPlan(repriced, keepId = sp.id, forSettings = currentSettings)
+                }
+            }
             Column(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.weight(1f)) {
                     when (tab) {
@@ -448,21 +470,27 @@ private fun DinnerBotApp(
                             stocks = bulkStocks,
                             onTogglePantry = { item ->
                                 val toggled = item.copy(owned = !item.owned)
+                                val updatedPantry = pantryItems.map {
+                                    if (it.id == item.id) toggled else it
+                                }
                                 scope.launch {
                                     withContext(Dispatchers.IO) {
                                         database.pantryDao().upsert(with(SeedMapper) { toggled.toEntity() })
                                         syncPantryStaples(database, currentSettings)
                                     }
+                                    repriceStoredPlan(updatedPantry)
                                     refresh()
                                 }
                             },
                             onAddStaple = { name ->
                                 val item = PantryLogic.newStaple(name)
+                                val updatedPantry = pantryItems.filterNot { it.id == item.id } + item
                                 scope.launch {
                                     withContext(Dispatchers.IO) {
                                         database.pantryDao().upsert(with(SeedMapper) { item.toEntity() })
                                         syncPantryStaples(database, currentSettings)
                                     }
+                                    repriceStoredPlan(updatedPantry)
                                     refresh()
                                 }
                             },
