@@ -141,6 +141,25 @@ class WeekPlannerRatingsTest {
         assertEquals("cheap", plan.nights.single().recipeId)
     }
 
+    @Test fun upRatedTieBreakSurvivesRotation() {
+        // All three dinners cost the same. Ranked order puts the UP-rated
+        // one first; without the repair, variation 1+ rotation would take an
+        // unrated dinner for the single cook night instead.
+        val recipes = listOf(
+            cheapDinner("u1", title = "U1"),
+            cheapDinner("up", title = "Up"),
+            cheapDinner("u2", title = "U2"),
+        )
+        val ratings = mapOf("up" to RecipeRating.UP)
+        for (variation in 0..2) {
+            val plan = WeekPlanner.generate(
+                settings(listOf("MON")), recipes, book, emptyMap(), emptySet(),
+                "2026-10-19", variation = variation, ratings = ratings,
+            )
+            assertEquals("variation $variation", "up", plan.nights.single().recipeId)
+        }
+    }
+
     @Test fun unratedRecipesStayInNormalRotation() {
         val recipes = (1..6).map { cheapDinner("c$it") }
         val ratings = mapOf("c6" to RecipeRating.UP)

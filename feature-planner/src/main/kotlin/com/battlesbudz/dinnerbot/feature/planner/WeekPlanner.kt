@@ -82,6 +82,27 @@ object WeekPlanner {
         // Rotate the ranked list for Regenerate so a new variation is a new week.
         val rotated = rotate(candidates, variation)
         var chosen = rotated.take(nightsNeeded).toMutableList()
+        // Thumbs-up tie-break repair: rotation can move an UP-rated dinner
+        // out of the taken window in favor of an unrated dinner it exactly
+        // ties with (same stock coverage, same cost). Swap it back in so the
+        // tie-break holds at every variation, not just variation 0. Anything
+        // that differs in stock coverage or cost is left exactly as rotated.
+        val chosenIds = chosen.map { it.id }.toMutableSet()
+        for (candidate in candidates) {
+            if (ratings[candidate.id] != RecipeRating.UP || candidate.id in chosenIds) continue
+            val swapOutIndex = chosen.indexOfLast { other ->
+                ratings[other.id] != RecipeRating.UP &&
+                    usesStockedBulk(other, itemsById, stockOnHand) ==
+                    usesStockedBulk(candidate, itemsById, stockOnHand) &&
+                    dinnerFoodCost(other, settings, itemsById) ==
+                    dinnerFoodCost(candidate, settings, itemsById)
+            }
+            if (swapOutIndex >= 0) {
+                chosenIds.remove(chosen[swapOutIndex].id)
+                chosen[swapOutIndex] = candidate
+                chosenIds.add(candidate.id)
+            }
+        }
         var costed = cost(settings, chosen, itemsById, stockOnHand)
         val notes = mutableListOf<String>()
         val deferred = mutableListOf<String>()
