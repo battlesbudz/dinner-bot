@@ -91,3 +91,42 @@ class SeedPoolPlannerTest {
         assertEquals(31, priceBook.items.size)
     }
 }
+
+    @Test fun fortnightFromTheRealPoolFillsBothWeeksWithoutCrossWeekRepeats() {
+        // Phase V2-3 against the real seed pool: two full weeks, no dinner
+        // in both, and every top-up line is a perishable at a regular store.
+        val settings = HouseholdSettings()
+        val itemsById = priceBook.items.associateBy { it.id }
+        for (variation in 0..4) {
+            val plan = WeekPlanner.generateFortnight(
+                settings = settings,
+                recipes = recipesFile.recipes,
+                priceItems = priceBook.items,
+                stockOnHand = emptyMap(),
+                pantryOwnedNames = pantryNames,
+                week1Start = "2026-10-26",
+                week2Start = "2026-11-02",
+                variation = variation,
+            )
+            assertEquals("variation $variation: week 1 full", 5, plan.week1.nights.size)
+            assertEquals("variation $variation: week 2 full", 5, plan.week2.nights.size)
+            val week1Ids = plan.week1.nights.map { it.recipeId }.toSet()
+            val week2Ids = plan.week2.nights.map { it.recipeId }.toSet()
+            assertTrue(
+                "variation $variation repeats across weeks",
+                week1Ids.intersect(week2Ids).isEmpty(),
+            )
+            assertEquals(
+                plan.week1.cashNeededCents + plan.week2.cashNeededCents,
+                plan.tripCashCents,
+            )
+            plan.topUpLines.forEach { line ->
+                val item = itemsById[line.itemId]
+                assertTrue(
+                    "top-up line ${line.itemId} must be perishable and not a Sam's purchase",
+                    item != null &&
+                        com.battlesbudz.dinnerbot.core.model.Perishables.isTopUpLine(line, item),
+                )
+            }
+        }
+    }

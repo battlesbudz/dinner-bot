@@ -52,6 +52,7 @@ import com.battlesbudz.dinnerbot.core.model.DietPreset
 import com.battlesbudz.dinnerbot.core.model.DietPresets
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
 import com.battlesbudz.dinnerbot.core.model.PantryItem
+import com.battlesbudz.dinnerbot.core.model.Perishables
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeAdaptation
@@ -67,6 +68,7 @@ import com.battlesbudz.dinnerbot.feature.onboarding.SettingsScreen
 import com.battlesbudz.dinnerbot.feature.onboarding.SetupWalkthrough
 import com.battlesbudz.dinnerbot.feature.pantry.PantryLogic
 import com.battlesbudz.dinnerbot.feature.pantry.PantryScreen
+import com.battlesbudz.dinnerbot.feature.planner.FortnightPlannerScreen
 import com.battlesbudz.dinnerbot.feature.planner.PlannerScreen
 import com.battlesbudz.dinnerbot.feature.planner.WeekPlanner
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceBookScreen
@@ -133,6 +135,8 @@ private fun DinnerBotApp(
     var bulkStocks by remember { mutableStateOf<List<BulkStock>>(emptyList()) }
     var storedPlan by remember { mutableStateOf<PlanMapper.StoredPlan?>(null) }
     var groceryRows by remember { mutableStateOf<List<GroceryRow>>(emptyList()) }
+    var storedPlan2 by remember { mutableStateOf<PlanMapper.StoredPlan?>(null) }
+    var groceryRows2 by remember { mutableStateOf<List<GroceryRow>>(emptyList()) }
     var ratings by remember { mutableStateOf<Map<String, RecipeRating>>(emptyMap()) }
     var presets by remember { mutableStateOf<List<DietPreset>>(emptyList()) }
     var tab by remember { mutableStateOf(Tab.RECIPES) }
@@ -158,8 +162,23 @@ private fun DinnerBotApp(
             val p = database.priceItemDao().getAll().map { with(SeedMapper) { it.toModel() } }
             val pantry = database.pantryDao().getAll().map { with(SeedMapper) { it.toModel() } }
             val stocks = database.bulkStockDao().getAll().map { with(SeedMapper) { it.toModel() } }
-            val plan = database.planDao().getLatest()?.let { with(PlanMapper) { it.toStoredPlan() } }
+            val recentPlans = database.planDao().getRecent(2)
+                .map { with(PlanMapper) { it.toStoredPlan() } }
+            val plan = recentPlans.firstOrNull()
+            // A fortnight is stored as two plans (Phase V2-3) in the
+            // existing plan storage: week 2's start is week 1's plus 7
+            // days. Anything else in the second slot is not a pair.
+            val plan2 = recentPlans.getOrNull(1)?.takeIf { second ->
+                plan != null && runCatching {
+                    LocalDate.parse(second.weekStart) == LocalDate.parse(plan.weekStart).plusWeeks(1)
+                }.getOrDefault(false)
+            }
             val rows = plan?.let { pl ->
+                database.groceryDao().getForPlan(pl.id).map {
+                    GroceryRow(it.rowId, with(PlanMapper) { it.toModel() })
+                }
+            } ?: emptyList()
+            val rows2 = plan2?.let { pl ->
                 database.groceryDao().getForPlan(pl.id).map {
                     GroceryRow(it.rowId, with(PlanMapper) { it.toModel() })
                 }
@@ -168,7 +187,7 @@ private fun DinnerBotApp(
                 runCatching { RecipeRating.valueOf(entity.rating) }.getOrNull()
                     ?.let { entity.recipeId to it }
             }.toMap()
-            LoadedState(s, r, p, pantry, stocks, plan, rows, loadedRatings, loadedPresets)
+            LoadedState(s, r, p, pantry, stocks, plan, rows, plan2, rows2, loadedRatings, loadedPresets)
         }
         settings = loaded.settings
         recipes = loaded.recipes
@@ -177,6 +196,8 @@ private fun DinnerBotApp(
         bulkStocks = loaded.bulkStocks
         storedPlan = loaded.plan
         groceryRows = loaded.groceryRows
+        storedPlan2 = loaded.plan2
+        groceryRows2 = loaded.groceryRows2
         ratings = loaded.ratings
         presets = loaded.presets
         loading = false
@@ -251,6 +272,73 @@ private fun DinnerBotApp(
             ratings = ratings,
         )
         persistPlan(plan, keepId = null, forSettings = forSettings)
+        tab = Tab.PLANNER
+    }
+
+    /**
+     * Persist a fortnight (Phase V2-3) as two plans in the existing plan
+     * storage: week 1 and week 2, each with its own grocery rows and
+     * check-offs. No schema change: a plan has always been a week, and a
+     * fortnight is two of them a week apart. A fresh generation clears the
+     * old plans exactly like a one-week generation does.
+     */
+    fun persistFortnight(
+        fortnight: WeekPlanner.FortnightPlan,
+        keepIds: Pair<String, String>?,
+        forSettings: HouseholdSettings,
+    ) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                val base = "plan-${System.currentTimeMillis()}"
+                val id1 = keepIds?.first ?: "$base-w1"
+                val id2 = keepIds?.second ?: "$base-w2"
+                if (keepIds == null) {
+                    database.planDao().deleteAll()
+                    database.groceryDao().deleteAll()
+                } else {
+                    database.groceryDao().deleteForPlan(id1)
+                    database.groceryDao().deleteForPlan(id2)
+                }
+                val now = System.currentTimeMillis()
+                listOf(
+                    Triple(id1, fortnight.week1, now),
+                    Triple(id2, fortnight.week2, now + 1),
+                ).forEach { (id, week, createdAt) ->
+                    val stored = PlanMapper.StoredPlan(
+                        id = id,
+                        weekStart = week.weekStart,
+                        budgetCents = forSettings.weeklyBudgetCents,
+                        cashNeededCents = week.cashNeededCents,
+                        foodCostCents = week.foodCostCents,
+                        samsMonthlySavingsCents = week.samsMonthlySavingsCents,
+                        nights = week.nights,
+                        notes = week.notes,
+                        createdAtMillis = createdAt,
+                    )
+                    database.planDao().insert(with(PlanMapper) { stored.toEntity() })
+                    database.groceryDao().insertAll(week.lines.map { with(PlanMapper) { it.toEntity(id) } })
+                }
+            }
+            refresh()
+        }
+    }
+
+    /** Plan two weeks on one trip (Phase V2-3). */
+    fun generateTwoWeekPlan(forSettings: HouseholdSettings) {
+        variation += 1
+        val week1Start = currentWeekStart()
+        val fortnight = WeekPlanner.generateFortnight(
+            settings = forSettings,
+            recipes = plannerPool(forSettings),
+            priceItems = priceItems,
+            stockOnHand = PantryLogic.stockMap(bulkStocks),
+            pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
+            week1Start = week1Start,
+            week2Start = LocalDate.parse(week1Start).plusWeeks(1).toString(),
+            variation = variation,
+            ratings = ratings,
+        )
+        persistFortnight(fortnight, keepIds = null, forSettings = forSettings)
         tab = Tab.PLANNER
     }
 
@@ -355,6 +443,33 @@ private fun DinnerBotApp(
                     )
                 }
             }
+            val weekPlanView2 = remember(storedPlan2, groceryRows2) {
+                storedPlan2?.let { sp ->
+                    WeekPlanner.WeekPlan(
+                        weekStart = sp.weekStart,
+                        nights = sp.nights,
+                        lines = groceryRows2.map { it.line },
+                        cashNeededCents = sp.cashNeededCents,
+                        foodCostCents = sp.foodCostCents,
+                        samsMonthlySavingsCents = sp.samsMonthlySavingsCents,
+                        samsGateMet = sp.samsMonthlySavingsCents >= Costing.SAMS_MONTHLY_GATE_CENTS,
+                        deferredRestocks = emptyList(),
+                        notes = sp.notes,
+                    )
+                }
+            }
+            // The stored fortnight as the engine's type, whenever both
+            // weeks are present; the sections are recomposed from the two
+            // weeks so the view always matches what was planned.
+            val fortnightView = remember(weekPlanView, weekPlanView2, priceItems) {
+                val w1 = weekPlanView
+                val w2 = weekPlanView2
+                if (w1 != null && w2 != null) {
+                    WeekPlanner.composeFortnight(w1, w2, priceItems)
+                } else {
+                    null
+                }
+            }
             /**
              * Pantry ownership feeds costing: when a staple is marked owned,
              * added, or marked not owned, the current week is repriced in
@@ -365,6 +480,55 @@ private fun DinnerBotApp(
             fun repriceStoredPlan(forPantryItems: List<PantryItem>) {
                 val sp = storedPlan ?: return
                 val view = weekPlanView ?: return
+                val sp2 = storedPlan2
+                val view2 = weekPlanView2
+                if (sp2 != null && view2 != null) {
+                    // Fortnight: reprice week 1 against the real stock,
+                    // then week 2 against the stock the repriced week 1
+                    // leaves behind, holding the horizon gate the pair
+                    // was planned under. Same dinners throughout.
+                    val owned = PantryLogic.ownedNames(forPantryItems)
+                    val stock = PantryLogic.stockMap(bulkStocks)
+                    val dinners = (view.nights + view2.nights)
+                        .filterNot { it.notCooking }
+                        .mapNotNull { recipesById[it.recipeId] }
+                    val gate = WeekPlanner.fortnightGateForDinners(currentSettings, dinners, priceItems)
+                    val repriced1 = WeekPlanner.recost(
+                        settings = currentSettings,
+                        current = view,
+                        recipes = adaptation.recipes,
+                        priceItems = priceItems,
+                        stockOnHand = stock,
+                        pantryOwnedNames = owned,
+                        gateOverride = gate,
+                    )
+                    val stock1 = WeekPlanner.projectedStockAfter(
+                        currentSettings, repriced1, adaptation.recipes, priceItems, stock, owned, gate,
+                    )
+                    val repriced2 = WeekPlanner.recost(
+                        settings = currentSettings,
+                        current = view2,
+                        recipes = adaptation.recipes,
+                        priceItems = priceItems,
+                        stockOnHand = stock1,
+                        pantryOwnedNames = owned,
+                        gateOverride = gate,
+                    )
+                    val changed = repriced1.lines != view.lines ||
+                        repriced1.cashNeededCents != view.cashNeededCents ||
+                        repriced1.notes != view.notes ||
+                        repriced2.lines != view2.lines ||
+                        repriced2.cashNeededCents != view2.cashNeededCents ||
+                        repriced2.notes != view2.notes
+                    if (changed) {
+                        persistFortnight(
+                            WeekPlanner.composeFortnight(repriced1, repriced2, priceItems),
+                            keepIds = sp.id to sp2.id,
+                            forSettings = currentSettings,
+                        )
+                    }
+                    return
+                }
                 val repriced = WeekPlanner.recost(
                     settings = currentSettings,
                     current = view,
@@ -402,7 +566,58 @@ private fun DinnerBotApp(
                                 )
                             }
                         }
-                        Tab.PLANNER -> PlannerScreen(
+                        Tab.PLANNER -> if (fortnightView != null && storedPlan != null && storedPlan2 != null) {
+                            FortnightPlannerScreen(
+                                plan = fortnightView,
+                                recipesById = recipesById,
+                                budgetCents = currentSettings.weeklyBudgetCents,
+                                onRegenerateTwoWeeks = { generateTwoWeekPlan(currentSettings) },
+                                onPlanOneWeek = { generatePlan(currentSettings) },
+                                onSwap = { weekIndex, day ->
+                                    val swapped = WeekPlanner.swapDinnerFortnight(
+                                        settings = currentSettings,
+                                        current = fortnightView,
+                                        weekIndex = weekIndex,
+                                        day = day,
+                                        recipes = adaptation.recipes,
+                                        priceItems = priceItems,
+                                        stockOnHand = PantryLogic.stockMap(bulkStocks),
+                                        pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
+                                        ratings = ratings,
+                                        candidatePool = plannerPool(currentSettings),
+                                    )
+                                    persistFortnight(
+                                        swapped,
+                                        keepIds = storedPlan!!.id to storedPlan2!!.id,
+                                        forSettings = currentSettings,
+                                    )
+                                },
+                                onSetNightCooking = { weekIndex, day, cooking, reason ->
+                                    val updated = WeekPlanner.setNightCookingFortnight(
+                                        settings = currentSettings,
+                                        current = fortnightView,
+                                        weekIndex = weekIndex,
+                                        day = day,
+                                        cooking = cooking,
+                                        reason = reason,
+                                        recipes = adaptation.recipes,
+                                        priceItems = priceItems,
+                                        stockOnHand = PantryLogic.stockMap(bulkStocks),
+                                        pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
+                                        ratings = ratings,
+                                        candidatePool = plannerPool(currentSettings),
+                                    )
+                                    persistFortnight(
+                                        updated,
+                                        keepIds = storedPlan!!.id to storedPlan2!!.id,
+                                        forSettings = currentSettings,
+                                    )
+                                },
+                                ratings = ratings,
+                                onRate = { recipeId, rating -> rateRecipe(recipeId, rating) },
+                                outOfRotationCount = ratings.values.count { it == RecipeRating.DOWN },
+                            )
+                        } else PlannerScreen(
                             plan = weekPlanView,
                             recipesById = recipesById,
                             budgetCents = currentSettings.weeklyBudgetCents,
@@ -446,10 +661,34 @@ private fun DinnerBotApp(
                             ratings = ratings,
                             onRate = { recipeId, rating -> rateRecipe(recipeId, rating) },
                             outOfRotationCount = ratings.values.count { it == RecipeRating.DOWN },
+                            onGenerateTwoWeeks = { generateTwoWeekPlan(currentSettings) },
                         )
-                        Tab.LIST -> GroceryListScreen(
+                        Tab.LIST -> {
+                            // Two-week plan: the list is the big trip (week
+                            // 1's rows plus week 2's shelf-stable and frozen
+                            // rows) and week 2's fresh top-up, split by the
+                            // same category rule the planner used.
+                            val priceById = priceItems.associateBy { it.id }
+                            val isFortnightList = fortnightView != null
+                            val topUpRows = if (isFortnightList) {
+                                groceryRows2.filter {
+                                    Perishables.isTopUpLine(it.line, priceById[it.line.itemId])
+                                }
+                            } else {
+                                emptyList()
+                            }
+                            val bigTripRows = if (isFortnightList) {
+                                groceryRows + groceryRows2.filterNot {
+                                    Perishables.isTopUpLine(it.line, priceById[it.line.itemId])
+                                }
+                            } else {
+                                groceryRows
+                            }
+                            GroceryListScreen(
                             priceItems = priceItems,
-                            rows = groceryRows,
+                            rows = bigTripRows,
+                            topUpRows = topUpRows,
+                            twoWeekTrip = isFortnightList,
                             onToggleChecked = { row, checked ->
                                 scope.launch {
                                     withContext(Dispatchers.IO) {
@@ -466,7 +705,8 @@ private fun DinnerBotApp(
                                     refresh()
                                 }
                             },
-                        )
+                            )
+                        }
                         Tab.PANTRY -> PantryScreen(
                             pantryItems = pantryItems,
                             bulkPriceItems = PantryLogic.bulkItems(priceItems),
@@ -606,6 +846,8 @@ private data class LoadedState(
     val bulkStocks: List<BulkStock>,
     val plan: PlanMapper.StoredPlan?,
     val groceryRows: List<GroceryRow>,
+    val plan2: PlanMapper.StoredPlan?,
+    val groceryRows2: List<GroceryRow>,
     val ratings: Map<String, RecipeRating>,
     val presets: List<DietPreset>,
 )
