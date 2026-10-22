@@ -61,7 +61,7 @@ class BackupEngineTest {
     }
 
     @Test fun importRejectsNewerVersionAndBrokenPrices() {
-        val newer = BackupEngine.export(data).replace("\"version\": 1", "\"version\": 99")
+        val newer = BackupEngine.export(data.copy(version = 99))
         assertThrows(IllegalArgumentException::class.java) { BackupEngine.import(newer) }
 
         val broken = data.copy(
