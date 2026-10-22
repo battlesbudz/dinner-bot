@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Reminders are scheduled and posted entirely on the device (WorkManager
+     plus local notifications). This library declares no permissions; the
+     POST_NOTIFICATIONS permission lives in the app manifest. -->
+<manifest />

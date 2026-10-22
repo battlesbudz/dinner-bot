@@ -2,6 +2,11 @@
 <!-- No INTERNET permission anywhere in Dinner Bot: local-first by platform enforcement. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Phase V2-4: the app's first permission, for the local reminders.
+         Asked for only at the moment a reminder is switched on in Settings,
+         never at install or first run; every feature works without it. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:allowBackup="true"
         android:label="Dinner Bot"

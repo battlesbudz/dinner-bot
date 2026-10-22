@@ -130,11 +130,18 @@ class Migration34Test {
     }
 
     @Test fun upgradeFromV3KeepsUserDataAndAddsV22Columns() = runBlocking {
+        // Since Phase V2-4 the database version is 5, so the v3 database rides
+        // the chain one step further (4 to 5) to open; the assertions below
+        // are the original V2-2 proof, unchanged.
         val db = Room.databaseBuilder(context, DinnerBotDatabase::class.java, dbName)
-            .addMigrations(DinnerBotDatabase.MIGRATION_2_3, DinnerBotDatabase.MIGRATION_3_4)
+            .addMigrations(
+                DinnerBotDatabase.MIGRATION_2_3,
+                DinnerBotDatabase.MIGRATION_3_4,
+                DinnerBotDatabase.MIGRATION_4_5,
+            )
             .build()
         try {
-            assertEquals(4, db.openHelper.readableDatabase.version)
+            assertEquals(5, db.openHelper.readableDatabase.version)
 
             // Corrected price and its flag survive; the new column starts empty.
             val onions = db.priceItemDao().getById("yellow-onions")!!

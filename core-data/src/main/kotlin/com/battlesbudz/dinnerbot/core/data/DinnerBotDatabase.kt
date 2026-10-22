@@ -29,6 +29,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * The instrumented migration test proves the upgrade from a populated v3
  * database, legacy plan JSON included.
  *
+ * Version 5 (Phase V2-4, v0.2.4) adds one column through [MIGRATION_4_5]:
+ * settings.remindersJson, the household's reminder switches and times as
+ * one JSON blob defaulting to "{}", which decodes to every reminder off.
+ * The instrumented migration test proves the upgrade from a populated v4
+ * database.
+ *
  * fallbackToDestructiveMigration remains only as a pre-1.0 safety net for
  * development installs; with a real migration registered for every version
  * step it never triggers on a real upgrade path.
@@ -44,7 +50,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         GroceryItemEntity::class,
         RecipeRatingEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class DinnerBotDatabase : RoomDatabase() {
@@ -77,9 +83,16 @@ abstract class DinnerBotDatabase : RoomDatabase() {
             }
         }
 
+        /** v4 to v5: the reminder settings blob on the settings row. Additive only. */
+        val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `settings` ADD COLUMN `remindersJson` TEXT NOT NULL DEFAULT '{}'")
+            }
+        }
+
         fun create(context: Context): DinnerBotDatabase =
             Room.databaseBuilder(context.applicationContext, DinnerBotDatabase::class.java, "dinner-bot.db")
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .fallbackToDestructiveMigration()
                 .build()
     }
