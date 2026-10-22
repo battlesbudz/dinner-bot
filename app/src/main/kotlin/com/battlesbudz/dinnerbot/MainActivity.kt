@@ -373,7 +373,10 @@ private fun DinnerBotApp(
                     stockOnHand = PantryLogic.stockMap(bulkStocks),
                     pantryOwnedNames = PantryLogic.ownedNames(forPantryItems),
                 )
-                if (repriced.lines != view.lines || repriced.cashNeededCents != view.cashNeededCents) {
+                if (repriced.lines != view.lines ||
+                    repriced.cashNeededCents != view.cashNeededCents ||
+                    repriced.notes != view.notes
+                ) {
                     persistPlan(repriced, keepId = sp.id, forSettings = currentSettings)
                 }
             }
