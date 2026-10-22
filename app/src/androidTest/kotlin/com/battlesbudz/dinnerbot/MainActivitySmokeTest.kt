@@ -16,15 +16,22 @@ class MainActivitySmokeTest {
     val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Test fun appLaunchesToOnboardingOrRecipes() {
-        // Fresh install: onboarding. Returning install: the recipe list.
-        // Either way the app must reach a real screen, not a crash or a blank.
+        // Fresh install: the setup walkthrough. Returning install: the
+        // recipe list. Either way the app must reach a real screen, not a
+        // crash or a blank. Wait for the loading screen to resolve instead
+        // of asserting on the first frame (the v0.1.1 flake: an immediate
+        // check races the database load and sees only "Loading...").
+        composeRule.waitUntil(timeoutMillis = 15_000) {
+            composeRule.onAllNodes(
+                androidx.compose.ui.test.hasText("Welcome to Dinner Bot"),
+            ).fetchSemanticsNodes().isNotEmpty() ||
+                composeRule.onAllNodes(
+                    androidx.compose.ui.test.hasText("Dinner Bot recipes"),
+                ).fetchSemanticsNodes().isNotEmpty()
+        }
         val onboarding = composeRule.onAllNodes(
             androidx.compose.ui.test.hasText("Welcome to Dinner Bot"),
         ).fetchSemanticsNodes().isNotEmpty()
-        val recipes = composeRule.onAllNodes(
-            androidx.compose.ui.test.hasText("Dinner Bot recipes"),
-        ).fetchSemanticsNodes().isNotEmpty()
-        assert(onboarding || recipes) { "App launched but showed neither onboarding nor recipes" }
         if (onboarding) {
             composeRule.onNodeWithText("Welcome to Dinner Bot").assertIsDisplayed()
         }
