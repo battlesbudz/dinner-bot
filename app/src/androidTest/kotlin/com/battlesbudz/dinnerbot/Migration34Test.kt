@@ -63,7 +63,7 @@ class Migration34Test {
             "`wontEatJson` TEXT NOT NULL, `dietNotes` TEXT NOT NULL, `pantryStaplesJson` TEXT NOT NULL, " +
             "`onboardingComplete` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "CREATE TABLE IF NOT EXISTS `recipe_ratings` (`recipeId` TEXT NOT NULL, " +
-            "`rating` TEXT NOT NULL, `ratedAtMillis` INTEGER NOT NULL, PRIMARY KEY(`recipeId`))",
+            "`rating` TEXT NOT NULL, `updatedAtMillis` INTEGER NOT NULL, PRIMARY KEY(`recipeId`))",
     )
 
     @Before fun setUp() {
@@ -118,7 +118,7 @@ class Migration34Test {
                 "9000, '[\"mushrooms\"]', '', '[\"Salt\"]', 1)",
         )
         db.execSQL(
-            "INSERT INTO recipe_ratings (recipeId, rating, ratedAtMillis) VALUES ('r1', 'UP', 7)",
+            "INSERT INTO recipe_ratings (recipeId, rating, updatedAtMillis) VALUES ('r1', 'UP', 7)",
         )
         // A v0.2.0 plan: nightsJson in the legacy shape, no notCooking fields.
         db.execSQL(

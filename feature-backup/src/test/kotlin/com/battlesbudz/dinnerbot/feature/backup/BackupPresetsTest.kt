@@ -1,6 +1,10 @@
 package com.battlesbudz.dinnerbot.feature.backup
 
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
+import com.battlesbudz.dinnerbot.core.model.MeasureUnit
+import com.battlesbudz.dinnerbot.core.model.PriceItem
+import com.battlesbudz.dinnerbot.core.model.Quantity
+import com.battlesbudz.dinnerbot.core.model.Store
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -17,7 +21,15 @@ class BackupPresetsTest {
                 dietPresets = listOf("dairy-free", "no-pork"),
                 onboardingComplete = true,
             ),
-            priceItems = emptyList(),
+            // Import requires a non-empty price book, as a real backup has.
+            priceItems = listOf(
+                PriceItem(
+                    id = "eggs", name = "Eggs", category = "Dairy",
+                    homeStore = Store.ALDI, packDescription = "12 ct",
+                    packQuantity = Quantity(12.0, MeasureUnit.COUNT), packPriceCents = 185,
+                    pricePerUnitCents = 15.4, checkedDate = "2026-10-22", source = "test",
+                ),
+            ),
             pantryItems = emptyList(),
             bulkStock = emptyList(),
         )

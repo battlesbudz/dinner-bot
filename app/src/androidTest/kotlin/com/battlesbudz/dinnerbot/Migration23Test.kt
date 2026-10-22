@@ -111,8 +111,11 @@ class Migration23Test {
     }
 
     @Test fun upgradeFromV2KeepsUserDataAndAddsRatings() = runBlocking {
+        // Since Phase V2-2 the database version is 4, so the v2 database rides
+        // the full registered chain (2 to 3 to 4) to open; the data-survival
+        // assertions below are the original V2-1 proof, unchanged.
         val db = Room.databaseBuilder(context, DinnerBotDatabase::class.java, dbName)
-            .addMigrations(DinnerBotDatabase.MIGRATION_2_3)
+            .addMigrations(DinnerBotDatabase.MIGRATION_2_3, DinnerBotDatabase.MIGRATION_3_4)
             .build()
         try {
             val item = db.priceItemDao().getById("yellow-onions")!!
@@ -128,7 +131,7 @@ class Migration23Test {
             val stored = db.recipeRatingDao().getAll().single()
             assertEquals("r1", stored.recipeId)
             assertEquals("DOWN", stored.rating)
-            assertEquals(3, db.openHelper.readableDatabase.version)
+            assertEquals(4, db.openHelper.readableDatabase.version)
         } finally {
             db.close()
         }
