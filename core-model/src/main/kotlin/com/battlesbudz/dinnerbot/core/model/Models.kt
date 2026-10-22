@@ -31,6 +31,13 @@ data class PriceItem(
     val userCorrected: Boolean = false,
     /** Known per-unit prices at other stores, used by the Sam's Club savings gate. */
     val alternates: List<StorePrice> = emptyList(),
+    /**
+     * Short project-written freezing guidance for oversize (Sam's Club bulk)
+     * packs, Phase V2-2. Shown on the grocery line when a pack is bought and
+     * on the pantry stock entry while stock is on hand. Seed-owned: refreshed
+     * from the bundled price book, never user-edited.
+     */
+    val freezeNote: String? = null,
 ) {
     /** Cents per 1.0 of [packQuantity]'s unit; derived from the pack price when not stored. */
     val perUnitCents: Double
@@ -94,7 +101,21 @@ data class Recipe(
 data class RecipesFile(val version: Int, val recipes: List<Recipe>)
 
 @Serializable
-data class PlannedNight(val day: String, val recipeId: String)
+data class PlannedNight(
+    val day: String,
+    val recipeId: String,
+    /**
+     * Per-night exception inside one generated week (Phase V2-2): true when
+     * this specific night is marked not cooking. Distinct from the setup
+     * cook-nights setting, which stays the default shape of a week. While a
+     * night is off, its dinner, ingredients, and cash are out of the plan
+     * and the list; [recipeId] is kept so the stored plan round-trips, and
+     * marking the night back on plans a dinner under the normal rules.
+     */
+    val notCooking: Boolean = false,
+    /** Why the night is off: "leftovers", "eating out", or "other". */
+    val notCookingReason: String? = null,
+)
 
 @Serializable
 data class MealPlan(
@@ -137,6 +158,8 @@ data class HouseholdSettings(
     val cookNights: List<String> = listOf("MON", "TUE", "WED", "THU", "FRI"),
     val weeklyBudgetCents: Int = 0,
     val wontEat: List<String> = emptyList(),
+    /** Ids of the diet presets (seed-data/diet-presets.json) switched on for this household, Phase V2-2. */
+    val dietPresets: List<String> = emptyList(),
     val dietNotes: String = "",
     val pantryStaples: List<String> = emptyList(),
     val onboardingComplete: Boolean = false,

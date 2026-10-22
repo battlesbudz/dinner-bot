@@ -45,4 +45,27 @@ class SeedMapperTest {
         val back = with(SeedMapper) { settings.toEntity().toModel() }
         assertEquals(settings, back)
     }
+
+    @Test fun priceItemFreezeNoteRoundTrips() {
+        val item = PriceItem(
+            id = "pork-tenderloin", name = "Pork tenderloin", category = "Meat",
+            homeStore = Store.SAMS_CLUB, packDescription = "about 9 lb",
+            packQuantity = Quantity.pounds(9.0), packPriceCents = 2168,
+            pricePerUnitCents = 240.9, checkedDate = "2026-10-22", source = "Battles",
+            freezeNote = "Cut into meal-size portions, bag flat, and freeze.",
+        )
+        val back = with(SeedMapper) { item.toEntity().toModel() }
+        assertEquals(item, back)
+        assertEquals("Cut into meal-size portions, bag flat, and freeze.", back.freezeNote)
+    }
+
+    @Test fun settingsDietPresetsRoundTrip() {
+        val settings = HouseholdSettings(
+            householdSize = 4, cookNights = listOf("MON"),
+            weeklyBudgetCents = 10000, dietPresets = listOf("dairy-free", "vegetarian"),
+        )
+        val back = with(SeedMapper) { settings.toEntity().toModel() }
+        assertEquals(settings, back)
+        assertEquals(listOf("dairy-free", "vegetarian"), back.dietPresets)
+    }
 }

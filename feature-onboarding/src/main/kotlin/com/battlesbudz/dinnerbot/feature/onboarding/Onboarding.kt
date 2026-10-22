@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.battlesbudz.dinnerbot.core.model.DietPreset
 import com.battlesbudz.dinnerbot.core.model.HouseholdRules
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
 
@@ -61,6 +62,8 @@ fun OnboardingForm(
     initial: HouseholdSettings,
     onSave: (HouseholdSettings) -> Unit,
     modifier: Modifier = Modifier,
+    /** The diet preset definitions the household can switch on (Phase V2-2). */
+    dietPresets: List<DietPreset> = emptyList(),
 ) {
     var householdSize by remember { mutableStateOf(initial.householdSize) }
     var cookNights by remember { mutableStateOf(initial.cookNights.toSet()) }
@@ -69,6 +72,7 @@ fun OnboardingForm(
     }
     var wontEatText by remember { mutableStateOf(initial.wontEat.joinToString(", ")) }
     var dietNotes by remember { mutableStateOf(initial.dietNotes) }
+    var selectedPresets by remember { mutableStateOf(initial.dietPresets.toSet()) }
     var staples by remember { mutableStateOf(initial.pantryStaples.toSet()) }
 
     Column(
@@ -135,6 +139,31 @@ fun OnboardingForm(
             style = MaterialTheme.typography.bodySmall,
         )
 
+        if (dietPresets.isNotEmpty()) {
+            Text("Diet presets (optional)", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Named bundles that sit on top of your own list: each preset adds won't-eat " +
+                    "entries and recipe filters of its own. A preset never removes anything you " +
+                    "listed yourself, and never changes the household substitution rule below. " +
+                    "Like the list, presets are planning filters only, not medical or allergen guarantees.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            dietPresets.forEach { preset ->
+                Row(verticalAlignment = Alignment.Top) {
+                    Checkbox(
+                        checked = preset.id in selectedPresets,
+                        onCheckedChange = { checked ->
+                            selectedPresets = if (checked) selectedPresets + preset.id else selectedPresets - preset.id
+                        },
+                    )
+                    Column {
+                        Text(preset.name, style = MaterialTheme.typography.bodyLarge)
+                        Text(preset.summary, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text("Household substitution rule", style = MaterialTheme.typography.titleSmall)
@@ -165,6 +194,7 @@ fun OnboardingForm(
                         cookNights = OnboardingDefaults.NIGHTS.map { it.first }.filter { it in cookNights },
                         weeklyBudgetCents = (budgetText.toIntOrNull() ?: 0) * 100,
                         wontEat = wontEatText.split(",").map { it.trim() }.filter { it.isNotEmpty() },
+                        dietPresets = dietPresets.map { it.id }.filter { it in selectedPresets },
                         dietNotes = dietNotes.trim(),
                         pantryStaples = staples.toList(),
                         onboardingComplete = true,
@@ -184,4 +214,5 @@ fun SettingsScreen(
     initial: HouseholdSettings,
     onSave: (HouseholdSettings) -> Unit,
     modifier: Modifier = Modifier,
-) = OnboardingForm(initial = initial, onSave = onSave, modifier = modifier)
+    dietPresets: List<DietPreset> = emptyList(),
+) = OnboardingForm(initial = initial, onSave = onSave, modifier = modifier, dietPresets = dietPresets)

@@ -112,6 +112,12 @@ fun PantryScreen(
                             "On hand: ${trimNumber(current?.amount ?: 0.0)} ${item.packQuantity.unit.label}",
                             style = MaterialTheme.typography.bodyMedium,
                         )
+                        // Freeze guidance (Phase V2-2): while bulk stock is
+                        // on hand, keep its freeze note with the stock entry.
+                        val freezeNote = item.freezeNote
+                        if ((current?.amount ?: 0.0) > 0.0 && !freezeNote.isNullOrBlank()) {
+                            Text(freezeNote, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                     TextButton(onClick = { onStockChanged(PantryLogic.adjustStock(item, current, -1)) }) {
                         Text("-")

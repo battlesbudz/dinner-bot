@@ -1,5 +1,6 @@
 package com.battlesbudz.dinnerbot.core.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -19,6 +20,8 @@ data class PriceItemEntity(
     val userCorrected: Boolean,
     /** JSON-encoded List<StorePrice>; alternate per-unit prices at other stores. */
     val alternatesJson: String = "[]",
+    /** Freeze guidance for oversize packs (Phase V2-2). Seed-owned text, refreshed from the bundle. */
+    val freezeNote: String? = null,
 )
 
 @Entity(tableName = "recipes")
@@ -103,6 +106,9 @@ data class SettingsEntity(
     val weeklyBudgetCents: Int,
     /** JSON-encoded List<String>. */
     val wontEatJson: String,
+    /** JSON-encoded List<String> of selected diet preset ids (Phase V2-2). */
+    @ColumnInfo(defaultValue = "[]")
+    val dietPresetsJson: String = "[]",
     val dietNotes: String,
     /** JSON-encoded List<String>. */
     val pantryStaplesJson: String,

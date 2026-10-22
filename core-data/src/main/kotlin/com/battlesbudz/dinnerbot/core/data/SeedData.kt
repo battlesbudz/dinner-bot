@@ -1,6 +1,8 @@
 package com.battlesbudz.dinnerbot.core.data
 
 import com.battlesbudz.dinnerbot.core.model.BulkStock
+import com.battlesbudz.dinnerbot.core.model.DietPreset
+import com.battlesbudz.dinnerbot.core.model.DietPresetsFile
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
 import com.battlesbudz.dinnerbot.core.model.MeasureUnit
 import com.battlesbudz.dinnerbot.core.model.PantryItem
@@ -22,6 +24,8 @@ object SeedDataParser {
 
     fun parsePriceBook(text: String): List<PriceItem> = json.decodeFromString<PriceBookFile>(text).items
     fun parseRecipes(text: String): List<Recipe> = json.decodeFromString<RecipesFile>(text).recipes
+    fun parseDietPresets(text: String): List<DietPreset> =
+        json.decodeFromString<DietPresetsFile>(text).presets
 }
 
 /** Pure conversions between core-model types and Room entities. Unit-testable on the JVM. */
@@ -45,6 +49,7 @@ object SeedMapper {
         source = source,
         userCorrected = userCorrected,
         alternatesJson = json.encodeToString(storePriceList, alternates),
+        freezeNote = freezeNote,
     )
 
     fun PriceItemEntity.toModel(): PriceItem = PriceItem(
@@ -61,6 +66,7 @@ object SeedMapper {
         userCorrected = userCorrected,
         alternates = runCatching { json.decodeFromString(storePriceList, alternatesJson) }
             .getOrDefault(emptyList()),
+        freezeNote = freezeNote,
     )
 
     fun PantryItem.toEntity(): PantryItemEntity = PantryItemEntity(id = id, name = name, owned = owned)
@@ -108,6 +114,7 @@ object SeedMapper {
         cookNightsJson = json.encodeToString(stringList, cookNights),
         weeklyBudgetCents = weeklyBudgetCents,
         wontEatJson = json.encodeToString(stringList, wontEat),
+        dietPresetsJson = json.encodeToString(stringList, dietPresets),
         dietNotes = dietNotes,
         pantryStaplesJson = json.encodeToString(stringList, pantryStaples),
         onboardingComplete = onboardingComplete,
@@ -118,6 +125,8 @@ object SeedMapper {
         cookNights = json.decodeFromString(stringList, cookNightsJson),
         weeklyBudgetCents = weeklyBudgetCents,
         wontEat = json.decodeFromString(stringList, wontEatJson),
+        dietPresets = runCatching { json.decodeFromString(stringList, dietPresetsJson) }
+            .getOrDefault(emptyList()),
         dietNotes = dietNotes,
         pantryStaples = json.decodeFromString(stringList, pantryStaplesJson),
         onboardingComplete = onboardingComplete,
@@ -164,6 +173,26 @@ class SeedLoader(private val db: DinnerBotDatabase) {
         db.recipeDao().deleteAll()
         db.recipeDao().insertAll(bundled.map { with(SeedMapper) { it.toEntity() } })
         return bundled.size
+    }
+
+    /**
+     * Keep the stored freeze notes identical to the bundled price book
+     * (Phase V2-2). Freeze notes are seed-owned guidance text on the Sam's
+     * bulk items; the refresh writes ONLY the freezeNote column per item,
+     * so Andrea's corrected prices and every other user row are untouched.
+     * Returns how many stored notes actually changed.
+     */
+    suspend fun refreshSeedPriceNotes(priceBookJson: String): Int {
+        val bundled = SeedDataParser.parsePriceBook(priceBookJson).associateBy { it.id }
+        var changed = 0
+        for (stored in db.priceItemDao().getAll()) {
+            val seedNote = bundled[stored.id]?.freezeNote
+            if (stored.freezeNote != seedNote) {
+                db.priceItemDao().updateFreezeNote(stored.id, seedNote)
+                changed++
+            }
+        }
+        return changed
     }
 
     /**

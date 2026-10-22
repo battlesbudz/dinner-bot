@@ -24,8 +24,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import com.battlesbudz.dinnerbot.core.model.Costing
 import com.battlesbudz.dinnerbot.core.model.GroceryLine
 import com.battlesbudz.dinnerbot.core.model.Money
+import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Store
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceCorrection
 
@@ -52,6 +54,8 @@ fun GroceryListScreen(
     onToggleChecked: (GroceryRow, Boolean) -> Unit,
     onPriceCorrected: (GroceryRow, Int) -> Unit,
     modifier: Modifier = Modifier,
+    /** Price book, for the Sam's bulk lines' leftover + freeze note (Phase V2-2). */
+    priceItems: List<PriceItem> = emptyList(),
 ) {
     var editing by remember { mutableStateOf<GroceryRow?>(null) }
 
@@ -67,6 +71,7 @@ fun GroceryListScreen(
     }
 
     val byStore = remember(rows) { rows.groupBy { it.line.store } }
+    val priceItemsById = remember(priceItems) { priceItems.associateBy { it.id } }
     val total = rows.sumOf { GroceryListBuilder.lineCashCents(it.line) }
 
     LazyColumn(
@@ -112,6 +117,19 @@ fun GroceryListScreen(
                                 if (line.packsToBuy > 1) " · buy ${line.packsToBuy} packs" else "",
                             style = MaterialTheme.typography.bodySmall,
                         )
+                        // Freeze guidance (Phase V2-2): when a Sam's bulk pack
+                        // is being bought, say how much will be left over and
+                        // how to freeze it. Guidance only, no tracking.
+                        val pricedItem = priceItemsById[line.itemId]
+                        val leftover = pricedItem?.let { Costing.buyLeftover(line, it) }
+                        val freezeNote = pricedItem?.freezeNote
+                        if (leftover != null && !freezeNote.isNullOrBlank()) {
+                            Text(
+                                "You will have about ${trimNumber(leftover.amount)} " +
+                                    "${leftover.unit.label} left over. $freezeNote",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
                     }
                     Text(
                         Money(GroceryListBuilder.lineCashCents(line)).format(),

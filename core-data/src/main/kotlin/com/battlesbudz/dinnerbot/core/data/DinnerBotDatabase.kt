@@ -20,6 +20,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * table; every v2 table and row carries over untouched, which the
  * instrumented migration test proves from a populated v2 database.
  *
+ * Version 4 (Phase V2-2, v0.2.1) adds two columns through [MIGRATION_3_4]:
+ * price_items.freezeNote (seed-owned freeze guidance on Sam's bulk items)
+ * and settings.dietPresetsJson (the household's selected diet preset ids).
+ * The per-night not-cooking state needs NO column: it lives inside the
+ * plan's existing nightsJson, and the new PlannedNight fields carry
+ * defaults, so a v3 plan's JSON decodes with every night still cooking.
+ * The instrumented migration test proves the upgrade from a populated v3
+ * database, legacy plan JSON included.
+ *
  * fallbackToDestructiveMigration remains only as a pre-1.0 safety net for
  * development installs; with a real migration registered for every version
  * step it never triggers on a real upgrade path.
@@ -35,7 +44,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         GroceryItemEntity::class,
         RecipeRatingEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class DinnerBotDatabase : RoomDatabase() {
@@ -60,9 +69,17 @@ abstract class DinnerBotDatabase : RoomDatabase() {
             }
         }
 
+        /** v3 to v4: freeze notes on price items, diet preset selection on settings. Additive only. */
+        val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `price_items` ADD COLUMN `freezeNote` TEXT")
+                db.execSQL("ALTER TABLE `settings` ADD COLUMN `dietPresetsJson` TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
         fun create(context: Context): DinnerBotDatabase =
             Room.databaseBuilder(context.applicationContext, DinnerBotDatabase::class.java, "dinner-bot.db")
-                .addMigrations(MIGRATION_2_3)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                 .fallbackToDestructiveMigration()
                 .build()
     }

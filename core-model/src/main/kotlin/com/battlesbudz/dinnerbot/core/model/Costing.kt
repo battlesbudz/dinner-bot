@@ -224,6 +224,24 @@ object Costing {
         )
     }
 
+    /**
+     * What is left of a bought Sam's Club pack after this week's dinners use
+     * what they need from it (Phase V2-2 freeze guidance): the packs bought
+     * for [line] minus the line's needed amount, in the item's pack unit.
+     * Null when the line is not a Sam's purchase of a Sam's item, or when the
+     * packs are used up exactly. The line's needed amount is what remained
+     * after home stock was drawn, so this is the NEW leftover the purchase
+     * creates, the amount the freeze note is about.
+     */
+    fun buyLeftover(line: GroceryLine, item: PriceItem): Quantity? {
+        if (line.store != Store.SAMS_CLUB || item.homeStore != Store.SAMS_CLUB) return null
+        if (line.packsToBuy <= 0) return null
+        val boughtBase = item.packQuantity.toBase() * line.packsToBuy
+        val leftoverBase = boughtBase - line.needed.toBase()
+        if (leftoverBase <= EPSILON) return null
+        return Quantity(leftoverBase / item.packQuantity.unit.toBaseFactor, item.packQuantity.unit)
+    }
+
     /** Price a full set of recipes for one week. Convenience over [aggregateNeeds] + [costNeeds]. */
     fun costRecipes(
         recipes: List<Recipe>,

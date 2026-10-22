@@ -1,5 +1,6 @@
 package com.battlesbudz.dinnerbot.dataseed
 
+import com.battlesbudz.dinnerbot.core.model.DietPreset
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import java.time.LocalDate
@@ -48,6 +49,42 @@ object SeedValidator {
                 val itemId = ingredient.priceItemId
                 if (itemId != null && itemId !in byId) {
                     errors += "recipe ${recipe.id}: ingredient references unknown price item '$itemId'"
+                }
+            }
+        }
+        return errors
+    }
+
+    /**
+     * Validate the diet preset definitions (Phase V2-2) against the recipe
+     * library they filter: unique ids, readable name and summary, non-blank
+     * won't-eat entries, and every tag a preset names (excluded or required)
+     * must be a tag the library actually uses, so a preset can never filter
+     * on a typo'd tag and silently match nothing.
+     */
+    fun validatePresets(presets: List<DietPreset>, recipes: List<Recipe>): List<String> {
+        val errors = mutableListOf<String>()
+        if (presets.isEmpty()) errors += "diet preset list is empty"
+        val seen = mutableSetOf<String>()
+        for (preset in presets) {
+            val id = preset.id.trim()
+            if (id.isEmpty()) {
+                errors += "diet preset has a blank id"
+            } else if (!seen.add(id.lowercase())) {
+                errors += "duplicate diet preset id: $id"
+            }
+            if (preset.name.isBlank()) errors += "diet preset '$id' has a blank name"
+            if (preset.summary.isBlank()) errors += "diet preset '$id' has a blank summary"
+            for (entry in preset.wontEatEntries) {
+                if (entry.isBlank()) errors += "diet preset '$id' has a blank won't-eat entry"
+            }
+        }
+        val libraryTags = recipes.flatMap { it.dietTags }
+            .map { it.trim().lowercase() }.toSet()
+        for (preset in presets) {
+            for (tag in preset.excludedTags + listOfNotNull(preset.requiredTag)) {
+                if (tag.trim().lowercase() !in libraryTags) {
+                    errors += "diet preset '${preset.id}' names tag '$tag' that no recipe carries"
                 }
             }
         }

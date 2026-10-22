@@ -1,7 +1,9 @@
 package com.battlesbudz.dinnerbot.dataseed
 
+import com.battlesbudz.dinnerbot.core.model.DietPresetsFile
 import com.battlesbudz.dinnerbot.core.model.PriceBookFile
 import com.battlesbudz.dinnerbot.core.model.RecipesFile
+import com.battlesbudz.dinnerbot.core.model.Store
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -40,5 +42,64 @@ class SeedDataFilesTest {
         assertTrue("pork-tenderloin" in ids)
         assertEquals(36, recipes.recipes.size)
         assertTrue(recipes.recipes.none { it.title.contains("beef", ignoreCase = true) })
+    }
+
+    @Test fun everySamsBulkItemCarriesAFreezeNote() {
+        val priceBook = json.decodeFromString<PriceBookFile>(seedFile("pricebook.json").readText())
+        val samsItems = priceBook.items.filter { it.homeStore == Store.SAMS_CLUB }
+        assertTrue("expected at least one Sam's Club item", samsItems.isNotEmpty())
+        for (item in samsItems) {
+            assertTrue(
+                "Sam's item ${item.id} must carry freeze guidance (Phase V2-2)",
+                !item.freezeNote.isNullOrBlank(),
+            )
+        }
+        // No other store's items carry freeze notes: the guidance exists for
+        // oversize bulk packs only.
+        assertTrue(priceBook.items.filter { it.homeStore != Store.SAMS_CLUB }.all { it.freezeNote == null })
+    }
+
+    @Test fun dietPresetsAreValidAgainstTheLibrary() {
+        val recipes = json.decodeFromString<RecipesFile>(seedFile("recipes.json").readText())
+        val presets = json.decodeFromString<DietPresetsFile>(seedFile("diet-presets.json").readText())
+        val errors = SeedValidator.validatePresets(presets.presets, recipes.recipes)
+        assertTrue("diet preset errors: $errors", errors.isEmpty())
+        assertEquals(
+            setOf("dairy-free", "gluten-free", "low-carb", "no-pork", "vegetarian"),
+            presets.presets.map { it.id }.toSet(),
+        )
+    }
+
+    /** The Phase V2-2 diet-tag audit (seed-data/DIET_TAG_AUDIT.md), pinned as assertions. */
+    @Test fun dietTagsMatchTheAudit() {
+        val recipes = json.decodeFromString<RecipesFile>(seedFile("recipes.json").readText())
+        val byId = recipes.recipes.associateBy { it.id }
+
+        // Vegetarian: exactly the ten egg and cheese dinners, nothing with meat.
+        val vegetarian = recipes.recipes.filter { "Vegetarian" in it.dietTags }.map { it.id }.toSet()
+        assertEquals(
+            setOf(
+                "egg-fried-rice", "tomato-soup-grilled-cheese", "breakfast-burritos",
+                "veggie-frittata", "cheese-omelets-home-fries", "rotini-mac-and-cheese",
+                "cheese-quesadillas", "veggie-pasta-bake", "cheesy-potato-skillet",
+                "bean-cheese-burritos",
+            ),
+            vegetarian,
+        )
+
+        // Gluten-free: the audit's eight, including the three added in V2-2.
+        val glutenFree = recipes.recipes.filter { "Gluten-free" in it.dietTags }.map { it.id }.toSet()
+        assertEquals(
+            setOf(
+                "turkey-chili", "turkey-bean-chili", "veggie-frittata",
+                "cheese-omelets-home-fries", "cheesy-potato-skillet",
+                "sheet-pan-pork-potatoes", "turkey-shepherds-pie", "potato-egg-skillet",
+            ),
+            glutenFree,
+        )
+        // Named judgment calls from the audit: removable flour and soy sauce
+        // dishes are NOT tagged; the won't-eat machinery handles them.
+        assertTrue("Gluten-free" !in (byId["cubed-pork-potato-skillet"]?.dietTags ?: emptyList()))
+        assertTrue("Gluten-free" !in (byId["pork-green-bean-skillet"]?.dietTags ?: emptyList()))
     }
 }

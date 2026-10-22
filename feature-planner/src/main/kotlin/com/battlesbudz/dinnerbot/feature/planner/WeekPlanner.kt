@@ -193,6 +193,11 @@ object WeekPlanner {
     /**
      * Swap one night's dinner for the best unused candidate, preferring swaps
      * that keep the week under the cash cap.
+     *
+     * [recipes] is the full adapted recipe set, used to resolve the dinners
+     * already in the plan so repricing never drops one silently; replacement
+     * candidates come from [candidatePool] (defaults to [recipes]), which is
+     * where narrower rules (the diet presets' tag filters, Phase V2-2) apply.
      */
     fun swapDinner(
         settings: HouseholdSettings,
@@ -203,21 +208,29 @@ object WeekPlanner {
         stockOnHand: Map<String, Quantity>,
         pantryOwnedNames: Set<String>,
         ratings: Map<String, RecipeRating> = emptyMap(),
+        candidatePool: List<Recipe> = recipes,
     ): WeekPlan {
         val itemsById = priceItems.associateBy { it.id }
         val recipesById = recipes.associateBy { it.id }
         val nightIndex = current.nights.indexOfFirst { it.day == day }
         if (nightIndex < 0) return current
-        val inPlan = current.nights.map { it.recipeId }.toSet()
-        val candidates = rankCandidates(settings, recipes, itemsById, stockOnHand, ratings)
+        // A night marked not cooking has no dinner to swap (Phase V2-2), and
+        // its stored recipeId must not leak into the week's costing: only the
+        // cooking nights are priced, and the trial slot is the target night's
+        // position among them.
+        if (current.nights[nightIndex].notCooking) return current
+        val cookingIndexes = current.nights.indices.filter { !current.nights[it].notCooking }
+        val trialSlot = cookingIndexes.indexOf(nightIndex)
+        val inPlan = current.nights.filterNot { it.notCooking }.map { it.recipeId }.toSet()
+        val candidates = rankCandidates(settings, candidatePool, itemsById, stockOnHand, ratings)
             .filter { it.id !in inPlan }
         if (candidates.isEmpty()) return current
 
-        val baseChosen = current.nights.mapNotNull { recipesById[it.recipeId] }
+        val baseChosen = cookingIndexes.mapNotNull { recipesById[current.nights[it].recipeId] }
+        if (trialSlot < 0 || trialSlot >= baseChosen.size) return current
         for (candidate in candidates) {
             val trial = baseChosen.toMutableList()
-            if (nightIndex >= trial.size) break
-            trial[nightIndex] = candidate
+            trial[trialSlot] = candidate
             val costed = cost(settings, trial, itemsById, stockOnHand)
             val cap = settings.weeklyBudgetCents
             if (cap <= 0 || costed.cashNeededCents <= cap) {
@@ -239,7 +252,7 @@ object WeekPlanner {
         // No swap fits the cap: take the best candidate anyway and say so.
         val fallback = candidates.first()
         val trial = baseChosen.toMutableList()
-        trial[nightIndex] = fallback
+        trial[trialSlot] = fallback
         val costed = cost(settings, trial, itemsById, stockOnHand)
         return current.copy(
             nights = current.nights.mapIndexed { i, night ->
@@ -252,6 +265,126 @@ object WeekPlanner {
             samsGateMet = costed.gate.useSams,
             notes = (current.notes + "That swap puts the week at ${Money(costed.cashNeededCents).format()}, " +
                 "over the ${Money(settings.weeklyBudgetCents).format()} budget; no cheaper swap was available.").distinct(),
+        )
+    }
+
+    /**
+     * Mark one night of a generated week not cooking, or put it back to
+     * cooking (Phase V2-2). This is a per-night exception inside one stored
+     * week, distinct from the setup cook-nights setting.
+     *
+     * Marking off takes that night's dinner, its ingredients, and its cash out
+     * of the plan and the list at once: the week is repriced from the cooking
+     * nights only, so an ingredient another cooking night also uses keeps
+     * exactly that night's share. The night stays in the plan carrying its
+     * [reason] ("leftovers", "eating out", or "other").
+     *
+     * Marking back on plans a dinner under the same rules [generate] and
+     * [swapDinner] use: an unused candidate from the ranked pool, preferring
+     * one that keeps the week under the cash cap, with the over-budget
+     * fallback said plainly in the notes. When no dinner is available at all,
+     * the night stays marked off and the note says why.
+     */
+    fun setNightCooking(
+        settings: HouseholdSettings,
+        current: WeekPlan,
+        day: String,
+        cooking: Boolean,
+        reason: String? = null,
+        recipes: List<Recipe>,
+        priceItems: List<PriceItem>,
+        stockOnHand: Map<String, Quantity>,
+        pantryOwnedNames: Set<String>,
+        ratings: Map<String, RecipeRating> = emptyMap(),
+        candidatePool: List<Recipe> = recipes,
+    ): WeekPlan {
+        val itemsById = priceItems.associateBy { it.id }
+        val recipesById = recipes.associateBy { it.id }
+        val nightIndex = current.nights.indexOfFirst { it.day == day }
+        if (nightIndex < 0) return current
+        if (cooking == !current.nights[nightIndex].notCooking) return current
+
+        if (!cooking) {
+            val nights = current.nights.mapIndexed { i, night ->
+                if (i == nightIndex) night.copy(notCooking = true, notCookingReason = reason) else night
+            }
+            val chosen = nights.filterNot { it.notCooking }.mapNotNull { recipesById[it.recipeId] }
+            val costed = cost(settings, chosen, itemsById, stockOnHand)
+            val notes = current.notes.toMutableList()
+            addPantryNotes(settings, chosen, pantryOwnedNames, notes)
+            return current.copy(
+                nights = nights,
+                lines = costed.lines,
+                cashNeededCents = costed.cashNeededCents,
+                foodCostCents = costed.foodCostCents,
+                samsMonthlySavingsCents = costed.gate.projectedMonthlySavingsCents,
+                samsGateMet = costed.gate.useSams,
+                notes = notes.distinct(),
+            )
+        }
+
+        // Turning the night back on: pick a dinner the week is not cooking.
+        // Candidates come from the (possibly preset-narrowed) pool; the
+        // dinners already cooking resolve from the full set above, so a
+        // dinner a new preset would exclude is still priced while it is
+        // displayed in this week.
+        val cookingIds = current.nights.filterNot { it.notCooking }.map { it.recipeId }.toSet()
+        val candidates = rankCandidates(settings, candidatePool, itemsById, stockOnHand, ratings)
+            .filter { it.id !in cookingIds }
+        if (candidates.isEmpty()) {
+            return current.copy(
+                notes = (current.notes + "No other dinner is available to cook that night, so it " +
+                    "stays marked not cooking.").distinct(),
+            )
+        }
+        val baseChosen = current.nights.filterNot { it.notCooking }
+            .mapNotNull { recipesById[it.recipeId] }
+        val cap = settings.weeklyBudgetCents
+        for (candidate in candidates) {
+            val trial = baseChosen + candidate
+            val costed = cost(settings, trial, itemsById, stockOnHand)
+            if (cap <= 0 || costed.cashNeededCents <= cap) {
+                return restoredNight(current, nightIndex, candidate, trial, costed, settings, pantryOwnedNames)
+            }
+        }
+        // No restored dinner fits the cap: take the best candidate anyway
+        // and say so, the same fallback swapDinner uses.
+        val fallback = candidates.first()
+        val trial = baseChosen + fallback
+        val costed = cost(settings, trial, itemsById, stockOnHand)
+        val restored = restoredNight(current, nightIndex, fallback, trial, costed, settings, pantryOwnedNames)
+        return restored.copy(
+            notes = (restored.notes + "Cooking that night again puts the week at " +
+                "${Money(costed.cashNeededCents).format()}, over the ${Money(cap).format()} budget; " +
+                "no cheaper dinner was available.").distinct(),
+        )
+    }
+
+    private fun restoredNight(
+        current: WeekPlan,
+        nightIndex: Int,
+        dinner: Recipe,
+        trial: List<Recipe>,
+        costed: Costing.CostedWeek,
+        settings: HouseholdSettings,
+        pantryOwnedNames: Set<String>,
+    ): WeekPlan {
+        val notes = current.notes.toMutableList()
+        addPantryNotes(settings, trial, pantryOwnedNames, notes)
+        return current.copy(
+            nights = current.nights.mapIndexed { i, night ->
+                if (i == nightIndex) {
+                    night.copy(recipeId = dinner.id, notCooking = false, notCookingReason = null)
+                } else {
+                    night
+                }
+            },
+            lines = costed.lines,
+            cashNeededCents = costed.cashNeededCents,
+            foodCostCents = costed.foodCostCents,
+            samsMonthlySavingsCents = costed.gate.projectedMonthlySavingsCents,
+            samsGateMet = costed.gate.useSams,
+            notes = notes.distinct(),
         )
     }
 

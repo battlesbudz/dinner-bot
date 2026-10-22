@@ -32,6 +32,10 @@ interface PriceItemDao {
     @Query("UPDATE price_items SET homeStore = :store, userCorrected = 1 WHERE id = :id")
     suspend fun updateHomeStore(id: String, store: String)
 
+    /** Seed-owned freeze guidance refresh (Phase V2-2): touches only the note, never prices. */
+    @Query("UPDATE price_items SET freezeNote = :freezeNote WHERE id = :id")
+    suspend fun updateFreezeNote(id: String, freezeNote: String?)
+
     @Query("DELETE FROM price_items")
     suspend fun deleteAll()
 }
