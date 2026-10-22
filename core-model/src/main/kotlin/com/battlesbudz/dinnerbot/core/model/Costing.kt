@@ -25,6 +25,56 @@ object Costing {
     fun substituteItemId(itemId: String): String =
         if (itemId.contains("beef", ignoreCase = true)) HouseholdRules.SUBSTITUTE_ITEM_ID else itemId
 
+    /**
+     * Ids of priced items already on hand because an owned pantry entry
+     * matches them by name: "Potatoes" in the pantry covers the priced item
+     * "Russet potatoes". This is the costing layer's one link between the
+     * name-based pantry and the price book, so the week plan total and the
+     * shopping list can never disagree about an item being already home.
+     *
+     * The match is deliberately conservative. Names are normalized (case
+     * folded, punctuation treated as a word break, simple plurals folded to
+     * singular) and a pantry entry matches an item when the entry's words
+     * are the item name's words or a whole-word ending of them: "Potatoes"
+     * and "Potato" both match "Russet potatoes", while "Pot" (a partial
+     * word) and "Russet" (not the ending) never do.
+     */
+    fun pantryCoveredItemIds(
+        pantryOwnedNames: Collection<String>,
+        items: Collection<PriceItem>,
+    ): Set<String> {
+        val pantryWords = pantryOwnedNames.map { normalizedWords(it) }.filter { it.isNotEmpty() }
+        if (pantryWords.isEmpty()) return emptySet()
+        return items.filter { item ->
+            val itemWords = normalizedWords(item.name)
+            itemWords.isNotEmpty() && pantryWords.any { words -> endsWithWords(itemWords, words) }
+        }.map { it.id }.toSet()
+    }
+
+    /** True when [words] ends with [suffix] as whole words; a full-length suffix is an exact match. */
+    private fun endsWithWords(words: List<String>, suffix: List<String>): Boolean {
+        if (suffix.size > words.size) return false
+        return words.subList(words.size - suffix.size, words.size) == suffix
+    }
+
+    /** Lowercased words of a name, each folded from a simple plural to its singular. */
+    private fun normalizedWords(name: String): List<String> =
+        name.lowercase()
+            .split(Regex("[^a-z0-9]+"))
+            .filter { it.isNotEmpty() }
+            .map { singularOf(it) }
+
+    /**
+     * Fold a simple plural to its singular: "potatoes" -> "potato",
+     * "onions" -> "onion". Conservative on purpose: only a trailing "oes"
+     * or a single trailing "s" (never "ss", so "glass" is untouched).
+     */
+    private fun singularOf(word: String): String = when {
+        word.length > 3 && word.endsWith("oes") -> word.dropLast(2)
+        word.length > 1 && word.endsWith("s") && !word.endsWith("ss") -> word.dropLast(1)
+        else -> word
+    }
+
     /** One aggregated need for one price item, expressed in base units. */
     data class ItemNeed(
         val item: PriceItem,
@@ -114,6 +164,8 @@ object Costing {
         val gate: SamsGateResult,
         /** Sam's items whose need was (partly) covered by bulk stock at home. */
         val stockCoveredItemIds: Set<String>,
+        /** Priced items whose need was covered by a matching owned pantry entry. */
+        val pantryCoveredItemIds: Set<String> = emptySet(),
     )
 
     /**
@@ -121,16 +173,21 @@ object Costing {
      *
      * @param stockOnHand tracked Sam's bulk stock, item id -> quantity on hand
      *   (quantities may be in any unit of the right dimension).
-     * @param pantryOwned pantry staple names currently marked owned; pantry
-     *   ingredients are never priced, so they never produce lines.
+     * @param pantryCoveredItemIds priced items an owned pantry entry matches
+     *   (see [pantryCoveredItemIds] for the matching rule). A covered item is
+     *   already home, so it gets the same on-hand treatment as Sam's stock:
+     *   no shopping line and $0 cash, with its portion cost still reported
+     *   as information. Sam's bulk stock behavior is unchanged.
      */
     fun costNeeds(
         needs: List<ItemNeed>,
         stockOnHand: Map<String, Quantity>,
+        pantryCoveredItemIds: Set<String> = emptySet(),
     ): CostedWeek {
         val gate = evaluateSamsGate(needs)
         val lines = mutableListOf<GroceryLine>()
         val stockCovered = mutableSetOf<String>()
+        val pantryCovered = mutableSetOf<String>()
         var cash = 0
         var foodCost = 0
 
@@ -138,6 +195,11 @@ object Costing {
             val item = need.item
             val portionCost = (need.neededInPackUnit * item.perUnitCents).roundToInt()
             foodCost += portionCost
+
+            if (item.id in pantryCoveredItemIds) {
+                pantryCovered += item.id
+                continue
+            }
 
             var remainingBase = need.neededBase
             if (item.homeStore == Store.SAMS_CLUB) {
@@ -221,6 +283,7 @@ object Costing {
             foodCostCents = foodCost,
             gate = gate,
             stockCoveredItemIds = stockCovered,
+            pantryCoveredItemIds = pantryCovered,
         )
     }
 
@@ -248,8 +311,9 @@ object Costing {
         forServings: Int,
         itemsById: Map<String, PriceItem>,
         stockOnHand: Map<String, Quantity>,
+        pantryCoveredItemIds: Set<String> = emptySet(),
     ): CostedWeek {
         val (needs, _) = aggregateNeeds(recipes, forServings, itemsById)
-        return costNeeds(needs, stockOnHand)
+        return costNeeds(needs, stockOnHand, pantryCoveredItemIds)
     }
 }
