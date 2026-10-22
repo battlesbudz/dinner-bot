@@ -102,4 +102,28 @@ class SeedDataFilesTest {
         assertTrue("Gluten-free" !in (byId["cubed-pork-potato-skillet"]?.dietTags ?: emptyList()))
         assertTrue("Gluten-free" !in (byId["pork-green-bean-skillet"]?.dietTags ?: emptyList()))
     }
+
+    /**
+     * Phase V2-6: the bundled nutrition file covers the shipped ingredient
+     * set exactly. Every priced item and every pantry staple the recipes
+     * use has a sourced entry, and the file's known-incomplete list
+     * matches the seed (it is empty while coverage is complete, and the
+     * validator fails the moment the two drift apart).
+     */
+    @Test fun nutritionSeedCoversTheShippedIngredientsExactly() {
+        val priceBook = json.decodeFromString<PriceBookFile>(seedFile("pricebook.json").readText())
+        val recipes = json.decodeFromString<RecipesFile>(seedFile("recipes.json").readText())
+        val nutrition = json.decodeFromString<com.battlesbudz.dinnerbot.core.model.NutritionFile>(
+            seedFile("nutrition.json").readText(),
+        )
+
+        val errors = SeedValidator.validateNutrition(
+            nutrition.entries, priceBook.items, recipes.recipes, nutrition.incomplete,
+        )
+        assertTrue("nutrition seed errors: $errors", errors.isEmpty())
+        assertEquals(42, nutrition.entries.size)
+        assertEquals(31, nutrition.entries.count { !it.pantryItem })
+        assertEquals(11, nutrition.entries.count { it.pantryItem })
+        assertTrue(nutrition.incomplete.isEmpty())
+    }
 }

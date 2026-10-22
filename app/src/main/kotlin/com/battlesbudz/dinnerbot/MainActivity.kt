@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Button
@@ -58,6 +59,7 @@ import com.battlesbudz.dinnerbot.core.model.Costing
 import com.battlesbudz.dinnerbot.core.model.DietPreset
 import com.battlesbudz.dinnerbot.core.model.DietPresets
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
+import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
 import com.battlesbudz.dinnerbot.core.model.PantryItem
 import com.battlesbudz.dinnerbot.core.model.Perishables
 import com.battlesbudz.dinnerbot.core.model.PriceItem
@@ -70,6 +72,8 @@ import com.battlesbudz.dinnerbot.feature.backup.BackupRecipeRating
 import com.battlesbudz.dinnerbot.feature.backup.BackupEngine
 import com.battlesbudz.dinnerbot.feature.grocerylist.GroceryRow
 import com.battlesbudz.dinnerbot.feature.grocerylist.GroceryListScreen
+import com.battlesbudz.dinnerbot.feature.nutrition.NutritionScreen
+import com.battlesbudz.dinnerbot.feature.nutrition.NutritionWeekInput
 import com.battlesbudz.dinnerbot.feature.onboarding.HowItWorksScreen
 import com.battlesbudz.dinnerbot.feature.onboarding.OnboardingDefaults
 import com.battlesbudz.dinnerbot.feature.onboarding.SettingsScreen
@@ -114,9 +118,11 @@ class MainActivity : ComponentActivity() {
             withContext(Dispatchers.IO) {
                 val priceJson = assets.open("pricebook.json").bufferedReader().use { it.readText() }
                 val recipesJson = assets.open("recipes.json").bufferedReader().use { it.readText() }
+                val nutritionJson = assets.open("nutrition.json").bufferedReader().use { it.readText() }
                 SeedLoader(database).seedIfEmpty(priceJson, recipesJson)
                 SeedLoader(database).refreshSeedRecipes(recipesJson)
                 SeedLoader(database).refreshSeedPriceNotes(priceJson)
+                SeedLoader(database).refreshSeedNutrition(nutritionJson)
             }
         }
     }
@@ -126,6 +132,7 @@ private enum class Tab(val label: String, val icon: ImageVector) {
     RECIPES("Recipes", Icons.Filled.MenuBook),
     PLANNER("Plan", Icons.Filled.CalendarMonth),
     LIST("List", Icons.Filled.ShoppingCart),
+    NUTRITION("Nutrition", Icons.Filled.PieChart),
     PANTRY("Pantry", Icons.Filled.Inventory2),
     PRICES("Prices", Icons.Filled.AttachMoney),
     SETTINGS("Settings", Icons.Filled.Settings),
@@ -151,6 +158,7 @@ private fun DinnerBotApp(
     var groceryRows2 by remember { mutableStateOf<List<GroceryRow>>(emptyList()) }
     var ratings by remember { mutableStateOf<Map<String, RecipeRating>>(emptyMap()) }
     var barcodeLinks by remember { mutableStateOf<List<BarcodeLink>>(emptyList()) }
+    var nutritionEntries by remember { mutableStateOf<List<IngredientNutrition>>(emptyList()) }
     var presets by remember { mutableStateOf<List<DietPreset>>(emptyList()) }
     var tab by remember { mutableStateOf(Tab.RECIPES) }
     var openRecipeId by remember { mutableStateOf<String?>(null) }
@@ -180,6 +188,7 @@ private fun DinnerBotApp(
             SeedLoader(database).seedIfEmpty(loadAsset("pricebook.json"), loadAsset("recipes.json"))
             SeedLoader(database).refreshSeedRecipes(loadAsset("recipes.json"))
             SeedLoader(database).refreshSeedPriceNotes(loadAsset("pricebook.json"))
+            SeedLoader(database).refreshSeedNutrition(loadAsset("nutrition.json"))
             val loadedPresets = runCatching {
                 SeedDataParser.parseDietPresets(loadAsset("diet-presets.json"))
             }.getOrDefault(emptyList())
@@ -217,9 +226,11 @@ private fun DinnerBotApp(
             }.toMap()
             val loadedLinks = database.barcodeLinkDao().getAll()
                 .map { with(SeedMapper) { it.toModel() } }
+            val loadedNutrition = database.ingredientNutritionDao().getAll()
+                .map { with(SeedMapper) { it.toModel() } }
             LoadedState(
                 s, r, p, pantry, stocks, plan, rows, plan2, rows2,
-                loadedRatings, loadedPresets, loadedLinks,
+                loadedRatings, loadedPresets, loadedLinks, loadedNutrition,
             )
         }
         settings = loaded.settings
@@ -234,6 +245,7 @@ private fun DinnerBotApp(
         ratings = loaded.ratings
         presets = loaded.presets
         barcodeLinks = loaded.barcodeLinks
+        nutritionEntries = loaded.nutritionEntries
         loading = false
     }
 
@@ -492,6 +504,14 @@ private fun DinnerBotApp(
             }
             val displayRecipes = adaptation.recipes
             val recipesById = remember(displayRecipes) { displayRecipes.associateBy { it.id } }
+            // Nutrition entries split the way the calculator reads them
+            // (Phase V2-6): priced items by id, pantry staples by name slug.
+            val nutritionByItemId = remember(nutritionEntries) {
+                nutritionEntries.filterNot { it.pantryItem }.associateBy { it.itemId }
+            }
+            val nutritionByPantrySlug = remember(nutritionEntries) {
+                nutritionEntries.filter { it.pantryItem }.associateBy { it.itemId }
+            }
             val weekPlanView = remember(storedPlan, groceryRows) {
                 storedPlan?.let { sp ->
                     WeekPlanner.WeekPlan(
@@ -620,6 +640,8 @@ private fun DinnerBotApp(
                                     onBack = { openRecipeId = null },
                                     rating = ratings[open.id],
                                     onRate = { rateRecipe(open.id, it) },
+                                    nutritionByItemId = nutritionByItemId,
+                                    nutritionByPantrySlug = nutritionByPantrySlug,
                                 )
                             } else {
                                 RecipeListScreen(
@@ -815,6 +837,20 @@ private fun DinnerBotApp(
                             },
                             )
                         }
+                        Tab.NUTRITION -> NutritionScreen(
+                            recipes = displayRecipes,
+                            byItemId = nutritionByItemId,
+                            byPantrySlug = nutritionByPantrySlug,
+                            weeks = listOfNotNull(
+                                storedPlan?.let {
+                                    NutritionWeekInput("This week's dinners", it.nights)
+                                },
+                                storedPlan2?.let {
+                                    NutritionWeekInput("Next week's dinners", it.nights)
+                                },
+                            ),
+                            householdSize = currentSettings.householdSize,
+                        )
                         Tab.PANTRY -> PantryScreen(
                             pantryItems = pantryItems,
                             bulkPriceItems = PantryLogic.bulkItems(priceItems),
@@ -936,7 +972,7 @@ private fun DinnerBotApp(
                         }
                     }
                 }
-                // Material 3 bottom navigation: six destinations stay
+                // Material 3 bottom navigation: seven destinations stay
                 // reachable with icons, and labels show only on the selected
                 // tab so they can never crush or wrap letter by letter the
                 // way the old hand-rolled row of full-width buttons did.
@@ -970,6 +1006,7 @@ private data class LoadedState(
     val ratings: Map<String, RecipeRating>,
     val presets: List<DietPreset>,
     val barcodeLinks: List<BarcodeLink>,
+    val nutritionEntries: List<IngredientNutrition>,
 )
 
 private fun currentWeekStart(): String =

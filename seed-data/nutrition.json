@@ -21,7 +21,11 @@
     "sodiumMg": 1420.0,
     "saturatedFatG": 13.7,
     "cholesterolMg": 73.24
-   }
+   },
+   "gramWeights": {
+    "COUNT": 21.0
+   },
+   "gramWeightSource": "One COUNT is one single slice. The entry record (fdcId 2647439) publishes no slice weight; the SR Legacy records for pasteurized process American cheese (fdcId 170853 and 171290) both give one 3/4 oz slice = 21 g, the standard singles slice."
   },
   {
    "itemId": "bell-peppers",
@@ -41,7 +45,11 @@
     "sodiumMg": 0.0,
     "saturatedFatG": null,
     "cholesterolMg": null
-   }
+   },
+   "gramWeights": {
+    "COUNT": 119.0
+   },
+   "gramWeightSource": "One COUNT is one whole pepper. The entry record (fdcId 2258588) publishes no piece weight; the SR Legacy record for the same food, Peppers, sweet, green, raw (fdcId 170427), gives one medium pepper = 119 g."
   },
   {
    "itemId": "canned-black-beans",
@@ -61,7 +69,11 @@
     "sodiumMg": 217.9,
     "saturatedFatG": null,
     "cholesterolMg": null
-   }
+   },
+   "gramWeights": {
+    "COUNT": 425.24
+   },
+   "gramWeightSource": "One COUNT is one whole 15 oz can. Grams are the can net weight from the price book pack description (Phase 0 verified), at 28.3495 g per ounce. The FDC values describe the beans drained and rinsed, so this reads as an upper estimate."
   },
   {
    "itemId": "canned-diced-tomatoes",
@@ -81,7 +93,11 @@
     "sodiumMg": 125.0,
     "saturatedFatG": null,
     "cholesterolMg": null
-   }
+   },
+   "gramWeights": {
+    "COUNT": 411.07
+   },
+   "gramWeightSource": "One COUNT is one whole 14.5 oz can. Grams are the can net weight from the price book pack description (Phase 0 verified), at 28.3495 g per ounce."
   },
   {
    "itemId": "canned-kidney-beans",
@@ -101,7 +117,11 @@
     "sodiumMg": 172.3,
     "saturatedFatG": null,
     "cholesterolMg": null
-   }
+   },
+   "gramWeights": {
+    "COUNT": 439.42
+   },
+   "gramWeightSource": "One COUNT is one whole 15.5 oz can. Grams are the can net weight from the price book pack description (Phase 0 verified), at 28.3495 g per ounce. The FDC values describe the beans drained and rinsed, so this reads as an upper estimate."
   },
   {
    "itemId": "canned-tomato-soup",
@@ -121,7 +141,11 @@
     "sodiumMg": 377.0,
     "saturatedFatG": 0.115,
     "cholesterolMg": 0.0
-   }
+   },
+   "gramWeights": {
+    "COUNT": 304.76
+   },
+   "gramWeightSource": "One COUNT is one whole 10.75 oz can. Grams are the can net weight from the price book pack description (Phase 0 verified), at 28.3495 g per ounce."
   },
   {
    "itemId": "chicken-breast",
@@ -181,7 +205,11 @@
     "sodiumMg": 142.0,
     "saturatedFatG": 3.126,
     "cholesterolMg": 372.0
-   }
+   },
+   "gramWeights": {
+    "COUNT": 50.0
+   },
+   "gramWeightSource": "USDA FoodData Central food portions for fdcId 171287: one large egg = 50 g."
   },
   {
    "itemId": "flour-tortillas",
@@ -201,7 +229,11 @@
     "sodiumMg": 742.0,
     "saturatedFatG": 1.225,
     "cholesterolMg": 0.0
-   }
+   },
+   "gramWeights": {
+    "COUNT": 49.0
+   },
+   "gramWeightSource": "USDA FoodData Central food portions for fdcId 167535: one tortilla = 49 g."
   },
   {
    "itemId": "frozen-broccoli",
@@ -341,7 +373,11 @@
     "sodiumMg": 544.0,
     "saturatedFatG": 5.281,
     "cholesterolMg": 0.0
-   }
+   },
+   "gramWeights": {
+    "COUNT": 39.87
+   },
+   "gramWeightSource": "One COUNT is one slice. The price book pack is an 11.25 oz box of 8 slices (Phase 0 verified), so one slice is 11.25/8 oz = 39.87 g."
   },
   {
    "itemId": "ground-turkey",
@@ -381,7 +417,11 @@
     "sodiumMg": 494.0,
     "saturatedFatG": 0.842,
     "cholesterolMg": 0.0
-   }
+   },
+   "gramWeights": {
+    "COUNT": 42.52
+   },
+   "gramWeightSource": "One COUNT is one bun. The price book pack is a 12 oz package of 8 buns (Phase 0 verified), so one bun is 12/8 oz = 42.52 g."
   },
   {
    "itemId": "iceberg-lettuce",
@@ -401,7 +441,11 @@
     "sodiumMg": 16.11,
     "saturatedFatG": null,
     "cholesterolMg": null
-   }
+   },
+   "gramWeights": {
+    "COUNT": 539.0
+   },
+   "gramWeightSource": "One COUNT is one head. The entry record (fdcId 2346388) publishes no head weight; the SR Legacy record for the same food, Lettuce, iceberg (includes crisphead types), raw (fdcId 169248), gives one medium head (6 in dia) = 539 g."
   },
   {
    "itemId": "milk",
@@ -421,7 +465,11 @@
     "sodiumMg": 39.0,
     "saturatedFatG": 1.11,
     "cholesterolMg": 8.0
-   }
+   },
+   "gramWeights": {
+    "FLUID_OUNCE": 30.5
+   },
+   "gramWeightSource": "The entry record (fdcId 746778) publishes no fluid-ounce weight; the SR Legacy record for the same food, Milk, reduced fat, fluid, 2% milkfat, with added vitamin A and vitamin D (fdcId 171267), gives 1 fl oz = 30.5 g."
   },
   {
    "itemId": "pasta-sauce",
@@ -642,7 +690,11 @@
     "saturatedFatG": 1.392,
     "cholesterolMg": 0.0
    },
-   "pantryName": "Black pepper"
+   "pantryName": "Black pepper",
+   "gramWeights": {
+    "TEASPOON": 2.3
+   },
+   "gramWeightSource": "USDA FoodData Central food portions for fdcId 170931: 1 tsp, ground = 2.3 g."
   },
   {
    "itemId": "butter",
@@ -663,7 +715,11 @@
     "saturatedFatG": 51.368,
     "cholesterolMg": 215.0
    },
-   "pantryName": "Butter"
+   "pantryName": "Butter",
+   "gramWeights": {
+    "TABLESPOON": 14.2
+   },
+   "gramWeightSource": "USDA FoodData Central food portions for fdcId 173410: 1 tbsp = 14.2 g."
   },
   {
    "itemId": "chili-powder",
@@ -684,7 +740,12 @@
     "saturatedFatG": 2.462,
     "cholesterolMg": 0.0
    },
-   "pantryName": "Chili powder"
+   "pantryName": "Chili powder",
+   "gramWeights": {
+    "TEASPOON": 2.7,
+    "TABLESPOON": 8.0
+   },
+   "gramWeightSource": "USDA FoodData Central food portions for fdcId 171319: 1 tsp = 2.7 g, 1 tbsp = 8 g."
   },
   {
    "itemId": "flour",
@@ -705,7 +766,12 @@
     "saturatedFatG": null,
     "cholesterolMg": null
    },
-   "pantryName": "Flour"
+   "pantryName": "Flour",
+   "gramWeights": {
+    "CUP": 125.0,
+    "TABLESPOON": 7.8125
+   },
+   "gramWeightSource": "The entry record (fdcId 789890) publishes no spoon weight; the SR Legacy record for the same food, Wheat flour, white, all-purpose, enriched, bleached (fdcId 168894), gives 1 cup = 125 g, so 1 tbsp = 125/16 = 7.8125 g."
   },
   {
    "itemId": "garlic-powder",
@@ -726,7 +792,11 @@
     "saturatedFatG": 0.249,
     "cholesterolMg": 0.0
    },
-   "pantryName": "Garlic powder"
+   "pantryName": "Garlic powder",
+   "gramWeights": {
+    "TEASPOON": 3.1
+   },
+   "gramWeightSource": "USDA FoodData Central food portions for fdcId 171325: 1 tsp = 3.1 g."
   },
   {
    "itemId": "ground-cumin",
@@ -747,7 +817,11 @@
     "saturatedFatG": 1.535,
     "cholesterolMg": 0.0
    },
-   "pantryName": "Ground cumin"
+   "pantryName": "Ground cumin",
+   "gramWeights": {
+    "TEASPOON": 2.1
+   },
+   "gramWeightSource": "USDA FoodData Central food portions for fdcId 170923 (Spices, cumin seed): 1 tsp = 2.1 g, used for the ground spice."
   },
   {
    "itemId": "long-grain-white-rice",
@@ -768,7 +842,11 @@
     "saturatedFatG": 0.18,
     "cholesterolMg": 0.0
    },
-   "pantryName": "Long grain white rice"
+   "pantryName": "Long grain white rice",
+   "gramWeights": {
+    "CUP": 185.0
+   },
+   "gramWeightSource": "USDA FoodData Central food portions for fdcId 168877: 1 cup = 185 g."
   },
   {
    "itemId": "paprika",
@@ -789,7 +867,11 @@
     "saturatedFatG": 2.14,
     "cholesterolMg": 0.0
    },
-   "pantryName": "Paprika"
+   "pantryName": "Paprika",
+   "gramWeights": {
+    "TEASPOON": 2.3
+   },
+   "gramWeightSource": "USDA FoodData Central food portions for fdcId 171329: 1 tsp = 2.3 g."
   },
   {
    "itemId": "salt",
@@ -810,7 +892,11 @@
     "saturatedFatG": 0.0,
     "cholesterolMg": 0.0
    },
-   "pantryName": "Salt"
+   "pantryName": "Salt",
+   "gramWeights": {
+    "TEASPOON": 6.0
+   },
+   "gramWeightSource": "USDA FoodData Central food portions for fdcId 173468: 1 tsp = 6 g."
   },
   {
    "itemId": "soy-sauce",
@@ -831,7 +917,11 @@
     "saturatedFatG": 0.073,
     "cholesterolMg": 0.0
    },
-   "pantryName": "Soy sauce"
+   "pantryName": "Soy sauce",
+   "gramWeights": {
+    "TABLESPOON": 16.0
+   },
+   "gramWeightSource": "USDA FoodData Central food portions for fdcId 174277: 1 tbsp = 16 g."
   },
   {
    "itemId": "vegetable-oil",
@@ -852,7 +942,11 @@
     "saturatedFatG": 15.65,
     "cholesterolMg": 0.0
    },
-   "pantryName": "Vegetable oil"
+   "pantryName": "Vegetable oil",
+   "gramWeights": {
+    "TABLESPOON": 13.6
+   },
+   "gramWeightSource": "USDA FoodData Central food portions for fdcId 171411: 1 tbsp = 13.6 g."
   }
  ],
  "incomplete": []

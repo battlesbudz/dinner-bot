@@ -1,6 +1,11 @@
 package com.battlesbudz.dinnerbot.dataseed
 
+import com.battlesbudz.dinnerbot.core.model.Costing
 import com.battlesbudz.dinnerbot.core.model.DietPreset
+import com.battlesbudz.dinnerbot.core.model.Dimension
+import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
+import com.battlesbudz.dinnerbot.core.model.MeasureUnit
+import com.battlesbudz.dinnerbot.core.model.NutritionCalculator
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import java.time.LocalDate
@@ -50,6 +55,82 @@ object SeedValidator {
                 if (itemId != null && itemId !in byId) {
                     errors += "recipe ${recipe.id}: ingredient references unknown price item '$itemId'"
                 }
+            }
+        }
+        return errors
+    }
+
+    /**
+     * Validate the nutrition entries (Phase V2-6) against the shipped
+     * ingredient set the recipes actually use. The honesty rules from the
+     * V2-0 capture, made mechanical:
+     * - every entry traces to a named FoodData Central record (id,
+     *   description, source note) and carries at least calories;
+     * - every ingredient the recipes use either has an entry or is named
+     *   on the known-incomplete list, and the list names nothing else, so
+     *   it matches the seed exactly and can never quietly grow stale;
+     * - a gram weight is recorded only for a non-weight unit (weight
+     *   converts exactly), is positive, and names where it came from.
+     */
+    fun validateNutrition(
+        entries: List<IngredientNutrition>,
+        priceItems: List<PriceItem>,
+        recipes: List<Recipe>,
+        knownIncomplete: List<String>,
+    ): List<String> {
+        val errors = mutableListOf<String>()
+        val entryIds = entries.map { it.itemId }
+        if (entryIds.size != entryIds.toSet().size) errors += "duplicate nutrition entry ids"
+        val priceIds = priceItems.map { it.id }.toSet()
+        for (entry in entries) {
+            if (entry.fdcId <= 0) errors += "nutrition entry ${entry.itemId}: missing FoodData Central id"
+            if (entry.fdcDescription.isBlank()) errors += "nutrition entry ${entry.itemId}: blank FDC description"
+            if (entry.source.isBlank()) errors += "nutrition entry ${entry.itemId}: missing source"
+            if (entry.per100g.caloriesKcal == null) {
+                errors += "nutrition entry ${entry.itemId}: no calories value; an entry without one is not an entry"
+            }
+            if (!entry.pantryItem && entry.itemId !in priceIds) {
+                errors += "nutrition entry ${entry.itemId}: not a shipped price item"
+            }
+            if (entry.gramWeights.isNotEmpty() && entry.gramWeightSource.isNullOrBlank()) {
+                errors += "nutrition entry ${entry.itemId}: gram weights without a gram weight source"
+            }
+            for ((unitName, grams) in entry.gramWeights) {
+                val unit = runCatching { MeasureUnit.valueOf(unitName) }.getOrNull()
+                if (unit == null) {
+                    errors += "nutrition entry ${entry.itemId}: gram weight for unknown unit '$unitName'"
+                } else if (unit.dimension == Dimension.WEIGHT) {
+                    errors += "nutrition entry ${entry.itemId}: gram weight for weight unit '$unitName' is meaningless"
+                }
+                if (grams <= 0.0) errors += "nutrition entry ${entry.itemId}: gram weight for '$unitName' must be positive"
+            }
+        }
+        val byId = entries.filterNot { it.pantryItem }.map { it.itemId }.toSet()
+        val bySlug = entries.filter { it.pantryItem }.map { it.itemId }.toSet()
+        val usedPriced = recipes.flatMap { it.ingredients }
+            .mapNotNull { it.priceItemId }
+            .map { Costing.substituteItemId(it) }.toSet()
+        val usedPantrySlugs = recipes.flatMap { it.ingredients }
+            .mapNotNull { it.pantryItem }
+            .map { NutritionCalculator.pantrySlug(it) }.toSet()
+        val incomplete = knownIncomplete.toSet()
+        if (incomplete.size != knownIncomplete.size) errors += "known-incomplete list has duplicates"
+        for (id in usedPriced) {
+            if (id !in byId && id !in incomplete) {
+                errors += "shipped ingredient '$id' has no nutrition entry and is not on the known-incomplete list"
+            }
+        }
+        for (slug in usedPantrySlugs) {
+            if (slug !in bySlug && slug !in incomplete) {
+                errors += "pantry staple '$slug' has no nutrition entry and is not on the known-incomplete list"
+            }
+        }
+        for (id in incomplete) {
+            if (id in byId || id in bySlug) {
+                errors += "known-incomplete list names '$id', which has a nutrition entry"
+            }
+            if (id !in usedPriced && id !in usedPantrySlugs) {
+                errors += "known-incomplete list names '$id', which no recipe uses"
             }
         }
         return errors
