@@ -8,6 +8,7 @@ import com.battlesbudz.dinnerbot.core.model.PlannedNight
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Quantity
 import com.battlesbudz.dinnerbot.core.model.Recipe
+import com.battlesbudz.dinnerbot.core.model.RecipeRating
 import com.battlesbudz.dinnerbot.core.model.Store
 
 /**
@@ -19,6 +20,10 @@ import com.battlesbudz.dinnerbot.core.model.Store
  * 1. Plan only from the recipes the caller passes in. The won't-eat rule is
  *    applied before this, by RecipeAdaptation: removable ingredients are
  *    already stripped and recipes needing a won't-eat ingredient are held out.
+ *    Thumbs ratings (Phase V2-1) apply here too: a DOWN-rated recipe is out
+ *    of generation and swaps entirely, and an UP-rated recipe wins ties
+ *    (same stock coverage, same cost) over unrated ones. UP never overrides
+ *    cost or budget; unrated recipes stay in normal rotation.
  * 2. Prefer dinners whose Sam's bulk ingredients are already covered by stock
  *    at home (they cost $0 cash for that ingredient), then cheaper dinners.
  * 3. Price the week with [Costing]: cash is what the budget sees.
@@ -55,14 +60,22 @@ object WeekPlanner {
         pantryOwnedNames: Set<String>,
         weekStart: String,
         variation: Int = 0,
+        ratings: Map<String, RecipeRating> = emptyMap(),
     ): WeekPlan {
         val itemsById = priceItems.associateBy { it.id }
-        val candidates = rankCandidates(settings, recipes, itemsById, stockOnHand)
+        val candidates = rankCandidates(settings, recipes, itemsById, stockOnHand, ratings)
         val nightsNeeded = settings.cookNights.size
         if (candidates.isEmpty() || nightsNeeded == 0) {
+            val allThumbedDown = recipes.isNotEmpty() &&
+                recipes.all { ratings[it.id] == RecipeRating.DOWN }
             return emptyPlan(
                 weekStart,
-                note = "No dinners are available to plan yet. Check the won't-eat list in Settings.",
+                note = if (allThumbedDown) {
+                    "Every dinner is thumbed down right now, so there is nothing to plan. " +
+                        "Bring one back from the recipe list by clearing its thumbs down."
+                } else {
+                    "No dinners are available to plan yet. Check the won't-eat list in Settings."
+                },
             )
         }
 
@@ -168,13 +181,14 @@ object WeekPlanner {
         priceItems: List<PriceItem>,
         stockOnHand: Map<String, Quantity>,
         pantryOwnedNames: Set<String>,
+        ratings: Map<String, RecipeRating> = emptyMap(),
     ): WeekPlan {
         val itemsById = priceItems.associateBy { it.id }
         val recipesById = recipes.associateBy { it.id }
         val nightIndex = current.nights.indexOfFirst { it.day == day }
         if (nightIndex < 0) return current
         val inPlan = current.nights.map { it.recipeId }.toSet()
-        val candidates = rankCandidates(settings, recipes, itemsById, stockOnHand)
+        val candidates = rankCandidates(settings, recipes, itemsById, stockOnHand, ratings)
             .filter { it.id !in inPlan }
         if (candidates.isEmpty()) return current
 
@@ -246,7 +260,10 @@ object WeekPlanner {
         Costing.costRecipes(listOf(recipe), settings.householdSize, itemsById, emptyMap()).foodCostCents
 
     /**
-     * Ranked candidates: stock-covered first, then cheapest, then title.
+     * Ranked candidates: DOWN-rated recipes removed first, then stock-covered
+     * first, then cheapest, then thumbs-up, then title. The thumbs-up step is
+     * a pure tie-break: it only orders recipes the earlier steps already tied,
+     * so it can never put a pricier dinner ahead of a cheaper one.
      * The won't-eat rule is NOT applied here: callers pass the recipes that
      * [com.battlesbudz.dinnerbot.core.model.RecipeAdaptation] produced,
      * already stripped of removable won't-eat ingredients and with
@@ -257,14 +274,18 @@ object WeekPlanner {
         recipes: List<Recipe>,
         itemsById: Map<String, PriceItem>,
         stockOnHand: Map<String, Quantity>,
+        ratings: Map<String, RecipeRating> = emptyMap(),
     ): List<Recipe> {
-        return recipes.sortedWith(
-            compareBy<Recipe>(
-                { recipe -> if (usesStockedBulk(recipe, itemsById, stockOnHand)) 0 else 1 },
-                { recipe -> dinnerFoodCost(recipe, settings, itemsById) },
-                { recipe -> recipe.title },
+        return recipes
+            .filter { ratings[it.id] != RecipeRating.DOWN }
+            .sortedWith(
+                compareBy<Recipe>(
+                    { recipe -> if (usesStockedBulk(recipe, itemsById, stockOnHand)) 0 else 1 },
+                    { recipe -> dinnerFoodCost(recipe, settings, itemsById) },
+                    { recipe -> if (ratings[recipe.id] == RecipeRating.UP) 0 else 1 },
+                    { recipe -> recipe.title },
+                )
             )
-        )
     }
 
     private fun usesStockedBulk(

@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Recipe
+import com.battlesbudz.dinnerbot.core.model.RecipeRating
 
 @Composable
 fun RecipeListScreen(
@@ -33,6 +35,7 @@ fun RecipeListScreen(
     priceItems: List<PriceItem>,
     onRecipeClick: (Recipe) -> Unit,
     modifier: Modifier = Modifier,
+    ratings: Map<String, RecipeRating> = emptyMap(),
 ) {
     val itemsById = remember(priceItems) { priceItems.associateBy { it.id } }
     LazyColumn(
@@ -61,6 +64,14 @@ fun RecipeListScreen(
                         "About ${Money(perServing).format()} per serving",
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    when (ratings[recipe.id]) {
+                        RecipeRating.UP -> Text("👍 Liked", style = MaterialTheme.typography.bodySmall)
+                        RecipeRating.DOWN -> Text(
+                            "👎 Not for us: out of rotation",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        null -> Unit
+                    }
                 }
             }
         }
@@ -73,6 +84,8 @@ fun RecipeDetailScreen(
     priceItems: List<PriceItem>,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    rating: RecipeRating? = null,
+    onRate: (RecipeRating?) -> Unit = {},
 ) {
     val itemsById = remember(priceItems) { priceItems.associateBy { it.id } }
     var servings by remember(recipe.id) { mutableStateOf(recipe.servings) }
@@ -95,6 +108,34 @@ fun RecipeDetailScreen(
         if (recipe.dietTags.isNotEmpty()) {
             Text(recipe.dietTags.joinToString(", "), style = MaterialTheme.typography.bodySmall)
         }
+
+        // Thumbs rating: set, change, or clear. The active thumb is the
+        // filled button; tapping it again clears the rating.
+        Text("Your rating", style = MaterialTheme.typography.titleMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (rating == RecipeRating.UP) {
+                Button(onClick = { onRate(null) }) { Text("👍 Liked it") }
+            } else {
+                TextButton(onClick = { onRate(RecipeRating.UP) }) { Text("👍 Liked it") }
+            }
+            if (rating == RecipeRating.DOWN) {
+                Button(onClick = { onRate(null) }) { Text("👎 Not for us") }
+            } else {
+                TextButton(onClick = { onRate(RecipeRating.DOWN) }) { Text("👎 Not for us") }
+            }
+        }
+        Text(
+            when (rating) {
+                RecipeRating.UP ->
+                    "Thumbs up: this dinner wins ties when Dinner Bot plans a week. Tap it again to clear the rating."
+                RecipeRating.DOWN ->
+                    "Thumbs down: Dinner Bot will not plan this dinner until the rating changes. " +
+                        "It stays in your recipe list."
+                null ->
+                    "Thumbs down takes a dinner out of rotation. Thumbs up makes it win ties when weeks are planned."
+            },
+            style = MaterialTheme.typography.bodySmall,
+        )
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Servings: ", style = MaterialTheme.typography.titleMedium)

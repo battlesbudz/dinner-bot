@@ -127,6 +127,21 @@ interface RecipeDao {
 }
 
 @Dao
+interface RecipeRatingDao {
+    @Query("SELECT * FROM recipe_ratings")
+    suspend fun getAll(): List<RecipeRatingEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(rating: RecipeRatingEntity)
+
+    @Query("DELETE FROM recipe_ratings WHERE recipeId = :recipeId")
+    suspend fun delete(recipeId: String)
+
+    @Query("DELETE FROM recipe_ratings")
+    suspend fun deleteAll()
+}
+
+@Dao
 interface SettingsDao {
     @Query("SELECT * FROM settings WHERE id = 1")
     suspend fun get(): SettingsEntity?
