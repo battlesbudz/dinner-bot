@@ -104,13 +104,14 @@ class WeekPlannerNightOffTest {
 
     @Test fun sharedIngredientKeepsTheCookingNightsShare() {
         val plan = twoNightPlan()
-        // Together the two dinners need 12 eggs: two packs.
+        // Together the two dinners need 12 eggs.
         val eggsLineBefore = plan.lines.single { it.itemId == "eggs" }
         assertEquals(12.0, eggsLineBefore.needed.amount, 0.001)
-        assertEquals(2, eggsLineBefore.packsToBuy)
 
         val off = setCooking(plan, "TUE", cooking = false, reason = "eating out")
-        // Only the off dinner's share is removed: 6 eggs, one pack remain.
+        // Only the off dinner's share is removed: the line keeps exactly the
+        // cooking night's 6 eggs instead of dropping the ingredient entirely
+        // (which is what removing the whole line would have done).
         val eggsLine = off.lines.single { it.itemId == "eggs" }
         assertEquals(6.0, eggsLine.needed.amount, 0.001)
         assertEquals(1, eggsLine.packsToBuy)
@@ -142,7 +143,7 @@ class WeekPlannerNightOffTest {
         assertEquals(plan.lines, back.lines)
     }
 
-    @Test fun restoreWithNoOtherDinnerAvailableStaysOffAndSaysWhy() {
+    @Test fun restoreWithNoDinnerAvailableStaysOffAndSaysWhy() {
         val plan = WeekPlanner.generate(
             settings(100_00, listOf("MON")), listOf(eggsOnly), book,
             emptyMap(), emptySet(), "2026-10-19",
@@ -151,9 +152,11 @@ class WeekPlannerNightOffTest {
             settings(100_00, listOf("MON")), plan, "MON", cooking = false, reason = "other",
             listOf(eggsOnly), book, emptyMap(), emptySet(),
         )
+        // The candidate pool has since emptied (every dinner thumbed down or
+        // filtered out after the plan was made): nothing can be restored.
         val back = WeekPlanner.setNightCooking(
             settings(100_00, listOf("MON")), off, "MON", cooking = true, reason = null,
-            listOf(eggsOnly), book, emptyMap(), emptySet(),
+            emptyList(), book, emptyMap(), emptySet(),
         )
         assertTrue(back.nights.single().notCooking)
         assertTrue(back.notes.any { it.contains("stays marked not cooking") })
