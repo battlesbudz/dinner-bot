@@ -1,0 +1,131 @@
+package com.battlesbudz.dinnerbot.feature.recipes
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Card
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.battlesbudz.dinnerbot.core.model.Money
+import com.battlesbudz.dinnerbot.core.model.PriceItem
+import com.battlesbudz.dinnerbot.core.model.Recipe
+
+@Composable
+fun RecipeListScreen(
+    recipes: List<Recipe>,
+    priceItems: List<PriceItem>,
+    onRecipeClick: (Recipe) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val itemsById = remember(priceItems) { priceItems.associateBy { it.id } }
+    LazyColumn(
+        modifier = modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
+            Text("Dinner Bot recipes", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                "Tap a dinner for ingredients and steps. Costs are estimates from the household price book.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        items(recipes, key = { it.id }) { recipe ->
+            val perServing = RecipeCostCalculator.costPerServingCents(recipe, recipe.servings, itemsById)
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { onRecipeClick(recipe) },
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(recipe.title, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "${recipe.mainProtein} · ${recipe.cuisine} · ${recipe.activeMinutes} min",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "About ${Money(perServing).format()} per serving",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun RecipeDetailScreen(
+    recipe: Recipe,
+    priceItems: List<PriceItem>,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val itemsById = remember(priceItems) { priceItems.associateBy { it.id } }
+    var servings by remember(recipe.id) { mutableStateOf(recipe.servings) }
+    val total = RecipeCostCalculator.ingredientCostCents(recipe, servings, itemsById)
+    val perServing = RecipeCostCalculator.costPerServingCents(recipe, servings, itemsById)
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        TextButton(onClick = onBack) { Text("Back to recipes") }
+        Text(recipe.title, style = MaterialTheme.typography.headlineSmall)
+        Text(
+            "${recipe.mainProtein} · ${recipe.cuisine} · ${recipe.activeMinutes} min active",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        if (recipe.dietTags.isNotEmpty()) {
+            Text(recipe.dietTags.joinToString(", "), style = MaterialTheme.typography.bodySmall)
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Servings: ", style = MaterialTheme.typography.titleMedium)
+            TextButton(onClick = { if (servings > 1) servings -= 1 }) { Text("-") }
+            Text(servings.toString(), style = MaterialTheme.typography.titleLarge)
+            TextButton(onClick = { servings += 1 }) { Text("+") }
+        }
+        Text(
+            "Estimated cost: ${Money(total).format()} total, ${Money(perServing).format()} per serving",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+
+        Text("Ingredients", style = MaterialTheme.typography.titleMedium)
+        recipe.scaledIngredients(servings).forEach { ingredient ->
+            val name = when {
+                ingredient.pantryItem != null -> "${ingredient.pantryItem} (pantry)"
+                else -> itemsById[ingredient.priceItemId]?.name ?: (ingredient.priceItemId ?: "")
+            }
+            val qty = ingredient.quantity
+            val qtyText = "${trimNumber(qty.amount)} ${qty.unit.label}"
+            val noteText = ingredient.note?.let { " — $it" } ?: ""
+            Text("$qtyText $name$noteText", style = MaterialTheme.typography.bodyMedium)
+        }
+
+        Text("Steps", style = MaterialTheme.typography.titleMedium)
+        recipe.steps.forEachIndexed { index, step ->
+            Text("${index + 1}. $step", style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+private fun trimNumber(value: Double): String =
+    if (value == value.toLong().toDouble()) value.toLong().toString()
+    else String.format("%.2f", value).trimEnd('0').trimEnd('.')
