@@ -178,13 +178,20 @@ object Costing {
      *   already home, so it gets the same on-hand treatment as Sam's stock:
      *   no shopping line and $0 cash, with its portion cost still reported
      *   as information. Sam's bulk stock behavior is unchanged.
+     * @param gateOverride a Sam's gate evaluated by the caller over a wider
+     *   horizon than [needs] (Phase V2-3: the two-week planner evaluates the
+     *   gate once over the combined fortnight and holds it fixed for both
+     *   weeks' costings, so a week's Sam's routing never depends on which
+     *   week of the pair is being priced). Null keeps the original behavior:
+     *   the gate is evaluated from [needs] themselves.
      */
     fun costNeeds(
         needs: List<ItemNeed>,
         stockOnHand: Map<String, Quantity>,
         pantryCoveredItemIds: Set<String> = emptySet(),
+        gateOverride: SamsGateResult? = null,
     ): CostedWeek {
-        val gate = evaluateSamsGate(needs)
+        val gate = gateOverride ?: evaluateSamsGate(needs)
         val lines = mutableListOf<GroceryLine>()
         val stockCovered = mutableSetOf<String>()
         val pantryCovered = mutableSetOf<String>()
@@ -312,8 +319,9 @@ object Costing {
         itemsById: Map<String, PriceItem>,
         stockOnHand: Map<String, Quantity>,
         pantryCoveredItemIds: Set<String> = emptySet(),
+        gateOverride: SamsGateResult? = null,
     ): CostedWeek {
         val (needs, _) = aggregateNeeds(recipes, forServings, itemsById)
-        return costNeeds(needs, stockOnHand, pantryCoveredItemIds)
+        return costNeeds(needs, stockOnHand, pantryCoveredItemIds, gateOverride)
     }
 }

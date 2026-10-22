@@ -84,6 +84,14 @@ interface PlanDao {
     @Query("SELECT * FROM plans ORDER BY createdAtMillis DESC LIMIT 1")
     suspend fun getLatest(): PlanEntity?
 
+    /**
+     * The most recent generation's plans in week order (Phase V2-3): one
+     * row for a one-week plan, two for a fortnight. Generation clears the
+     * table first, so everything returned belongs to the same generation.
+     */
+    @Query("SELECT * FROM plans ORDER BY weekStart ASC, createdAtMillis ASC LIMIT :limit")
+    suspend fun getRecent(limit: Int): List<PlanEntity>
+
     @Query("SELECT * FROM plans WHERE id = :id")
     suspend fun getById(id: String): PlanEntity?
 

@@ -4,6 +4,7 @@ import com.battlesbudz.dinnerbot.core.model.Costing
 import com.battlesbudz.dinnerbot.core.model.GroceryLine
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
 import com.battlesbudz.dinnerbot.core.model.Money
+import com.battlesbudz.dinnerbot.core.model.Perishables
 import com.battlesbudz.dinnerbot.core.model.PlannedNight
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Quantity
@@ -67,9 +68,36 @@ object WeekPlanner {
         weekStart: String,
         variation: Int = 0,
         ratings: Map<String, RecipeRating> = emptyMap(),
+    ): WeekPlan = generateWeek(
+        settings, recipes, priceItems, stockOnHand, pantryOwnedNames,
+        weekStart, variation, ratings,
+        excludedRecipeIds = emptySet(), gateOverride = null,
+    )
+
+    /**
+     * One week of planning. [excludedRecipeIds] are dinners the horizon has
+     * already placed in another week (Phase V2-3: week 2 never repeats a
+     * week 1 dinner, and the exclusion covers every pool the week is built
+     * from, including the restock-deferral and budget swap pools, because
+     * they all derive from the same ranked candidate list). [gateOverride]
+     * holds the Sam's gate at the value the caller evaluated over a wider
+     * horizon; null evaluates it from this week's own needs, as before.
+     */
+    private fun generateWeek(
+        settings: HouseholdSettings,
+        recipes: List<Recipe>,
+        priceItems: List<PriceItem>,
+        stockOnHand: Map<String, Quantity>,
+        pantryOwnedNames: Set<String>,
+        weekStart: String,
+        variation: Int,
+        ratings: Map<String, RecipeRating>,
+        excludedRecipeIds: Set<String>,
+        gateOverride: Costing.SamsGateResult?,
     ): WeekPlan {
         val itemsById = priceItems.associateBy { it.id }
         val candidates = rankCandidates(settings, recipes, itemsById, stockOnHand, ratings)
+            .filter { it.id !in excludedRecipeIds }
         val nightsNeeded = settings.cookNights.size
         if (candidates.isEmpty() || nightsNeeded == 0) {
             val allThumbedDown = recipes.isNotEmpty() &&
@@ -109,7 +137,7 @@ object WeekPlanner {
                 chosenIds.add(candidate.id)
             }
         }
-        var costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames)
+        var costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
         val notes = mutableListOf<String>()
         val deferred = mutableListOf<String>()
 
@@ -141,7 +169,7 @@ object WeekPlanner {
                     notes += "${item.name}: the ${Money(item.packPriceCents).format()} Sam's Club restock " +
                         "does not fit under this week's ${Money(cap).format()} budget, so it is moved to a " +
                         "later week and this week's dinners were swapped to ones that do not need it."
-                    costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames)
+                    costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
                 }
             }
             // Step 2: greedily swap the most expensive dinner for the cheapest
@@ -156,7 +184,7 @@ object WeekPlanner {
                 val cheapestUnused = unused.minByOrNull { dinnerFoodCost(it, settings, itemsById) } ?: break
                 if (dinnerFoodCost(cheapestUnused, settings, itemsById) >= dinnerFoodCost(mostExpensive, settings, itemsById)) break
                 chosen[chosen.indexOf(mostExpensive)] = cheapestUnused
-                costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames)
+                costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
             }
             if (costed.cashNeededCents > cap) {
                 notes += "Even the cheapest week Dinner Bot can build from these recipes costs " +
@@ -173,7 +201,7 @@ object WeekPlanner {
         // short list around (the v0.1.0 bug: index % size repeated dinners).
         val distinctChosen = chosen.distinctBy { it.id }
         if (distinctChosen.size < chosen.size) {
-            costed = cost(settings, distinctChosen, itemsById, stockOnHand, pantryOwnedNames)
+            costed = cost(settings, distinctChosen, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
         }
         if (distinctChosen.size < nightsNeeded) {
             notes += "There are not enough different dinners available to fill every cook " +
@@ -196,6 +224,322 @@ object WeekPlanner {
         )
     }
 
+
+    // ------------------------------------------------------------------
+    // Two-week horizon (Phase V2-3)
+    //
+    // A fortnight is two one-week plans generated as one planning event:
+    // week 2 is generated against the stock and the dinners week 1 leaves
+    // behind, so no dinner repeats across the two weeks and Sam's stock
+    // draws down in order. Cash is still reported per week against the
+    // weekly cap; the trip total is the sum of the two weeks. The Sam's
+    // gate is evaluated once over the combined horizon (see
+    // [fortnightGate]) and held fixed for both weeks. The shopping output
+    // splits into the one big trip and week 2's fresh top-up list by the
+    // category rule in [Perishables]. No new costing rules: each week is
+    // priced by the same machinery [generate] uses for a single week.
+    // ------------------------------------------------------------------
+
+    /** Tolerance for stock arithmetic, matching Costing's own. */
+    private const val STOCK_EPSILON = 1e-9
+
+    data class FortnightPlan(
+        val week1: WeekPlan,
+        val week2: WeekPlan,
+        /** Bought on the one big trip: all of week 1's lines, plus week 2's shelf-stable, frozen, and Sam's stock lines. */
+        val bigTripLines: List<GroceryLine>,
+        /** Week 2's fresh lines ([Perishables]), bought at the start of week 2 so nothing spoils. */
+        val topUpLines: List<GroceryLine>,
+        /** Whole-trip cash. Defined as week 1 cash + week 2 cash; each week still reports against the weekly cap. */
+        val tripCashCents: Int,
+        /** Horizon-level notes (the top-up explanation). Per-week notes stay on each [WeekPlan]. */
+        val notes: List<String>,
+    )
+
+    /**
+     * Generate two weeks together as one planning event. Week 1 is a
+     * normal week; week 2 is generated with week 1's dinners excluded and
+     * week 1's projected end-of-week stock as its starting stock, so bulk
+     * packs bought in week 1 are drawn down in week 2 at $0 cash before
+     * any restock is planned. Pantry-owned coverage, ratings, night-off
+     * state, and the per-week budget fitting all behave exactly as they do
+     * in a one-week plan, in both weeks.
+     */
+    fun generateFortnight(
+        settings: HouseholdSettings,
+        recipes: List<Recipe>,
+        priceItems: List<PriceItem>,
+        stockOnHand: Map<String, Quantity>,
+        pantryOwnedNames: Set<String>,
+        week1Start: String,
+        week2Start: String,
+        variation: Int = 0,
+        ratings: Map<String, RecipeRating> = emptyMap(),
+    ): FortnightPlan {
+        val gate = fortnightGate(settings, recipes, priceItems, stockOnHand, ratings)
+        val week1 = generateWeek(
+            settings, recipes, priceItems, stockOnHand, pantryOwnedNames,
+            week1Start, variation, ratings, excludedRecipeIds = emptySet(), gateOverride = gate,
+        )
+        val stockAfterWeek1 = projectedStockAfter(
+            settings, week1, recipes, priceItems, stockOnHand, pantryOwnedNames, gate,
+        )
+        val week2 = generateWeek(
+            settings, recipes, priceItems, stockAfterWeek1, pantryOwnedNames,
+            week2Start, variation, ratings,
+            excludedRecipeIds = week1.nights.map { it.recipeId }.toSet(), gateOverride = gate,
+        )
+        return composeFortnight(week1, week2, priceItems)
+    }
+
+    /**
+     * The Sam's gate for a two-week horizon, evaluated on the combined
+     * horizon with the existing machinery's semantics: the gate projects
+     * monthly savings from ONE week's use, so the combined horizon is
+     * represented by its average week. [recipes] here is the full pool;
+     * the projection uses the dinners the fortnight expects to cook (the
+     * top two weeks' worth of the ranked pool), because the gate is a
+     * projection and the actual picks are not known until it is decided.
+     */
+    fun fortnightGate(
+        settings: HouseholdSettings,
+        recipes: List<Recipe>,
+        priceItems: List<PriceItem>,
+        stockOnHand: Map<String, Quantity>,
+        ratings: Map<String, RecipeRating> = emptyMap(),
+    ): Costing.SamsGateResult {
+        val itemsById = priceItems.associateBy { it.id }
+        val preview = rankCandidates(settings, recipes, itemsById, stockOnHand, ratings)
+            .take(2 * settings.cookNights.size)
+        return gateForDinners(settings, preview, itemsById)
+    }
+
+    /** The horizon gate over a fortnight's actual dinners (both weeks combined, averaged). */
+    fun fortnightGateForDinners(
+        settings: HouseholdSettings,
+        dinners: List<Recipe>,
+        priceItems: List<PriceItem>,
+    ): Costing.SamsGateResult = gateForDinners(settings, dinners, priceItems.associateBy { it.id })
+
+    private fun gateForDinners(
+        settings: HouseholdSettings,
+        dinners: List<Recipe>,
+        itemsById: Map<String, PriceItem>,
+    ): Costing.SamsGateResult {
+        val (needs, _) = Costing.aggregateNeeds(dinners, settings.householdSize, itemsById)
+        // The gate projects from one week of use; a fortnight's dinners are
+        // two weeks of use, so the combined needs are halved to the average
+        // week before the existing gate math projects them monthly.
+        val averageWeek = needs.map { it.copy(neededBase = it.neededBase / 2.0) }
+        return Costing.evaluateSamsGate(averageWeek)
+    }
+
+    /**
+     * The Sam's bulk stock a week leaves behind: what it drew from the
+     * stock it started with, plus the leftovers of any packs it bought,
+     * minus what its dinners used. Pantry-covered items never touch stock
+     * (Costing treats them as already home before stock is drawn), and
+     * non-Sam's items are not tracked. This is the stock week 2 of a
+     * fortnight starts from, and the same projection the app uses to
+     * reprice week 2 after week 1 changes.
+     */
+    fun projectedStockAfter(
+        settings: HouseholdSettings,
+        week: WeekPlan,
+        recipes: List<Recipe>,
+        priceItems: List<PriceItem>,
+        stockOnHand: Map<String, Quantity>,
+        pantryOwnedNames: Set<String>,
+        gateOverride: Costing.SamsGateResult? = null,
+    ): Map<String, Quantity> {
+        val itemsById = priceItems.associateBy { it.id }
+        val recipesById = recipes.associateBy { it.id }
+        val dinners = dinnersOf(week, recipesById)
+        if (dinners.isEmpty()) return stockOnHand
+        val (needs, _) = Costing.aggregateNeeds(dinners, settings.householdSize, itemsById)
+        val costed = Costing.costNeeds(
+            needs, stockOnHand,
+            pantryCoveredItemIds = Costing.pantryCoveredItemIds(pantryOwnedNames, itemsById.values),
+            gateOverride = gateOverride,
+        )
+        val result = stockOnHand.toMutableMap()
+        for (need in needs) {
+            val item = need.item
+            if (item.homeStore != Store.SAMS_CLUB) continue
+            if (item.id in costed.pantryCoveredItemIds) continue
+            val onHandBase = stockOnHand[item.id]?.toBase() ?: 0.0
+            val packsBought = costed.lines
+                .firstOrNull { it.itemId == item.id && it.store == Store.SAMS_CLUB }
+                ?.packsToBuy ?: 0
+            val endingBase = onHandBase - need.neededBase + packsBought * item.packQuantity.toBase()
+            if (endingBase <= STOCK_EPSILON) {
+                result.remove(item.id)
+            } else {
+                result[item.id] = Quantity(
+                    endingBase / item.packQuantity.unit.toBaseFactor, item.packQuantity.unit,
+                )
+            }
+        }
+        return result
+    }
+
+    /**
+     * Compose the shopping sections and trip total for two week plans.
+     * Used by [generateFortnight] and by callers rebuilding the view of a
+     * stored fortnight, so the split shown is always the split planned.
+     */
+    fun composeFortnight(
+        week1: WeekPlan,
+        week2: WeekPlan,
+        priceItems: List<PriceItem>,
+    ): FortnightPlan {
+        val itemsById = priceItems.associateBy { it.id }
+        val topUp = week2.lines.filter { Perishables.isTopUpLine(it, itemsById[it.itemId]) }
+        val bigTrip = week1.lines + week2.lines.filterNot { Perishables.isTopUpLine(it, itemsById[it.itemId]) }
+        val notes = mutableListOf<String>()
+        if (topUp.isNotEmpty()) {
+            val topUpCash = topUp.sumOf { it.packsToBuy * it.estimatedPackPriceCents }
+            notes += "Week 2's fresh food (${Money(topUpCash).format()}) is on a separate top-up " +
+                "list: buy it at the start of week 2 so nothing spoils. Everything else is " +
+                "bought on the one big trip."
+        }
+        return FortnightPlan(
+            week1 = week1,
+            week2 = week2,
+            bigTripLines = bigTrip,
+            topUpLines = topUp,
+            tripCashCents = week1.cashNeededCents + week2.cashNeededCents,
+            notes = notes,
+        )
+    }
+
+    /**
+     * Swap one night's dinner inside a fortnight ([weekIndex] is 1 or 2).
+     * The replacement never comes from the other week's dinners. A week 2
+     * swap is priced against the stock week 1 leaves behind; a week 1 swap
+     * reprices week 2 against the new stock projection, keeping week 2's
+     * dinners (a repricing, like [recost], not a re-plan).
+     */
+    fun swapDinnerFortnight(
+        settings: HouseholdSettings,
+        current: FortnightPlan,
+        weekIndex: Int,
+        day: String,
+        recipes: List<Recipe>,
+        priceItems: List<PriceItem>,
+        stockOnHand: Map<String, Quantity>,
+        pantryOwnedNames: Set<String>,
+        ratings: Map<String, RecipeRating> = emptyMap(),
+        candidatePool: List<Recipe> = recipes,
+    ): FortnightPlan {
+        if (weekIndex == 2) {
+            val gate = horizonGateOf(current.week1)
+            val stock1 = projectedStockAfter(
+                settings, current.week1, recipes, priceItems, stockOnHand, pantryOwnedNames, gate,
+            )
+            val pool = candidatePool.filter { it.id !in current.week1.nights.map { n -> n.recipeId }.toSet() }
+            val newWeek2 = swapDinner(
+                settings, current.week2, day, recipes, priceItems, stock1,
+                pantryOwnedNames, ratings, pool, gate,
+            )
+            return composeFortnight(current.week1, newWeek2, priceItems)
+        }
+        val gateBefore = horizonGateOf(current.week1)
+        val pool = candidatePool.filter { it.id !in current.week2.nights.map { n -> n.recipeId }.toSet() }
+        val newWeek1 = swapDinner(
+            settings, current.week1, day, recipes, priceItems, stockOnHand,
+            pantryOwnedNames, ratings, pool, gateBefore,
+        )
+        return withReplacedWeek1(settings, current, newWeek1, recipes, priceItems, stockOnHand, pantryOwnedNames)
+    }
+
+    /**
+     * Mark one night not cooking, or back to cooking, inside a fortnight
+     * ([weekIndex] is 1 or 2). Same horizon rules as [swapDinnerFortnight]:
+     * a restored week 2 dinner never comes from week 1, and changing week 1
+     * reprices week 2 against the new stock projection.
+     */
+    fun setNightCookingFortnight(
+        settings: HouseholdSettings,
+        current: FortnightPlan,
+        weekIndex: Int,
+        day: String,
+        cooking: Boolean,
+        reason: String? = null,
+        recipes: List<Recipe>,
+        priceItems: List<PriceItem>,
+        stockOnHand: Map<String, Quantity>,
+        pantryOwnedNames: Set<String>,
+        ratings: Map<String, RecipeRating> = emptyMap(),
+        candidatePool: List<Recipe> = recipes,
+    ): FortnightPlan {
+        if (weekIndex == 2) {
+            val gate = horizonGateOf(current.week1)
+            val stock1 = projectedStockAfter(
+                settings, current.week1, recipes, priceItems, stockOnHand, pantryOwnedNames, gate,
+            )
+            val pool = candidatePool.filter { it.id !in current.week1.nights.map { n -> n.recipeId }.toSet() }
+            val newWeek2 = setNightCooking(
+                settings, current.week2, day, cooking, reason, recipes, priceItems, stock1,
+                pantryOwnedNames, ratings, pool, gate,
+            )
+            return composeFortnight(current.week1, newWeek2, priceItems)
+        }
+        val gateBefore = horizonGateOf(current.week1)
+        val pool = candidatePool.filter { it.id !in current.week2.nights.map { n -> n.recipeId }.toSet() }
+        val newWeek1 = setNightCooking(
+            settings, current.week1, day, cooking, reason, recipes, priceItems, stockOnHand,
+            pantryOwnedNames, ratings, pool, gateBefore,
+        )
+        return withReplacedWeek1(settings, current, newWeek1, recipes, priceItems, stockOnHand, pantryOwnedNames)
+    }
+
+    /**
+     * After week 1 changes, the pair is re-projected once and BOTH weeks
+     * are repriced under that single new horizon gate, so the two weeks can
+     * never route the same Sam's item differently or report inconsistent
+     * savings (Codex review, PR #16). Week 2's dinners stay; both weeks are
+     * repriced, not re-planned, and week 2 is priced against the stock the
+     * repriced week 1 leaves behind.
+     */
+    private fun withReplacedWeek1(
+        settings: HouseholdSettings,
+        current: FortnightPlan,
+        newWeek1: WeekPlan,
+        recipes: List<Recipe>,
+        priceItems: List<PriceItem>,
+        stockOnHand: Map<String, Quantity>,
+        pantryOwnedNames: Set<String>,
+    ): FortnightPlan {
+        val recipesById = recipes.associateBy { it.id }
+        val gate = fortnightGateForDinners(
+            settings, dinnersOf(newWeek1, recipesById) + dinnersOf(current.week2, recipesById), priceItems,
+        )
+        val repricedWeek1 = recost(settings, newWeek1, recipes, priceItems, stockOnHand, pantryOwnedNames, gate)
+        val stock1 = projectedStockAfter(
+            settings, repricedWeek1, recipes, priceItems, stockOnHand, pantryOwnedNames, gate,
+        )
+        val newWeek2 = recost(settings, current.week2, recipes, priceItems, stock1, pantryOwnedNames, gate)
+        return composeFortnight(repricedWeek1, newWeek2, priceItems)
+    }
+
+    /**
+     * The horizon gate a fortnight already carries: both of its weeks were
+     * costed under one gate at generation, and its projection is what each
+     * week reports. Rebuilt here so edits to the untouched week keep
+     * pricing under the gate the pair was created with. (Costing reads
+     * only [Costing.SamsGateResult.useSams] and the projection figure from
+     * a gate; the per-item savings map is reporting detail.)
+     */
+    private fun horizonGateOf(week1: WeekPlan): Costing.SamsGateResult = Costing.SamsGateResult(
+        projectedMonthlySavingsCents = week1.samsMonthlySavingsCents,
+        useSams = week1.samsGateMet,
+        savingsByItemCents = emptyMap(),
+    )
+
+    private fun dinnersOf(week: WeekPlan, recipesById: Map<String, Recipe>): List<Recipe> =
+        week.nights.filterNot { it.notCooking }.mapNotNull { recipesById[it.recipeId] }
+
     /**
      * Swap one night's dinner for the best unused candidate, preferring swaps
      * that keep the week under the cash cap.
@@ -215,6 +559,7 @@ object WeekPlanner {
         pantryOwnedNames: Set<String>,
         ratings: Map<String, RecipeRating> = emptyMap(),
         candidatePool: List<Recipe> = recipes,
+        gateOverride: Costing.SamsGateResult? = null,
     ): WeekPlan {
         val itemsById = priceItems.associateBy { it.id }
         val recipesById = recipes.associateBy { it.id }
@@ -237,7 +582,7 @@ object WeekPlanner {
         for (candidate in candidates) {
             val trial = baseChosen.toMutableList()
             trial[trialSlot] = candidate
-            val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames)
+            val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
             val cap = settings.weeklyBudgetCents
             if (cap <= 0 || costed.cashNeededCents <= cap) {
                 val notes = current.notes.toMutableList()
@@ -259,7 +604,7 @@ object WeekPlanner {
         val fallback = candidates.first()
         val trial = baseChosen.toMutableList()
         trial[trialSlot] = fallback
-        val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames)
+        val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
         return current.copy(
             nights = current.nights.mapIndexed { i, night ->
                 if (i == nightIndex) night.copy(recipeId = fallback.id) else night
@@ -303,6 +648,7 @@ object WeekPlanner {
         pantryOwnedNames: Set<String>,
         ratings: Map<String, RecipeRating> = emptyMap(),
         candidatePool: List<Recipe> = recipes,
+        gateOverride: Costing.SamsGateResult? = null,
     ): WeekPlan {
         val itemsById = priceItems.associateBy { it.id }
         val recipesById = recipes.associateBy { it.id }
@@ -315,7 +661,7 @@ object WeekPlanner {
                 if (i == nightIndex) night.copy(notCooking = true, notCookingReason = reason) else night
             }
             val chosen = nights.filterNot { it.notCooking }.mapNotNull { recipesById[it.recipeId] }
-            val costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames)
+            val costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
             val notes = current.notes.toMutableList()
             addPantryNotes(settings, chosen, pantryOwnedNames, notes)
             return current.copy(
@@ -348,7 +694,7 @@ object WeekPlanner {
         val cap = settings.weeklyBudgetCents
         for (candidate in candidates) {
             val trial = baseChosen + candidate
-            val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames)
+            val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
             if (cap <= 0 || costed.cashNeededCents <= cap) {
                 return restoredNight(current, nightIndex, candidate, trial, costed, settings, pantryOwnedNames)
             }
@@ -357,7 +703,7 @@ object WeekPlanner {
         // and say so, the same fallback swapDinner uses.
         val fallback = candidates.first()
         val trial = baseChosen + fallback
-        val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames)
+        val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
         val restored = restoredNight(current, nightIndex, fallback, trial, costed, settings, pantryOwnedNames)
         return restored.copy(
             notes = (restored.notes + "Cooking that night again puts the week at " +
@@ -384,11 +730,12 @@ object WeekPlanner {
         priceItems: List<PriceItem>,
         stockOnHand: Map<String, Quantity>,
         pantryOwnedNames: Set<String>,
+        gateOverride: Costing.SamsGateResult? = null,
     ): WeekPlan {
         val itemsById = priceItems.associateBy { it.id }
         val recipesById = recipes.associateBy { it.id }
         val chosen = current.nights.filterNot { it.notCooking }.mapNotNull { recipesById[it.recipeId] }
-        val costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames)
+        val costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
         val checkedItemIds = current.lines.filter { it.checkedOff }.map { it.itemId }.toSet()
         val notes = current.notes.filterNot { it.startsWith(PANTRY_GAP_NOTE_PREFIX) }.toMutableList()
         addPantryNotes(settings, chosen, pantryOwnedNames, notes)
@@ -453,12 +800,14 @@ object WeekPlanner {
         itemsById: Map<String, PriceItem>,
         stockOnHand: Map<String, Quantity>,
         pantryOwnedNames: Set<String>,
+        gateOverride: Costing.SamsGateResult? = null,
     ): Costing.CostedWeek = Costing.costRecipes(
         chosen,
         settings.householdSize,
         itemsById,
         stockOnHand,
         pantryCoveredItemIds = Costing.pantryCoveredItemIds(pantryOwnedNames, itemsById.values),
+        gateOverride = gateOverride,
     )
 
     private fun dinnerFoodCost(recipe: Recipe, settings: HouseholdSettings, itemsById: Map<String, PriceItem>): Int =
