@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.GroceryLine
 import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.Store
+import com.battlesbudz.dinnerbot.feature.pricebook.PriceCorrection
 
 /** One persisted shopping row, as displayed. [rowId] is the Room row id. */
 data class GroceryRow(
