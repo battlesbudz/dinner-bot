@@ -54,6 +54,12 @@ data class RecipeIngredient(
     val pantryItem: String? = null,
     val quantity: Quantity,
     val note: String? = null,
+    /**
+     * Battles's won't-eat rule: true when the dish cannot be made without
+     * this ingredient, false when the dish works fine without it. Defaults
+     * to true so an unmarked ingredient is treated as needed, never dropped.
+     */
+    val essential: Boolean = true,
 ) {
     init {
         require((priceItemId == null) != (pantryItem == null)) {

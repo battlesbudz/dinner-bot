@@ -145,6 +145,26 @@ class SeedLoader(private val db: DinnerBotDatabase) {
     }
 
     /**
+     * Keep the stored seed recipes identical to the bundled seed file.
+     * Recipes are pure seed content (the app never lets the user edit them),
+     * so when a new app version ships changed seed recipes (v0.1.1 added the
+     * essential/removable ingredient marks), the stored rows are replaced
+     * from the asset. This touches ONLY the recipes table: settings, price
+     * items (including Andrea's corrections), pantry, stock, and plans are
+     * user data and are never touched here. No Room schema change is needed
+     * because ingredients live in a JSON column. Returns how many recipes
+     * were written (0 when the stored set already matches the bundle).
+     */
+    suspend fun refreshSeedRecipes(recipesJson: String): Int {
+        val bundled = SeedDataParser.parseRecipes(recipesJson)
+        val stored = db.recipeDao().getAll().map { with(SeedMapper) { it.toModel() } }
+        if (stored == bundled) return 0
+        db.recipeDao().deleteAll()
+        db.recipeDao().insertAll(bundled.map { with(SeedMapper) { it.toEntity() } })
+        return bundled.size
+    }
+
+    /**
      * First-run pantry seeding: every known staple name becomes a pantry row,
      * owned when its name is in [ownedNames]. Ids are slugs of the name.
      */

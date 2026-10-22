@@ -12,11 +12,23 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,13 +50,15 @@ import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
 import com.battlesbudz.dinnerbot.core.model.PantryItem
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Recipe
+import com.battlesbudz.dinnerbot.core.model.RecipeAdaptation
 import com.battlesbudz.dinnerbot.feature.backup.BackupData
 import com.battlesbudz.dinnerbot.feature.backup.BackupEngine
 import com.battlesbudz.dinnerbot.feature.grocerylist.GroceryRow
 import com.battlesbudz.dinnerbot.feature.grocerylist.GroceryListScreen
+import com.battlesbudz.dinnerbot.feature.onboarding.HowItWorksScreen
 import com.battlesbudz.dinnerbot.feature.onboarding.OnboardingDefaults
-import com.battlesbudz.dinnerbot.feature.onboarding.OnboardingForm
 import com.battlesbudz.dinnerbot.feature.onboarding.SettingsScreen
+import com.battlesbudz.dinnerbot.feature.onboarding.SetupWalkthrough
 import com.battlesbudz.dinnerbot.feature.pantry.PantryLogic
 import com.battlesbudz.dinnerbot.feature.pantry.PantryScreen
 import com.battlesbudz.dinnerbot.feature.planner.PlannerScreen
@@ -81,14 +95,19 @@ class MainActivity : ComponentActivity() {
                 val priceJson = assets.open("pricebook.json").bufferedReader().use { it.readText() }
                 val recipesJson = assets.open("recipes.json").bufferedReader().use { it.readText() }
                 SeedLoader(database).seedIfEmpty(priceJson, recipesJson)
+                SeedLoader(database).refreshSeedRecipes(recipesJson)
             }
         }
     }
 }
 
-private enum class Tab(val label: String) {
-    RECIPES("Recipes"), PLANNER("Plan"), LIST("List"),
-    PANTRY("Pantry"), PRICES("Prices"), SETTINGS("Settings"),
+private enum class Tab(val label: String, val icon: ImageVector) {
+    RECIPES("Recipes", Icons.Filled.MenuBook),
+    PLANNER("Plan", Icons.Filled.CalendarMonth),
+    LIST("List", Icons.Filled.ShoppingCart),
+    PANTRY("Pantry", Icons.Filled.Inventory2),
+    PRICES("Prices", Icons.Filled.AttachMoney),
+    SETTINGS("Settings", Icons.Filled.Settings),
 }
 
 @Composable
@@ -112,11 +131,13 @@ private fun DinnerBotApp(
     var variation by remember { mutableStateOf(0) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var reloadKey by remember { mutableStateOf(0) }
+    var showHowItWorks by remember { mutableStateOf(false) }
 
     LaunchedEffect(reloadKey) {
         loading = true
         val loaded = withContext(Dispatchers.IO) {
             SeedLoader(database).seedIfEmpty(loadAsset("pricebook.json"), loadAsset("recipes.json"))
+            SeedLoader(database).refreshSeedRecipes(loadAsset("recipes.json"))
             val s = database.settingsDao().get()?.let { with(SeedMapper) { it.toModel() } }
                 ?: OnboardingDefaults.initialSettings()
             SeedLoader(database).seedPantryIfEmpty(OnboardingDefaults.DEFAULT_STAPLES, s.pantryStaples)
@@ -144,8 +165,8 @@ private fun DinnerBotApp(
 
     fun refresh() { reloadKey += 1 }
 
-    fun persistPlan(plan: WeekPlanner.WeekPlan, keepId: String?) {
-        val currentSettings = settings ?: return
+    fun persistPlan(plan: WeekPlanner.WeekPlan, keepId: String?, forSettings: HouseholdSettings) {
+        val currentSettings = forSettings
         scope.launch {
             withContext(Dispatchers.IO) {
                 val id = keepId ?: "plan-${System.currentTimeMillis()}"
@@ -173,19 +194,25 @@ private fun DinnerBotApp(
         }
     }
 
-    fun generatePlan() {
-        val currentSettings = settings ?: return
+    /**
+     * The won't-eat rule, applied once for a given settings: removable
+     * ingredients stripped, essential-blocked recipes held out of planning.
+     */
+    fun adaptationFor(forSettings: HouseholdSettings): RecipeAdaptation.Result =
+        RecipeAdaptation.adapt(recipes, forSettings.wontEat, priceItems.associateBy { it.id })
+
+    fun generatePlan(forSettings: HouseholdSettings) {
         variation += 1
         val plan = WeekPlanner.generate(
-            settings = currentSettings,
-            recipes = recipes,
+            settings = forSettings,
+            recipes = adaptationFor(forSettings).plannable,
             priceItems = priceItems,
             stockOnHand = PantryLogic.stockMap(bulkStocks),
             pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
             weekStart = currentWeekStart(),
             variation = variation,
         )
-        persistPlan(plan, keepId = null)
+        persistPlan(plan, keepId = null, forSettings = forSettings)
         tab = Tab.PLANNER
     }
 
@@ -235,9 +262,9 @@ private fun DinnerBotApp(
         loading && settings == null -> Box(Modifier.fillMaxSize().padding(16.dp)) {
             Text("Loading Dinner Bot...")
         }
-        settings?.onboardingComplete != true -> OnboardingForm(
+        settings?.onboardingComplete != true -> SetupWalkthrough(
             initial = settings ?: OnboardingDefaults.initialSettings(),
-            onSave = { saved ->
+            onFinish = { saved ->
                 scope.launch {
                     withContext(Dispatchers.IO) {
                         database.settingsDao().upsert(with(SeedMapper) { saved.toEntity() })
@@ -245,13 +272,20 @@ private fun DinnerBotApp(
                             OnboardingDefaults.DEFAULT_STAPLES, saved.pantryStaples,
                         )
                     }
+                    generatePlan(saved)
                     refresh()
                 }
             },
         )
         else -> {
             val currentSettings = settings!!
-            val recipesById = remember(recipes) { recipes.associateBy { it.id } }
+            // Display and cost the ADAPTED recipes: removable won't-eat
+            // ingredients are out everywhere; blocked recipes still browse.
+            val adaptation = remember(recipes, priceItems, currentSettings.wontEat) {
+                adaptationFor(currentSettings)
+            }
+            val displayRecipes = adaptation.recipes
+            val recipesById = remember(displayRecipes) { displayRecipes.associateBy { it.id } }
             val weekPlanView = remember(storedPlan, groceryRows) {
                 storedPlan?.let { sp ->
                     WeekPlanner.WeekPlan(
@@ -280,7 +314,7 @@ private fun DinnerBotApp(
                                 )
                             } else {
                                 RecipeListScreen(
-                                    recipes = recipes,
+                                    recipes = displayRecipes,
                                     priceItems = priceItems,
                                     onRecipeClick = { openRecipeId = it.id },
                                 )
@@ -290,7 +324,7 @@ private fun DinnerBotApp(
                             plan = weekPlanView,
                             recipesById = recipesById,
                             budgetCents = currentSettings.weeklyBudgetCents,
-                            onGenerate = { generatePlan() },
+                            onGenerate = { generatePlan(currentSettings) },
                             onSwap = { day ->
                                 val current = weekPlanView
                                 if (current != null && storedPlan != null) {
@@ -298,12 +332,12 @@ private fun DinnerBotApp(
                                         settings = currentSettings,
                                         current = current,
                                         day = day,
-                                        recipes = recipes,
+                                        recipes = adaptation.plannable,
                                         priceItems = priceItems,
                                         stockOnHand = PantryLogic.stockMap(bulkStocks),
                                         pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
                                     )
-                                    persistPlan(swapped, keepId = storedPlan!!.id)
+                                    persistPlan(swapped, keepId = storedPlan!!.id, forSettings = currentSettings)
                                 }
                             },
                         )
@@ -374,7 +408,13 @@ private fun DinnerBotApp(
                                 }
                             },
                         )
-                        Tab.SETTINGS -> Column(modifier = Modifier.fillMaxSize()) {
+                        Tab.SETTINGS -> if (showHowItWorks) {
+                            HowItWorksScreen(onDone = { showHowItWorks = false })
+                        } else Column(modifier = Modifier.fillMaxSize()) {
+                            OutlinedButton(
+                                onClick = { showHowItWorks = true },
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            ) { Text("How Dinner Bot works") }
                             Box(modifier = Modifier.weight(1f)) {
                                 SettingsScreen(
                                     initial = currentSettings,
@@ -420,19 +460,20 @@ private fun DinnerBotApp(
                         }
                     }
                 }
-                Surface(shadowElevation = 8.dp) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp)) {
-                        Tab.entries.forEach { entry ->
-                            if (entry == tab) {
-                                Button(onClick = { tab = entry }, modifier = Modifier.weight(1f)) {
-                                    Text(entry.label)
-                                }
-                            } else {
-                                TextButton(onClick = { tab = entry }, modifier = Modifier.weight(1f)) {
-                                    Text(entry.label)
-                                }
-                            }
-                        }
+                // Material 3 bottom navigation: six destinations stay
+                // reachable with icons, and labels show only on the selected
+                // tab so they can never crush or wrap letter by letter the
+                // way the old hand-rolled row of full-width buttons did.
+                NavigationBar {
+                    Tab.entries.forEach { entry ->
+                        NavigationBarItem(
+                            selected = entry == tab,
+                            onClick = { tab = entry },
+                            icon = { Icon(entry.icon, contentDescription = entry.label) },
+                            label = { Text(entry.label, maxLines = 1) },
+                            alwaysShowLabel = false,
+                            modifier = Modifier.testTag("tab-${entry.label}"),
+                        )
                     }
                 }
             }

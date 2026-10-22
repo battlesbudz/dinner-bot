@@ -16,7 +16,9 @@ import com.battlesbudz.dinnerbot.core.model.Store
  * unit-testable and the Regenerate button honest.
  *
  * Policy, in order:
- * 1. Filter out anything the household won't eat.
+ * 1. Plan only from the recipes the caller passes in. The won't-eat rule is
+ *    applied before this, by RecipeAdaptation: removable ingredients are
+ *    already stripped and recipes needing a won't-eat ingredient are held out.
  * 2. Prefer dinners whose Sam's bulk ingredients are already covered by stock
  *    at home (they cost $0 cash for that ingredient), then cheaper dinners.
  * 3. Price the week with [Costing]: cash is what the budget sees.
@@ -60,7 +62,7 @@ object WeekPlanner {
         if (candidates.isEmpty() || nightsNeeded == 0) {
             return emptyPlan(
                 weekStart,
-                note = "No recipes match the household filters yet. Check the won't-eat list in Settings.",
+                note = "No dinners are available to plan yet. Check the won't-eat list in Settings.",
             )
         }
 
@@ -125,8 +127,21 @@ object WeekPlanner {
 
         addPantryNotes(settings, chosen, pantryOwnedNames, notes)
 
-        val nights = settings.cookNights.mapIndexed { index, day ->
-            PlannedNight(day = day, recipeId = chosen[index % chosen.size].id)
+        // A generated week NEVER repeats a dinner. When fewer different
+        // dinners are available than there are cook nights, plan the nights
+        // that can be filled and say so plainly instead of wrapping the
+        // short list around (the v0.1.0 bug: index % size repeated dinners).
+        val distinctChosen = chosen.distinctBy { it.id }
+        if (distinctChosen.size < chosen.size) {
+            costed = cost(settings, distinctChosen, itemsById, stockOnHand)
+        }
+        if (distinctChosen.size < nightsNeeded) {
+            notes += "There are not enough different dinners available to fill every cook " +
+                "night this week: ${distinctChosen.size} of $nightsNeeded nights are planned. " +
+                "More recipes, or fewer won't-eat ingredients the dinners need, would fill the week."
+        }
+        val nights = settings.cookNights.zip(distinctChosen) { day, recipe ->
+            PlannedNight(day = day, recipeId = recipe.id)
         }
         return WeekPlan(
             weekStart = weekStart,
@@ -230,29 +245,20 @@ object WeekPlanner {
     private fun dinnerFoodCost(recipe: Recipe, settings: HouseholdSettings, itemsById: Map<String, PriceItem>): Int =
         Costing.costRecipes(listOf(recipe), settings.householdSize, itemsById, emptyMap()).foodCostCents
 
-    /** Ranked candidates: won't-eat filtered, stock-covered first, then cheapest, then title. */
+    /**
+     * Ranked candidates: stock-covered first, then cheapest, then title.
+     * The won't-eat rule is NOT applied here: callers pass the recipes that
+     * [com.battlesbudz.dinnerbot.core.model.RecipeAdaptation] produced,
+     * already stripped of removable won't-eat ingredients and with
+     * essential-blocked recipes held out, so what arrives is plannable.
+     */
     fun rankCandidates(
         settings: HouseholdSettings,
         recipes: List<Recipe>,
         itemsById: Map<String, PriceItem>,
         stockOnHand: Map<String, Quantity>,
     ): List<Recipe> {
-        val blocked = settings.wontEat.map { it.trim().lowercase() }.filter { it.isNotEmpty() }
-        val filtered = recipes.filter { recipe ->
-            val haystacks = buildList {
-                add(recipe.title.lowercase())
-                add(recipe.mainProtein.lowercase())
-                recipe.ingredients.forEach { ingredient ->
-                    ingredient.priceItemId?.let { id ->
-                        add(id.lowercase())
-                        itemsById[Costing.substituteItemId(id)]?.name?.lowercase()?.let { add(it) }
-                    }
-                    ingredient.pantryItem?.let { add(it.lowercase()) }
-                }
-            }
-            blocked.none { term -> haystacks.any { it.contains(term) } }
-        }
-        return filtered.sortedWith(
+        return recipes.sortedWith(
             compareBy<Recipe>(
                 { recipe -> if (usesStockedBulk(recipe, itemsById, stockOnHand)) 0 else 1 },
                 { recipe -> dinnerFoodCost(recipe, settings, itemsById) },

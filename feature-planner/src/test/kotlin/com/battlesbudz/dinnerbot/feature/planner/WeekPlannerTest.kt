@@ -105,12 +105,98 @@ class WeekPlannerTest {
         assertTrue(plan.nights.none { it.recipeId == "pork-feast" })
     }
 
-    @Test fun wontEatFiltersRecipesOut() {
+    @Test fun generatedWeekNeverRepeatsAcrossManyVariations() {
+        val recipes = (1..8).map { cheapDinner("c$it") }
+        val nights = listOf("MON", "TUE", "WED", "THU", "FRI")
+        for (variation in 0..40) {
+            val plan = WeekPlanner.generate(
+                settings(100_00, nights), recipes, book, emptyMap(), emptySet(),
+                "2026-10-19", variation = variation,
+            )
+            assertEquals("variation $variation fills the week", 5, plan.nights.size)
+            assertEquals(
+                "variation $variation repeats a dinner: ${plan.nights.map { it.recipeId }}",
+                plan.nights.size, plan.nights.map { it.recipeId }.distinct().size,
+            )
+        }
+    }
+
+    @Test fun poolSmallerThanCookNightsPlansWhatItCanAndSaysSo() {
+        val recipes = listOf(cheapDinner("c1"), cheapDinner("c2"), cheapDinner("c3"))
         val plan = WeekPlanner.generate(
-            settings(100_00, listOf("MON")).copy(wontEat = listOf("turkey")),
-            listOf(turkeyDinner, cheapDinner("c1")), book, emptyMap(), emptySet(), "2026-10-19",
+            settings(100_00, listOf("MON", "TUE", "WED", "THU", "FRI")),
+            recipes, book, emptyMap(), emptySet(), "2026-10-19",
         )
-        assertEquals("c1", plan.nights.single().recipeId)
+        assertEquals(3, plan.nights.size)
+        assertEquals(3, plan.nights.map { it.recipeId }.distinct().size)
+        assertTrue(
+            "notes should say plainly the week could not be filled: ${plan.notes}",
+            plan.notes.any { it.contains("not enough different dinners") },
+        )
+    }
+
+    @Test fun v010RegressionOnionWontEatNoRepeatsAndSwapWorks() {
+        // The exact v0.1.0 failure: most recipes share one removable
+        // ingredient (onion). The old code filtered those recipes out whole,
+        // leaving fewer dinners than cook nights: generation wrapped the
+        // short list into repeats and swap had no candidates left at all.
+        val onionBook = book + item("yellow-onions", Store.ALDI, 3.0, MeasureUnit.POUND, 150)
+        val recipes = (1..6).map { i ->
+            recipe(
+                "d$i", "Dinner $i",
+                priced("eggs", 6.0, MeasureUnit.COUNT),
+                priced("spaghetti", 16.0, MeasureUnit.OUNCE),
+                RecipeIngredient(
+                    priceItemId = "yellow-onions",
+                    quantity = Quantity(0.5, MeasureUnit.POUND),
+                    essential = false,
+                ),
+            )
+        }
+        val s = settings(100_00, listOf("MON", "TUE", "WED", "THU", "FRI"))
+            .copy(wontEat = listOf("onion"))
+        val adapted = com.battlesbudz.dinnerbot.core.model.RecipeAdaptation
+            .adapt(recipes, s.wontEat, onionBook.associateBy { it.id })
+        assertTrue(adapted.blockedFromPlanning.isEmpty())
+        val plan = WeekPlanner.generate(
+            s, adapted.plannable, onionBook, emptyMap(), emptySet(), "2026-10-19",
+        )
+        assertEquals(5, plan.nights.size)
+        assertEquals(5, plan.nights.map { it.recipeId }.distinct().size)
+        assertTrue(plan.lines.none { it.itemId == "yellow-onions" })
+        val firstNight = plan.nights.first()
+        val swapped = WeekPlanner.swapDinner(
+            s, plan, firstNight.day, adapted.plannable, onionBook, emptyMap(), emptySet(),
+        )
+        assertTrue(
+            "swap must change the dinner",
+            swapped.nights.first { it.day == firstNight.day }.recipeId != firstNight.recipeId,
+        )
+    }
+
+    @Test fun essentialBlockedRecipeNeverAppearsInGeneratedWeeks() {
+        val eggBook = book
+        val eggRecipe = recipe(
+            "egg-night", "Egg Night",
+            RecipeIngredient(
+                priceItemId = "eggs",
+                quantity = Quantity(6.0, MeasureUnit.COUNT),
+                essential = true,
+            ),
+        )
+        val others = (1..5).map { cheapDinner("c$it") }
+        val s = settings(100_00, listOf("MON", "TUE", "WED", "THU", "FRI"))
+            .copy(wontEat = listOf("eggs"))
+        val adapted = com.battlesbudz.dinnerbot.core.model.RecipeAdaptation
+            .adapt(others + eggRecipe, s.wontEat, eggBook.associateBy { it.id })
+        assertEquals(setOf("egg-night"), adapted.blockedFromPlanning)
+        for (variation in 0..10) {
+            val plan = WeekPlanner.generate(
+                s, adapted.plannable, eggBook, emptyMap(), emptySet(),
+                "2026-10-19", variation = variation,
+            )
+            assertTrue(plan.nights.none { it.recipeId == "egg-night" })
+        }
     }
 
     @Test fun swapChangesTheDinnerAndStaysUnderCap() {

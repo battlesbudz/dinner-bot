@@ -9,11 +9,17 @@ import androidx.room.RoomDatabase
  * Database version 2 (Phase 2) adds pantry_items, bulk_stock, plans and
  * grocery_items, plus the price_items.alternatesJson column.
  *
- * Migration choice: fallbackToDestructiveMigration. Dinner Bot is pre-1.0 and
- * has never shipped a release, so there is no installed user data to protect;
- * the seed loader refills price items and recipes after a destructive bump,
- * and onboarding settings can be re-entered. Revisit before any post-1.0
- * schema change.
+ * v0.1.1 deliberately keeps version 2: the essential/removable ingredient
+ * marks live inside the recipes JSON column, so there is NO schema change,
+ * no migration runs, and no user table (settings, price_items, pantry,
+ * bulk_stock, plans, grocery_items) is touched on upgrade. SeedLoader
+ * refreshes only the recipes table from the bundled asset; recipes are
+ * seed content the user cannot edit.
+ *
+ * fallbackToDestructiveMigration remains only as a pre-1.0 safety net for
+ * development installs; it does not trigger without a version bump. Any
+ * future schema change after v0.1.0 ships real user data must ship a real
+ * migration instead.
  */
 @Database(
     entities = [
