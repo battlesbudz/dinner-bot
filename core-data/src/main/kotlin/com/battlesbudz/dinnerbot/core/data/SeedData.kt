@@ -20,6 +20,7 @@ import com.battlesbudz.dinnerbot.core.model.ReminderSettings
 import com.battlesbudz.dinnerbot.core.model.Store
 import com.battlesbudz.dinnerbot.core.model.StorePrice
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
@@ -93,9 +94,9 @@ object SeedMapper {
         saturatedFatG = per100g.saturatedFatG,
         cholesterolMg = per100g.cholesterolMg,
         gramWeightsJson = json.encodeToString(
-            kotlinx.serialization.builtins.MapSerializer(
+            MapSerializer(
                 String.serializer(),
-                kotlinx.serialization.builtins.Double.serializer(),
+                Double.serializer(),
             ),
             gramWeights,
         ),
@@ -123,9 +124,9 @@ object SeedMapper {
         ),
         gramWeights = runCatching {
             json.decodeFromString(
-                kotlinx.serialization.builtins.MapSerializer(
+                MapSerializer(
                     String.serializer(),
-                    kotlinx.serialization.builtins.Double.serializer(),
+                    Double.serializer(),
                 ),
                 gramWeightsJson,
             )
