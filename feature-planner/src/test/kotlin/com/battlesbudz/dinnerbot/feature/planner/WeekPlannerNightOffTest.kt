@@ -204,6 +204,58 @@ class WeekPlannerNightOffTest {
         assertEquals(off, swapped)
     }
 
+    /**
+     * Codex review regression (PR #14): a dinner already cooking in the week
+     * can fall out of the candidate pool when a diet preset changes in
+     * Settings. Repricing the edited week must still price that dinner from
+     * the full recipe set; the narrowed pool supplies candidates only.
+     */
+    @Test fun nightOffKeepsPricingACookingDinnerOutsideTheCandidatePool() {
+        val plan = twoNightPlan()
+        val updated = WeekPlanner.setNightCooking(
+            settings(100_00, listOf("MON", "TUE")), plan, "MON", cooking = false,
+            reason = "leftovers", recipes = pool, priceItems = book,
+            stockOnHand = emptyMap(), pantryOwnedNames = emptySet(),
+            candidatePool = listOf(eggsOnly),
+        )
+        // TUE's eggs-pasta is not in the candidate pool, but it is still
+        // cooking and displayed, so its ingredients and cash stay.
+        assertTrue(updated.lines.any { it.itemId == "spaghetti" })
+        val expected = Costing.costRecipes(listOf(eggsAndPasta), 4, itemsById, emptyMap())
+        assertEquals(expected.cashNeededCents, updated.cashNeededCents)
+        assertEquals(expected.lines, updated.lines)
+    }
+
+    @Test fun swapKeepsPricingACookingDinnerOutsideTheCandidatePool() {
+        val plan = twoNightPlan()
+        val swapped = WeekPlanner.swapDinner(
+            settings(100_00, listOf("MON", "TUE")), plan, "MON",
+            recipes = pool, priceItems = book,
+            stockOnHand = emptyMap(), pantryOwnedNames = emptySet(),
+            candidatePool = listOf(turkeyOnly),
+        )
+        assertEquals("turkey-only", swapped.nights.single { it.day == "MON" }.recipeId)
+        // TUE's eggs-pasta was never a swap candidate, but it is still
+        // cooking, so the repriced week includes it in full.
+        val expected = Costing.costRecipes(listOf(turkeyOnly, eggsAndPasta), 4, itemsById, emptyMap())
+        assertEquals(expected.cashNeededCents, swapped.cashNeededCents)
+        assertEquals(expected.lines, swapped.lines)
+    }
+
+    @Test fun restoreDrawsCandidatesOnlyFromThePool() {
+        val plan = twoNightPlan()
+        val off = setCooking(plan, "TUE", cooking = false, reason = "other")
+        val back = WeekPlanner.setNightCooking(
+            settings(100_00, listOf("MON", "TUE")), off, "TUE", cooking = true,
+            recipes = pool, priceItems = book,
+            stockOnHand = emptyMap(), pantryOwnedNames = emptySet(),
+            candidatePool = listOf(turkeyOnly),
+        )
+        // eggs-pasta resolves from the full set but is not a candidate, so
+        // the restored dinner is the pool's turkey dinner.
+        assertEquals("turkey-only", back.nights.single { it.day == "TUE" }.recipeId)
+    }
+
     @Test fun markingOffAnAlreadyOffNightChangesNothing() {
         val plan = twoNightPlan()
         val off = setCooking(plan, "TUE", cooking = false, reason = "other")

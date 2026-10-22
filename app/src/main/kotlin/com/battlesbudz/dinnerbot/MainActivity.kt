@@ -389,11 +389,12 @@ private fun DinnerBotApp(
                                         settings = currentSettings,
                                         current = current,
                                         day = day,
-                                        recipes = plannerPool(currentSettings),
+                                        recipes = adaptation.recipes,
                                         priceItems = priceItems,
                                         stockOnHand = PantryLogic.stockMap(bulkStocks),
                                         pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
                                         ratings = ratings,
+                                        candidatePool = plannerPool(currentSettings),
                                     )
                                     persistPlan(swapped, keepId = storedPlan!!.id, forSettings = currentSettings)
                                 }
@@ -407,11 +408,12 @@ private fun DinnerBotApp(
                                         day = day,
                                         cooking = cooking,
                                         reason = reason,
-                                        recipes = plannerPool(currentSettings),
+                                        recipes = adaptation.recipes,
                                         priceItems = priceItems,
                                         stockOnHand = PantryLogic.stockMap(bulkStocks),
                                         pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
                                         ratings = ratings,
+                                        candidatePool = plannerPool(currentSettings),
                                     )
                                     persistPlan(updated, keepId = storedPlan!!.id, forSettings = currentSettings)
                                 }

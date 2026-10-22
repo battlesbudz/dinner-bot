@@ -193,6 +193,11 @@ object WeekPlanner {
     /**
      * Swap one night's dinner for the best unused candidate, preferring swaps
      * that keep the week under the cash cap.
+     *
+     * [recipes] is the full adapted recipe set, used to resolve the dinners
+     * already in the plan so repricing never drops one silently; replacement
+     * candidates come from [candidatePool] (defaults to [recipes]), which is
+     * where narrower rules (the diet presets' tag filters, Phase V2-2) apply.
      */
     fun swapDinner(
         settings: HouseholdSettings,
@@ -203,6 +208,7 @@ object WeekPlanner {
         stockOnHand: Map<String, Quantity>,
         pantryOwnedNames: Set<String>,
         ratings: Map<String, RecipeRating> = emptyMap(),
+        candidatePool: List<Recipe> = recipes,
     ): WeekPlan {
         val itemsById = priceItems.associateBy { it.id }
         val recipesById = recipes.associateBy { it.id }
@@ -216,7 +222,7 @@ object WeekPlanner {
         val cookingIndexes = current.nights.indices.filter { !current.nights[it].notCooking }
         val trialSlot = cookingIndexes.indexOf(nightIndex)
         val inPlan = current.nights.filterNot { it.notCooking }.map { it.recipeId }.toSet()
-        val candidates = rankCandidates(settings, recipes, itemsById, stockOnHand, ratings)
+        val candidates = rankCandidates(settings, candidatePool, itemsById, stockOnHand, ratings)
             .filter { it.id !in inPlan }
         if (candidates.isEmpty()) return current
 
@@ -290,6 +296,7 @@ object WeekPlanner {
         stockOnHand: Map<String, Quantity>,
         pantryOwnedNames: Set<String>,
         ratings: Map<String, RecipeRating> = emptyMap(),
+        candidatePool: List<Recipe> = recipes,
     ): WeekPlan {
         val itemsById = priceItems.associateBy { it.id }
         val recipesById = recipes.associateBy { it.id }
@@ -317,8 +324,12 @@ object WeekPlanner {
         }
 
         // Turning the night back on: pick a dinner the week is not cooking.
+        // Candidates come from the (possibly preset-narrowed) pool; the
+        // dinners already cooking resolve from the full set above, so a
+        // dinner a new preset would exclude is still priced while it is
+        // displayed in this week.
         val cookingIds = current.nights.filterNot { it.notCooking }.map { it.recipeId }.toSet()
-        val candidates = rankCandidates(settings, recipes, itemsById, stockOnHand, ratings)
+        val candidates = rankCandidates(settings, candidatePool, itemsById, stockOnHand, ratings)
             .filter { it.id !in cookingIds }
         if (candidates.isEmpty()) {
             return current.copy(
