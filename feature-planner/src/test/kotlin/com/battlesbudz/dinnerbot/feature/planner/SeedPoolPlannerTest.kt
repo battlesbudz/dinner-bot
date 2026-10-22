@@ -89,6 +89,7 @@ class SeedPoolPlannerTest {
     @Test fun poolIsTheFull36() {
         assertEquals(36, recipesFile.recipes.size)
         assertEquals(31, priceBook.items.size)
+    }
 
     @Test fun fortnightFromTheRealPoolFillsBothWeeksWithoutCrossWeekRepeats() {
         // Phase V2-3 against the real seed pool: two full weeks, no dinner
