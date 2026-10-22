@@ -17,8 +17,9 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.UiSelector
+import androidx.test.uiautomator.Until
 import com.battlesbudz.dinnerbot.core.data.DinnerBotDatabase
 import com.battlesbudz.dinnerbot.core.data.SeedLoader
 import com.battlesbudz.dinnerbot.core.data.SettingsEntity
@@ -120,11 +121,17 @@ class BarcodeInstrumentedTest {
             waitForTag("scan-barcode-button")
             composeRule.onNodeWithTag("scan-barcode-button").assertIsDisplayed()
 
-            // First tap: the system permission ask appears; deny it.
+            // First tap: the system permission ask appears (the
+            // permission controller's window, matched by package so
+            // the test does not depend on its button wording); backing
+            // out of it delivers a denial to the app.
             composeRule.onNodeWithTag("scan-barcode-button").performClick()
-            val deny = device.findObject(UiSelector().text("Don't allow"))
-            assertTrue("permission dialog should offer Don't allow", deny.waitForExists(15_000))
-            deny.click()
+            val askAppeared = device.wait(
+                Until.hasObject(By.pkg("com.google.android.permissioncontroller")),
+                15_000,
+            ) || device.wait(Until.hasObject(By.pkg("com.android.permissioncontroller")), 5_000)
+            assertTrue("the system permission ask should appear on first scan tap", askAppeared)
+            device.pressBack()
 
             // The list explains the fallback and stays fully usable.
             waitForTag("camera-denied-note")
