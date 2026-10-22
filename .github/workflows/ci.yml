@@ -53,6 +53,7 @@ jobs:
         with:
           api-level: 34
           target: default
-          arch: x86_64
+          # macos-14 runners are ARM64; the system image must match the host.
+          arch: arm64-v8a
           profile: pixel_6
           script: ./gradlew :app:connectedDebugAndroidTest --stacktrace
