@@ -8,12 +8,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -25,6 +30,16 @@ private val DAY_LABELS = mapOf(
     "MON" to "Monday", "TUE" to "Tuesday", "WED" to "Wednesday", "THU" to "Thursday",
     "FRI" to "Friday", "SAT" to "Saturday", "SUN" to "Sunday",
 )
+
+/** The not-cooking reasons (Phase V2-2): stored key to shown label. */
+private val NOT_COOKING_REASONS = listOf(
+    "leftovers" to "Leftovers",
+    "eating out" to "Eating out",
+    "other" to "Other",
+)
+
+private fun notCookingReasonLabel(reason: String?): String =
+    NOT_COOKING_REASONS.firstOrNull { it.first == reason }?.second ?: "Other"
 
 /**
  * Week view: one card per cook night, the two headline numbers (cash needed
@@ -42,7 +57,11 @@ fun PlannerScreen(
     ratings: Map<String, RecipeRating> = emptyMap(),
     onRate: (String, RecipeRating?) -> Unit = { _, _ -> },
     outOfRotationCount: Int = 0,
+    /** (day, cooking, reason) — mark a night not cooking (with a reason) or back to cooking. */
+    onSetNightCooking: (String, Boolean, String?) -> Unit = { _, _, _ -> },
 ) {
+    // The day whose not-cooking reason is being picked, if any.
+    var reasonForDay by remember { mutableStateOf<String?>(null) }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -98,6 +117,24 @@ fun PlannerScreen(
                     modifier = Modifier.padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
+                    if (night.notCooking) {
+                        // Marked off for this week only: no dinner, no swap,
+                        // no thumbs. Its ingredients and cash are already out
+                        // of the plan and the list.
+                        Text(DAY_LABELS[night.day] ?: night.day, style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "Not cooking: ${notCookingReasonLabel(night.notCookingReason)}",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            "Nothing is planned, priced, or listed for this night.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        TextButton(onClick = { onSetNightCooking(night.day, true, null) }) {
+                            Text("Cook this night")
+                        }
+                        return@Column
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(DAY_LABELS[night.day] ?: night.day, style = MaterialTheme.typography.titleSmall)
@@ -109,7 +146,10 @@ fun PlannerScreen(
                                 )
                             }
                         }
-                        TextButton(onClick = { onSwap(night.day) }) { Text("Swap") }
+                        Column(horizontalAlignment = Alignment.End) {
+                            TextButton(onClick = { onSwap(night.day) }) { Text("Swap") }
+                            TextButton(onClick = { reasonForDay = night.day }) { Text("Not cooking") }
+                        }
                     }
                     // Rate this dinner after cooking it. Tapping the active
                     // thumb again clears the rating.
@@ -147,5 +187,34 @@ fun PlannerScreen(
                 )
             }
         }
+    }
+
+    val pickingDay = reasonForDay
+    if (pickingDay != null) {
+        AlertDialog(
+            onDismissRequest = { reasonForDay = null },
+            title = { Text("Not cooking this night?") },
+            text = {
+                Text(
+                    "Its dinner, ingredients, and cost come off the plan and the list. " +
+                        "You can put the night back any time.",
+                )
+            },
+            confirmButton = {
+                Column {
+                    NOT_COOKING_REASONS.forEach { (key, label) ->
+                        TextButton(
+                            onClick = {
+                                onSetNightCooking(pickingDay, false, key)
+                                reasonForDay = null
+                            },
+                        ) { Text(label) }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { reasonForDay = null }) { Text("Cancel") }
+            },
+        )
     }
 }

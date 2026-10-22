@@ -6,6 +6,7 @@ import com.battlesbudz.dinnerbot.core.model.PlannedNight
 import com.battlesbudz.dinnerbot.core.model.Quantity
 import com.battlesbudz.dinnerbot.core.model.Store
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PlanMapperTest {
@@ -23,6 +24,45 @@ class PlanMapperTest {
                 PlannedNight("TUE", "egg-fried-rice"),
             ),
             notes = listOf("A note."),
+            createdAtMillis = 123456789L,
+        )
+        val back = with(PlanMapper) { stored.toEntity().toStoredPlan() }
+        assertEquals(stored, back)
+    }
+
+    @Test fun legacyNightsJsonFromV3DecodesAsAllCooking() {
+        // A plan stored by v0.2.0 (DB v3): nightsJson has no notCooking
+        // fields. The Phase V2-2 fields carry defaults, so the old JSON must
+        // decode with every night cooking and no reason.
+        val entity = PlanEntity(
+            id = "plan-legacy",
+            weekStart = "2026-10-19",
+            budgetCents = 7500,
+            cashNeededCents = 5620,
+            foodCostCents = 4100,
+            samsMonthlySavingsCents = 505,
+            nightsJson = """[{"day":"MON","recipeId":"turkey-spaghetti"},{"day":"TUE","recipeId":"egg-fried-rice"}]""",
+            notesJson = "[]",
+            createdAtMillis = 123456789L,
+        )
+        val stored = with(PlanMapper) { entity.toStoredPlan() }
+        assertEquals(2, stored.nights.size)
+        assertTrue(stored.nights.all { !it.notCooking && it.notCookingReason == null })
+    }
+
+    @Test fun notCookingNightRoundTripsThroughEntity() {
+        val stored = PlanMapper.StoredPlan(
+            id = "plan-2",
+            weekStart = "2026-10-19",
+            budgetCents = 7500,
+            cashNeededCents = 3000,
+            foodCostCents = 2500,
+            samsMonthlySavingsCents = 0,
+            nights = listOf(
+                PlannedNight("MON", "turkey-spaghetti"),
+                PlannedNight("TUE", "egg-fried-rice", notCooking = true, notCookingReason = "leftovers"),
+            ),
+            notes = emptyList(),
             createdAtMillis = 123456789L,
         )
         val back = with(PlanMapper) { stored.toEntity().toStoredPlan() }

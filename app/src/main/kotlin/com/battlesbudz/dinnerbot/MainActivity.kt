@@ -43,10 +43,13 @@ import androidx.lifecycle.lifecycleScope
 import com.battlesbudz.dinnerbot.core.data.DinnerBotDatabase
 import com.battlesbudz.dinnerbot.core.data.PlanMapper
 import com.battlesbudz.dinnerbot.core.data.RecipeRatingEntity
+import com.battlesbudz.dinnerbot.core.data.SeedDataParser
 import com.battlesbudz.dinnerbot.core.data.SeedLoader
 import com.battlesbudz.dinnerbot.core.data.SeedMapper
 import com.battlesbudz.dinnerbot.core.model.BulkStock
 import com.battlesbudz.dinnerbot.core.model.Costing
+import com.battlesbudz.dinnerbot.core.model.DietPreset
+import com.battlesbudz.dinnerbot.core.model.DietPresets
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
 import com.battlesbudz.dinnerbot.core.model.PantryItem
 import com.battlesbudz.dinnerbot.core.model.PriceItem
@@ -99,6 +102,7 @@ class MainActivity : ComponentActivity() {
                 val recipesJson = assets.open("recipes.json").bufferedReader().use { it.readText() }
                 SeedLoader(database).seedIfEmpty(priceJson, recipesJson)
                 SeedLoader(database).refreshSeedRecipes(recipesJson)
+                SeedLoader(database).refreshSeedPriceNotes(priceJson)
             }
         }
     }
@@ -130,6 +134,7 @@ private fun DinnerBotApp(
     var storedPlan by remember { mutableStateOf<PlanMapper.StoredPlan?>(null) }
     var groceryRows by remember { mutableStateOf<List<GroceryRow>>(emptyList()) }
     var ratings by remember { mutableStateOf<Map<String, RecipeRating>>(emptyMap()) }
+    var presets by remember { mutableStateOf<List<DietPreset>>(emptyList()) }
     var tab by remember { mutableStateOf(Tab.RECIPES) }
     var openRecipeId by remember { mutableStateOf<String?>(null) }
     var variation by remember { mutableStateOf(0) }
@@ -142,6 +147,10 @@ private fun DinnerBotApp(
         val loaded = withContext(Dispatchers.IO) {
             SeedLoader(database).seedIfEmpty(loadAsset("pricebook.json"), loadAsset("recipes.json"))
             SeedLoader(database).refreshSeedRecipes(loadAsset("recipes.json"))
+            SeedLoader(database).refreshSeedPriceNotes(loadAsset("pricebook.json"))
+            val loadedPresets = runCatching {
+                SeedDataParser.parseDietPresets(loadAsset("diet-presets.json"))
+            }.getOrDefault(emptyList())
             val s = database.settingsDao().get()?.let { with(SeedMapper) { it.toModel() } }
                 ?: OnboardingDefaults.initialSettings()
             SeedLoader(database).seedPantryIfEmpty(OnboardingDefaults.DEFAULT_STAPLES, s.pantryStaples)
@@ -159,7 +168,7 @@ private fun DinnerBotApp(
                 runCatching { RecipeRating.valueOf(entity.rating) }.getOrNull()
                     ?.let { entity.recipeId to it }
             }.toMap()
-            LoadedState(s, r, p, pantry, stocks, plan, rows, loadedRatings)
+            LoadedState(s, r, p, pantry, stocks, plan, rows, loadedRatings, loadedPresets)
         }
         settings = loaded.settings
         recipes = loaded.recipes
@@ -169,6 +178,7 @@ private fun DinnerBotApp(
         storedPlan = loaded.plan
         groceryRows = loaded.groceryRows
         ratings = loaded.ratings
+        presets = loaded.presets
         loading = false
     }
 
@@ -206,15 +216,33 @@ private fun DinnerBotApp(
     /**
      * The won't-eat rule, applied once for a given settings: removable
      * ingredients stripped, essential-blocked recipes held out of planning.
+     * The selected diet presets' won't-eat entries join the household's own
+     * list before adapting (Phase V2-2); the household's own entries always
+     * stay, and presets never remove any of them.
      */
     fun adaptationFor(forSettings: HouseholdSettings): RecipeAdaptation.Result =
-        RecipeAdaptation.adapt(recipes, forSettings.wontEat, priceItems.associateBy { it.id })
+        RecipeAdaptation.adapt(
+            recipes,
+            DietPresets.effectiveWontEat(forSettings, presets),
+            priceItems.associateBy { it.id },
+        )
+
+    /**
+     * The pool generation and swaps plan from: the adapted recipes narrowed
+     * further by the selected presets' tag rules (Phase V2-2). Browsing the
+     * recipe list is not narrowed; only generated weeks are.
+     */
+    fun plannerPool(forSettings: HouseholdSettings): List<Recipe> =
+        DietPresets.applyTagFilters(
+            adaptationFor(forSettings).plannable,
+            DietPresets.selected(forSettings, presets),
+        )
 
     fun generatePlan(forSettings: HouseholdSettings) {
         variation += 1
         val plan = WeekPlanner.generate(
             settings = forSettings,
-            recipes = adaptationFor(forSettings).plannable,
+            recipes = plannerPool(forSettings),
             priceItems = priceItems,
             stockOnHand = PantryLogic.stockMap(bulkStocks),
             pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
@@ -307,7 +335,7 @@ private fun DinnerBotApp(
             val currentSettings = settings!!
             // Display and cost the ADAPTED recipes: removable won't-eat
             // ingredients are out everywhere; blocked recipes still browse.
-            val adaptation = remember(recipes, priceItems, currentSettings.wontEat) {
+            val adaptation = remember(recipes, priceItems, currentSettings.wontEat, currentSettings.dietPresets, presets) {
                 adaptationFor(currentSettings)
             }
             val displayRecipes = adaptation.recipes
@@ -361,7 +389,7 @@ private fun DinnerBotApp(
                                         settings = currentSettings,
                                         current = current,
                                         day = day,
-                                        recipes = adaptation.plannable,
+                                        recipes = plannerPool(currentSettings),
                                         priceItems = priceItems,
                                         stockOnHand = PantryLogic.stockMap(bulkStocks),
                                         pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
@@ -370,11 +398,30 @@ private fun DinnerBotApp(
                                     persistPlan(swapped, keepId = storedPlan!!.id, forSettings = currentSettings)
                                 }
                             },
+                            onSetNightCooking = { day, cooking, reason ->
+                                val current = weekPlanView
+                                if (current != null && storedPlan != null) {
+                                    val updated = WeekPlanner.setNightCooking(
+                                        settings = currentSettings,
+                                        current = current,
+                                        day = day,
+                                        cooking = cooking,
+                                        reason = reason,
+                                        recipes = plannerPool(currentSettings),
+                                        priceItems = priceItems,
+                                        stockOnHand = PantryLogic.stockMap(bulkStocks),
+                                        pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
+                                        ratings = ratings,
+                                    )
+                                    persistPlan(updated, keepId = storedPlan!!.id, forSettings = currentSettings)
+                                }
+                            },
                             ratings = ratings,
                             onRate = { recipeId, rating -> rateRecipe(recipeId, rating) },
                             outOfRotationCount = ratings.values.count { it == RecipeRating.DOWN },
                         )
                         Tab.LIST -> GroceryListScreen(
+                            priceItems = priceItems,
                             rows = groceryRows,
                             onToggleChecked = { row, checked ->
                                 scope.launch {
@@ -451,6 +498,7 @@ private fun DinnerBotApp(
                             Box(modifier = Modifier.weight(1f)) {
                                 SettingsScreen(
                                     initial = currentSettings,
+                                    dietPresets = presets,
                                     onSave = { saved ->
                                         scope.launch {
                                             withContext(Dispatchers.IO) {
@@ -526,6 +574,7 @@ private data class LoadedState(
     val plan: PlanMapper.StoredPlan?,
     val groceryRows: List<GroceryRow>,
     val ratings: Map<String, RecipeRating>,
+    val presets: List<DietPreset>,
 )
 
 private fun currentWeekStart(): String =

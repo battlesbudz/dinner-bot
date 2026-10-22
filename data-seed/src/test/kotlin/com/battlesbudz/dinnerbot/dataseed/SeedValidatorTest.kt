@@ -1,5 +1,6 @@
 package com.battlesbudz.dinnerbot.dataseed
 
+import com.battlesbudz.dinnerbot.core.model.DietPreset
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Quantity
 import com.battlesbudz.dinnerbot.core.model.Recipe
@@ -41,5 +42,40 @@ class SeedValidatorTest {
         val bad = item("ground-turkey", 198).copy(checkedDate = "Oct 22 2026")
         val errors = SeedValidator.validate(listOf(bad), listOf(recipe("ground-turkey")))
         assertTrue(errors.any { it.contains("yyyy-MM-dd") })
+    }
+
+    // ---- Phase V2-2: diet preset validation ----
+
+    private fun taggedRecipe() = recipe("ground-turkey").copy(dietTags = listOf("Vegetarian"))
+
+    private fun preset(id: String = "dairy-free") = DietPreset(
+        id = id, name = "Dairy-free", summary = "Drops dairy.",
+        wontEatEntries = listOf("cheese"),
+    )
+
+    @Test fun validPresetsPass() {
+        assertTrue(SeedValidator.validatePresets(listOf(preset()), listOf(taggedRecipe())).isEmpty())
+    }
+
+    @Test fun duplicatePresetIdFails() {
+        val errors = SeedValidator.validatePresets(listOf(preset(), preset()), listOf(taggedRecipe()))
+        assertTrue(errors.any { it.contains("duplicate diet preset id") })
+    }
+
+    @Test fun presetNamingAnUnusedTagFails() {
+        val bad = preset().copy(requiredTag = "Keto")
+        val errors = SeedValidator.validatePresets(listOf(bad), listOf(taggedRecipe()))
+        assertTrue(errors.any { it.contains("no recipe carries") })
+    }
+
+    @Test fun presetWithBlankEntryFails() {
+        val bad = preset().copy(wontEatEntries = listOf("cheese", " "))
+        val errors = SeedValidator.validatePresets(listOf(bad), listOf(taggedRecipe()))
+        assertTrue(errors.any { it.contains("blank won't-eat entry") })
+    }
+
+    @Test fun emptyPresetListFails() {
+        val errors = SeedValidator.validatePresets(emptyList(), listOf(taggedRecipe()))
+        assertTrue(errors.any { it.contains("preset list is empty") })
     }
 }
