@@ -20,13 +20,19 @@ object PriceCorrection {
         return (value * 100).roundToInt()
     }
 
-    /** A copy of [item] carrying Andrea's corrected pack price. */
-    fun applyPackPrice(item: PriceItem, newPackPriceCents: Int): PriceItem {
+    /**
+     * A copy of [item] carrying Andrea's corrected pack price. [source]
+     * records which door the correction came through: a typed correction
+     * by default, "Corrected by barcode scan" for Phase V2-5 scans. The
+     * write itself is identical either way: her number wins, the per-unit
+     * price is recomputed, and the item is flagged user-corrected.
+     */
+    fun applyPackPrice(item: PriceItem, newPackPriceCents: Int, source: String = "Corrected in app"): PriceItem {
         require(newPackPriceCents > 0) { "price must be positive" }
         return item.copy(
             packPriceCents = newPackPriceCents,
             pricePerUnitCents = newPackPriceCents.toDouble() / item.packQuantity.amount,
-            source = "Corrected in app",
+            source = source,
             userCorrected = true,
         )
     }

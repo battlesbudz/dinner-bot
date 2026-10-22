@@ -47,7 +47,7 @@ class BackupRatingsTest {
             ),
         )
         val restored = BackupEngine.import(BackupEngine.export(original))
-        assertEquals(2, restored.version)
+        assertEquals(BackupData.CURRENT_VERSION, restored.version)
         assertEquals(original.recipeRatings, restored.recipeRatings)
         assertEquals(original.priceItems, restored.priceItems)
         assertEquals(original.settings, restored.settings)

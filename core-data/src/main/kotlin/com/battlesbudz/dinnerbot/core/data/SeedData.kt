@@ -1,5 +1,6 @@
 package com.battlesbudz.dinnerbot.core.data
 
+import com.battlesbudz.dinnerbot.core.model.BarcodeLink
 import com.battlesbudz.dinnerbot.core.model.BulkStock
 import com.battlesbudz.dinnerbot.core.model.DietPreset
 import com.battlesbudz.dinnerbot.core.model.DietPresetsFile
@@ -68,6 +69,18 @@ object SeedMapper {
         alternates = runCatching { json.decodeFromString(storePriceList, alternatesJson) }
             .getOrDefault(emptyList()),
         freezeNote = freezeNote,
+    )
+
+    fun BarcodeLink.toEntity(): BarcodeLinkEntity = BarcodeLinkEntity(
+        barcode = barcode,
+        itemId = itemId,
+        createdAtMillis = createdAtMillis,
+    )
+
+    fun BarcodeLinkEntity.toModel(): BarcodeLink = BarcodeLink(
+        barcode = barcode,
+        itemId = itemId,
+        createdAtMillis = createdAtMillis,
     )
 
     fun PantryItem.toEntity(): PantryItemEntity = PantryItemEntity(id = id, name = name, owned = owned)

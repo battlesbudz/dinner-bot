@@ -35,6 +35,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * The instrumented migration test proves the upgrade from a populated v4
  * database.
  *
+ * Version 6 (Phase V2-5, v0.3.0) adds the barcode_links table through
+ * [MIGRATION_5_6]: one learned barcode-to-item link per barcode, created
+ * empty on upgrade. It only creates the new table; every v5 table and
+ * row carries over untouched, which the instrumented migration test
+ * proves from a populated v5 database.
+ *
  * fallbackToDestructiveMigration remains only as a pre-1.0 safety net for
  * development installs; with a real migration registered for every version
  * step it never triggers on a real upgrade path.
@@ -49,8 +55,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PlanEntity::class,
         GroceryItemEntity::class,
         RecipeRatingEntity::class,
+        BarcodeLinkEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class DinnerBotDatabase : RoomDatabase() {
@@ -62,6 +69,7 @@ abstract class DinnerBotDatabase : RoomDatabase() {
     abstract fun planDao(): PlanDao
     abstract fun groceryDao(): GroceryDao
     abstract fun recipeRatingDao(): RecipeRatingDao
+    abstract fun barcodeLinkDao(): BarcodeLinkDao
 
     companion object {
         /** v2 to v3: create the recipe_ratings table. Nothing else changes. */
@@ -90,9 +98,20 @@ abstract class DinnerBotDatabase : RoomDatabase() {
             }
         }
 
+        /** v5 to v6: create the barcode_links table. Nothing else changes. */
+        val MIGRATION_5_6: Migration = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `barcode_links` (" +
+                        "`barcode` TEXT NOT NULL, `itemId` TEXT NOT NULL, " +
+                        "`createdAtMillis` INTEGER NOT NULL, PRIMARY KEY(`barcode`))",
+                )
+            }
+        }
+
         fun create(context: Context): DinnerBotDatabase =
             Room.databaseBuilder(context.applicationContext, DinnerBotDatabase::class.java, "dinner-bot.db")
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .fallbackToDestructiveMigration()
                 .build()
     }

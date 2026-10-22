@@ -1,11 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- No INTERNET permission anywhere in Dinner Bot: local-first by platform enforcement. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Phase V2-4: the app's first permission, for the local reminders.
          Asked for only at the moment a reminder is switched on in Settings,
          never at install or first run; every feature works without it. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Phase V2-5: CAMERA is for barcode scanning only, asked for at the
+         moment the first scan is tapped, never before. No photo is stored
+         or sent anywhere; frames are read on the device and dropped. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false" />
+
+    <!-- Phase V2-5: INTERNET exists for exactly one purpose, Battles's
+         D-V2-3 decision: when a connection is available, a scanned barcode
+         may be looked up in Open Food Facts (a public database, contacted
+         directly by the phone) to suggest the product's name while it is
+         linked to a price book item. There is no Dinner Bot server,
+         nothing about the household is sent, scanning and linking work
+         fully without a connection, and no other feature uses this. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="true"

@@ -12,8 +12,8 @@ android {
         applicationId = "com.battlesbudz.dinnerbot"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "0.2.4"
+        versionCode = 9
+        versionName = "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -80,6 +80,10 @@ dependencies {
     implementation(libs.lifecycle.runtime.ktx)
     implementation(libs.coroutines.android)
     testImplementation(libs.junit)
+    // Test-only: the instrumented barcode test drives ML Kit's decoder
+    // directly. Production ML Kit stays confined to feature-grocerylist.
+    androidTestImplementation(libs.mlkit.barcode.scanning)
+    androidTestImplementation(libs.test.uiautomator)
     androidTestImplementation(libs.work.testing)
     androidTestImplementation(libs.test.ext.junit)
     androidTestImplementation(libs.test.runner)
