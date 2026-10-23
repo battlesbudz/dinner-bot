@@ -277,6 +277,44 @@ private fun DinnerBotApp(
 
     fun refresh() { reloadKey += 1 }
 
+    /**
+     * Re-read the Sunday gate's inputs from the store and adopt them.
+     * A generate request must judge the week that is actually stored;
+     * in-memory state can lag the database, and gating on a stale copy
+     * would skip (or invent) the reconciliation.
+     */
+    suspend fun reloadGateInputs() {
+        val snapshot = withContext(Dispatchers.IO) {
+            val recentPlans = database.planDao().getRecent(2)
+                .map { with(PlanMapper) { it.toStoredPlan() } }
+            val first = recentPlans.firstOrNull()
+            val second = recentPlans.getOrNull(1)?.takeIf { candidate ->
+                first != null && runCatching {
+                    LocalDate.parse(candidate.weekStart) ==
+                        LocalDate.parse(first.weekStart).plusWeeks(1)
+                }.getOrDefault(false)
+            }
+            GateSnapshot(
+                plan = first,
+                plan2 = second,
+                ranOutEvents = database.ranOutDao().getAll()
+                    .map { with(ReconciliationMapper) { it.toModel() } },
+                cookCheckoffs = database.cookCheckoffDao().getAll()
+                    .map { with(ReconciliationMapper) { it.toModel() } },
+                pantryItems = database.pantryDao().getAll()
+                    .map { with(SeedMapper) { it.toModel() } },
+                bulkStocks = database.bulkStockDao().getAll()
+                    .map { with(SeedMapper) { it.toModel() } },
+            )
+        }
+        storedPlan = snapshot.plan
+        storedPlan2 = snapshot.plan2
+        ranOutEvents = snapshot.ranOutEvents
+        cookCheckoffs = snapshot.cookCheckoffs
+        pantryItems = snapshot.pantryItems
+        bulkStocks = snapshot.bulkStocks
+    }
+
     fun persistPlan(plan: WeekPlanner.WeekPlan, keepId: String?, forSettings: HouseholdSettings) {
         val currentSettings = forSettings
         scope.launch {
@@ -582,20 +620,26 @@ private fun DinnerBotApp(
 
     /** The Plan tab's generate buttons: the Sunday gate first, planning second. */
     fun requestGenerateWeek(forSettings: HouseholdSettings) {
-        val session = fullReconSession(forSettings)
-        if (session != null) {
-            reconFlow = ReconFlow(session, ReconTarget.WEEK)
-        } else {
-            doGenerateWeek(forSettings, pantryItems, bulkStocks, emptyList())
+        scope.launch {
+            reloadGateInputs()
+            val session = fullReconSession(forSettings)
+            if (session != null) {
+                reconFlow = ReconFlow(session, ReconTarget.WEEK)
+            } else {
+                doGenerateWeek(forSettings, pantryItems, bulkStocks, emptyList())
+            }
         }
     }
 
     fun requestGenerateFortnight(forSettings: HouseholdSettings) {
-        val session = fullReconSession(forSettings)
-        if (session != null) {
-            reconFlow = ReconFlow(session, ReconTarget.FORTNIGHT)
-        } else {
-            doGenerateFortnight(forSettings, pantryItems, bulkStocks, emptyList())
+        scope.launch {
+            reloadGateInputs()
+            val session = fullReconSession(forSettings)
+            if (session != null) {
+                reconFlow = ReconFlow(session, ReconTarget.FORTNIGHT)
+            } else {
+                doGenerateFortnight(forSettings, pantryItems, bulkStocks, emptyList())
+            }
         }
     }
 
@@ -1502,6 +1546,16 @@ private data class LoadedState(
     val nutritionEntries: List<IngredientNutrition>,
     val ranOutEvents: List<RanOutEvent>,
     val cookCheckoffs: List<CookCheckoff>,
+)
+
+/** The Sunday gate's inputs, re-read from the store at request time. */
+private data class GateSnapshot(
+    val plan: PlanMapper.StoredPlan?,
+    val plan2: PlanMapper.StoredPlan?,
+    val ranOutEvents: List<RanOutEvent>,
+    val cookCheckoffs: List<CookCheckoff>,
+    val pantryItems: List<PantryItem>,
+    val bulkStocks: List<BulkStock>,
 )
 
 private fun currentWeekStart(): String =
