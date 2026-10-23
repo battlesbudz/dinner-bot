@@ -68,6 +68,7 @@ import com.battlesbudz.dinnerbot.core.model.Perishables
 import com.battlesbudz.dinnerbot.core.model.PossibleOut
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.RanOutEvent
+import com.battlesbudz.dinnerbot.core.model.RanOutSource
 import com.battlesbudz.dinnerbot.core.model.RanOutState
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeAdaptation
@@ -654,6 +655,21 @@ private fun DinnerBotApp(
     }
 
     /**
+     * A replaced dinner's cook check-offs clear with it: they recorded
+     * cooking the dinner that was planned then, and leaving them would
+     * let Sunday's inference treat the replacement dinner as cooked
+     * (Codex review, PR #20).
+     */
+    fun clearNightCheckoffs(planId: String, day: String) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                database.cookCheckoffDao().deleteForPlanAndDay(planId, day)
+            }
+            refresh()
+        }
+    }
+
+    /**
      * A reconciliation finished: persist its records, land the write-back
      * (pantry flips and stock zeroing) BEFORE anything is planned, mark
      * the consumed plans, and only then plan (or, for the top-up check,
@@ -668,6 +684,12 @@ private fun DinnerBotApp(
         reconFlow = null
         scope.launch {
             withContext(Dispatchers.IO) {
+                // A decided candidate retires its carried pending row;
+                // the outcome row written below replaces it.
+                val decidedKeys = choices.confirmedPossibleKeys + choices.dismissedPossibleKeys
+                if (decidedKeys.isNotEmpty()) {
+                    database.ranOutDao().deletePendingInferred(decidedKeys.toList())
+                }
                 outcome.eventsToSave.forEach { event ->
                     database.ranOutDao().upsert(with(ReconciliationMapper) { event.toEntity() })
                 }
@@ -709,10 +731,46 @@ private fun DinnerBotApp(
     fun skipReconciliation(flow: ReconFlow) {
         val forSettings = settings ?: return
         reconFlow = null
-        when (flow.target) {
-            ReconTarget.WEEK -> doGenerateWeek(forSettings, pantryItems, bulkStocks, emptyList())
-            ReconTarget.FORTNIGHT -> doGenerateFortnight(forSettings, pantryItems, bulkStocks, emptyList())
-            ReconTarget.TOP_UP -> Unit
+        // Deferring must not lose the inferred candidates (Codex review,
+        // PR #20): generating the replacement plan deletes the source
+        // plan and its cook check-offs, which are the only evidence the
+        // inference had. The session's possibles are carried forward as
+        // pending inferred events, and the next session presents them
+        // again in its second list. Her own marks are already persisted
+        // rows and need no carry.
+        val pendingKeys = ranOutEvents
+            .filter { it.state == RanOutState.PENDING }
+            .map { it.itemKey }.toSet()
+        val carries = flow.session.possibleOuts
+            .filter { it.itemKey !in pendingKeys }
+            .map { possible ->
+                RanOutEvent(
+                    itemKey = possible.itemKey,
+                    displayName = possible.displayName,
+                    stapleSide = possible.stapleSide,
+                    priceItemId = possible.priceItemId,
+                    bulkItemId = possible.bulkItemId,
+                    pantryStapleName = possible.pantryStapleName,
+                    dateMarked = LocalDate.now().toString(),
+                    source = RanOutSource.INFERRED,
+                    state = RanOutState.PENDING,
+                    cyclePlanId = flow.session.sourcePlanIds.firstOrNull(),
+                )
+            }
+        scope.launch {
+            if (carries.isNotEmpty()) {
+                withContext(Dispatchers.IO) {
+                    carries.forEach { event ->
+                        database.ranOutDao().upsert(with(ReconciliationMapper) { event.toEntity() })
+                    }
+                }
+            }
+            when (flow.target) {
+                ReconTarget.WEEK -> doGenerateWeek(forSettings, pantryItems, bulkStocks, emptyList())
+                ReconTarget.FORTNIGHT -> doGenerateFortnight(forSettings, pantryItems, bulkStocks, emptyList())
+                ReconTarget.TOP_UP -> Unit
+            }
+            refresh()
         }
     }
 
@@ -1072,6 +1130,9 @@ private fun DinnerBotApp(
                                         keepIds = storedPlan!!.id to storedPlan2!!.id,
                                         forSettings = currentSettings,
                                     )
+                                    clearNightCheckoffs(
+                                        if (weekIndex == 1) storedPlan!!.id else storedPlan2!!.id, day,
+                                    )
                                 },
                                 onSetNightCooking = { weekIndex, day, cooking, reason ->
                                     val updated = WeekPlanner.setNightCookingFortnight(
@@ -1092,6 +1153,9 @@ private fun DinnerBotApp(
                                         updated,
                                         keepIds = storedPlan!!.id to storedPlan2!!.id,
                                         forSettings = currentSettings,
+                                    )
+                                    clearNightCheckoffs(
+                                        if (weekIndex == 1) storedPlan!!.id else storedPlan2!!.id, day,
                                     )
                                 },
                                 ratings = ratings,
@@ -1125,6 +1189,7 @@ private fun DinnerBotApp(
                                         candidatePool = plannerPool(currentSettings),
                                     )
                                     persistPlan(swapped, keepId = storedPlan!!.id, forSettings = currentSettings)
+                                    clearNightCheckoffs(storedPlan!!.id, day)
                                 }
                             },
                             onSetNightCooking = { day, cooking, reason ->
@@ -1144,6 +1209,7 @@ private fun DinnerBotApp(
                                         candidatePool = plannerPool(currentSettings),
                                     )
                                     persistPlan(updated, keepId = storedPlan!!.id, forSettings = currentSettings)
+                                    clearNightCheckoffs(storedPlan!!.id, day)
                                 }
                             },
                             ratings = ratings,

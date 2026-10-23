@@ -269,6 +269,67 @@ class ReconciliationTest {
     }
 
     // ------------------------------------------------------------------
+    // Deferral carry (Codex review, PR #20)
+    // ------------------------------------------------------------------
+
+    private val carriedPossible = RanOutEvent(
+        itemKey = "item:jasmine-rice", displayName = "Jasmine rice", stapleSide = true,
+        priceItemId = "jasmine-rice", dateMarked = "2026-10-18",
+        source = RanOutSource.INFERRED, state = RanOutState.PENDING, cyclePlanId = "plan-old",
+    )
+
+    @Test fun carriedInferenceReappearsAsPossibleNotAsMark() {
+        // A deferred session's candidates persist as pending inferred
+        // events; at the next session they are list 2 again, never
+        // presented as things she marked herself.
+        val session = Reconciliation.buildSession(
+            Reconciliation.CheckKind.FULL,
+            listOf(sourcePlan),
+            listOf(carriedPossible),
+            emptyList(),
+            pantry,
+            book,
+            stockOnHand = emptyMap(),
+        )
+        assertTrue(session.markedOuts.isEmpty())
+        assertEquals(listOf("item:jasmine-rice"), session.possibleOuts.map { it.itemKey })
+        assertTrue(session.possibleOuts.single().reason.contains("earlier check"))
+    }
+
+    @Test fun deferralCarrySurvivesPlanReplacement() {
+        // Deferring generates a replacement plan and deletes the source
+        // plan's check-offs, so fresh inference over the new plan finds
+        // nothing; the carried candidate still gates and still appears,
+        // and confirming it records the decision against the new plan.
+        assertTrue(
+            Reconciliation.hasPendingReconciliation(
+                listOf(sourcePlan), listOf(carriedPossible), emptyList(),
+            ),
+        )
+        val session = Reconciliation.buildSession(
+            Reconciliation.CheckKind.FULL,
+            listOf(sourcePlan),
+            listOf(carriedPossible),
+            emptyList(),
+            pantry,
+            book,
+            stockOnHand = emptyMap(),
+        )
+        assertEquals(listOf("item:jasmine-rice"), session.possibleOuts.map { it.itemKey })
+        val outcome = Reconciliation.resolveSession(
+            session,
+            Reconciliation.SessionChoices(confirmedPossibleKeys = setOf("item:jasmine-rice")),
+            book,
+            "2026-10-25",
+        )
+        assertEquals(listOf("item:jasmine-rice"), outcome.resolvedOuts.map { it.itemKey })
+        assertEquals(
+            "plan-1",
+            outcome.eventsToSave.single { it.source == RanOutSource.INFERRED }.cyclePlanId,
+        )
+    }
+
+    // ------------------------------------------------------------------
     // Resolution
     // ------------------------------------------------------------------
 

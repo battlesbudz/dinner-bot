@@ -267,10 +267,14 @@ object Reconciliation {
         return Session(
             kind = kind,
             sourcePlanIds = sourcePlans.map { it.planId },
+            // List 1 is her own marks. Pending events with the inferred
+            // source are not marks; they are candidates carried forward
+            // from a deferred check (Codex review, PR #20), and they
+            // belong in list 2 below, not presented as things she said.
             markedOuts = pendingEvents
-                .filter { it.state == RanOutState.PENDING }
+                .filter { it.state == RanOutState.PENDING && it.source != RanOutSource.INFERRED }
                 .sortedWith(compareBy({ it.dateMarked }, { it.displayName.lowercase() })),
-            possibleOuts = possibleOuts,
+            possibleOuts = mergeCarriedPossibles(possibleOuts, pendingEvents),
             pantryChecklist = if (full) {
                 pantryItems.filter { it.owned }.sortedBy { it.name.lowercase() }
             } else {
@@ -285,6 +289,40 @@ object Reconciliation {
                 emptyList()
             },
         )
+    }
+
+    /**
+     * Deferred inference, carried forward. Choosing "Reconcile later"
+     * generates a replacement plan, which deletes the source plan and
+     * its cook check-offs; without a carry, the inferred candidates from
+     * that plan would vanish instead of waiting for the next attempt
+     * (Codex review, PR #20). The app therefore persists an unanswered
+     * session's possibles as pending events with the inferred source,
+     * and this merge presents them again in list 2 at the next session,
+     * behind any fresher inference for the same item.
+     */
+    private fun mergeCarriedPossibles(
+        fresh: List<PossibleOut>,
+        pendingEvents: List<RanOutEvent>,
+    ): List<PossibleOut> {
+        val freshKeys = fresh.map { it.itemKey }.toSet()
+        val carried = pendingEvents
+            .filter { it.state == RanOutState.PENDING && it.source == RanOutSource.INFERRED }
+            .filter { it.itemKey !in freshKeys }
+            .map { event ->
+                PossibleOut(
+                    itemKey = event.itemKey,
+                    displayName = event.displayName,
+                    stapleSide = event.stapleSide,
+                    priceItemId = event.priceItemId,
+                    bulkItemId = event.bulkItemId,
+                    pantryStapleName = event.pantryStapleName,
+                    reason = "Flagged by an earlier check; not bought since.",
+                )
+            }
+        if (carried.isEmpty()) return fresh
+        return (fresh + carried)
+            .sortedWith(compareBy({ !it.stapleSide }, { it.displayName.lowercase() }))
     }
 
     /**

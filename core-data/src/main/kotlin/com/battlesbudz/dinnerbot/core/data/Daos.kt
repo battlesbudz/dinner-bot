@@ -215,6 +215,16 @@ interface RanOutDao {
     )
     suspend fun markRestockedForStaple(name: String)
 
+    /**
+     * Retire carried inference once a session decides it: the confirmed
+     * or dismissed outcome row replaces the pending carry for the key.
+     */
+    @Query(
+        "DELETE FROM ran_out_events WHERE state = 'PENDING' " +
+            "AND source = 'INFERRED' AND itemKey IN (:keys)",
+    )
+    suspend fun deletePendingInferred(keys: List<String>)
+
     @Query("DELETE FROM ran_out_events")
     suspend fun deleteAll()
 }
@@ -232,6 +242,15 @@ interface CookCheckoffDao {
 
     @Query("DELETE FROM cook_checkoffs WHERE planId = :planId")
     suspend fun deleteForPlan(planId: String)
+
+    /**
+     * A night's check-offs belong to the dinner that was planned when
+     * they were ticked; when that dinner is replaced (a swap, or the
+     * night toggled off and on), they clear so a replacement dinner is
+     * never mistaken for cooked (Codex review, PR #20).
+     */
+    @Query("DELETE FROM cook_checkoffs WHERE planId = :planId AND day = :day")
+    suspend fun deleteForPlanAndDay(planId: String, day: String)
 
     @Query("DELETE FROM cook_checkoffs")
     suspend fun deleteAll()
