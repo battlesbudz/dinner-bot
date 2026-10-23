@@ -154,6 +154,24 @@ interface RecipeRatingDao {
 }
 
 @Dao
+interface RecipePhotoDao {
+    @Query("SELECT * FROM recipe_photos")
+    suspend fun getAll(): List<RecipePhotoEntity>
+
+    @Query("SELECT * FROM recipe_photos WHERE recipeId = :recipeId")
+    suspend fun getByRecipeId(recipeId: String): RecipePhotoEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(photo: RecipePhotoEntity)
+
+    @Query("DELETE FROM recipe_photos WHERE recipeId = :recipeId")
+    suspend fun delete(recipeId: String)
+
+    @Query("DELETE FROM recipe_photos")
+    suspend fun deleteAll()
+}
+
+@Dao
 interface BarcodeLinkDao {
     @Query("SELECT * FROM barcode_links ORDER BY barcode")
     suspend fun getAll(): List<BarcodeLinkEntity>

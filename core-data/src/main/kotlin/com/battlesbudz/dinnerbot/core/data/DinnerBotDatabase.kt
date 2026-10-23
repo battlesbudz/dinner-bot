@@ -57,6 +57,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * row carries over untouched, which the instrumented migration test
  * proves from a populated v7 database.
  *
+ * Version 9 (Epic issue #10, v0.4.2) adds the recipe_photos table
+ * through [MIGRATION_8_9]: one household photo reference (file name in
+ * app-local storage plus credit) per recipe, created empty on upgrade —
+ * no photo is bundled, so every recipe starts with no photo and renders
+ * exactly as before until the household attaches one. Every v8 table
+ * and row carries over untouched, which the instrumented migration
+ * test proves from a populated v8 database.
+ *
  * fallbackToDestructiveMigration remains only as a pre-1.0 safety net for
  * development installs; with a real migration registered for every version
  * step it never triggers on a real upgrade path.
@@ -71,12 +79,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PlanEntity::class,
         GroceryItemEntity::class,
         RecipeRatingEntity::class,
+        RecipePhotoEntity::class,
         BarcodeLinkEntity::class,
         IngredientNutritionEntity::class,
         RanOutEventEntity::class,
         CookCheckoffEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 abstract class DinnerBotDatabase : RoomDatabase() {
@@ -88,6 +97,7 @@ abstract class DinnerBotDatabase : RoomDatabase() {
     abstract fun planDao(): PlanDao
     abstract fun groceryDao(): GroceryDao
     abstract fun recipeRatingDao(): RecipeRatingDao
+    abstract fun recipePhotoDao(): RecipePhotoDao
     abstract fun barcodeLinkDao(): BarcodeLinkDao
     abstract fun ingredientNutritionDao(): IngredientNutritionDao
     abstract fun ranOutDao(): RanOutDao
@@ -173,10 +183,23 @@ abstract class DinnerBotDatabase : RoomDatabase() {
             }
         }
 
+        /** v8 to v9: create the recipe_photos table (Epic issue #10). Nothing else changes. */
+        val MIGRATION_8_9: Migration = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `recipe_photos` (" +
+                        "`recipeId` TEXT NOT NULL, `fileName` TEXT NOT NULL, " +
+                        "`credit` TEXT NOT NULL, `updatedAtMillis` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`recipeId`))",
+                )
+            }
+        }
+
         fun create(context: Context): DinnerBotDatabase =
             Room.databaseBuilder(context.applicationContext, DinnerBotDatabase::class.java, "dinner-bot.db")
                 .addMigrations(
-                    MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
+                    MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+                    MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
                 )
                 .fallbackToDestructiveMigration()
                 .build()

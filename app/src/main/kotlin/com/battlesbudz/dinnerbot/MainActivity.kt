@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -76,6 +77,8 @@ import com.battlesbudz.dinnerbot.core.model.RanOutSource
 import com.battlesbudz.dinnerbot.core.model.RanOutState
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeAdaptation
+import com.battlesbudz.dinnerbot.core.model.RecipePhoto
+import com.battlesbudz.dinnerbot.core.model.RecipePhotos
 import com.battlesbudz.dinnerbot.core.model.RecipeRating
 import com.battlesbudz.dinnerbot.core.model.ReconciledOut
 import com.battlesbudz.dinnerbot.feature.backup.BackupBarcodeLink
@@ -108,6 +111,7 @@ import com.battlesbudz.dinnerbot.feature.recipes.RecipeListScreen
 import com.battlesbudz.dinnerbot.feature.reminders.ReminderPlanner
 import com.battlesbudz.dinnerbot.feature.reminders.ReminderScheduler
 import com.battlesbudz.dinnerbot.feature.reminders.ReminderWeek
+import java.io.File
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -175,6 +179,10 @@ private fun DinnerBotApp(
     var storedPlan2 by remember { mutableStateOf<PlanMapper.StoredPlan?>(null) }
     var groceryRows2 by remember { mutableStateOf<List<GroceryRow>>(emptyList()) }
     var ratings by remember { mutableStateOf<Map<String, RecipeRating>>(emptyMap()) }
+    // Household recipe photos (Epic issue #10): the records, and the
+    // photo files that actually exist on this phone, by recipe id.
+    var recipePhotos by remember { mutableStateOf<Map<String, RecipePhoto>>(emptyMap()) }
+    var photoFiles by remember { mutableStateOf<Map<String, File>>(emptyMap()) }
     var barcodeLinks by remember { mutableStateOf<List<BarcodeLink>>(emptyList()) }
     var nutritionEntries by remember { mutableStateOf<List<IngredientNutrition>>(emptyList()) }
     // Sunday reconciliation state (Phase V2-7): ran-out records and cook
@@ -248,6 +256,14 @@ private fun DinnerBotApp(
                 runCatching { RecipeRating.valueOf(entity.rating) }.getOrNull()
                     ?.let { entity.recipeId to it }
             }.toMap()
+            val loadedPhotos = database.recipePhotoDao().getAll()
+                .map { with(SeedMapper) { it.toModel() } }
+            val loadedPhotoById = loadedPhotos.associateBy { it.recipeId }
+            // Only files that exist on this phone render; a record whose
+            // file is gone simply shows no photo.
+            val loadedPhotoFiles = loadedPhotos
+                .associate { it.recipeId to RecipePhotoStore.fileFor(context, it) }
+                .filterValues { it.exists() }
             val loadedLinks = database.barcodeLinkDao().getAll()
                 .map { with(SeedMapper) { it.toModel() } }
             val loadedNutrition = database.ingredientNutritionDao().getAll()
@@ -259,7 +275,7 @@ private fun DinnerBotApp(
             LoadedState(
                 s, r, p, pantry, stocks, plan, rows, plan2, rows2,
                 loadedRatings, loadedPresets, loadedLinks, loadedNutrition,
-                loadedRanOut, loadedCheckoffs,
+                loadedRanOut, loadedCheckoffs, loadedPhotoById, loadedPhotoFiles,
             )
         }
         settings = loaded.settings
@@ -272,6 +288,8 @@ private fun DinnerBotApp(
         storedPlan2 = loaded.plan2
         groceryRows2 = loaded.groceryRows2
         ratings = loaded.ratings
+        recipePhotos = loaded.photos
+        photoFiles = loaded.photoFiles
         presets = loaded.presets
         barcodeLinks = loaded.barcodeLinks
         nutritionEntries = loaded.nutritionEntries
@@ -840,6 +858,62 @@ private fun DinnerBotApp(
     }
 
     /**
+     * Attach a household photo to a recipe (Epic issue #10): the picked
+     * image is copied into app-local storage by [RecipePhotoStore] and
+     * its reference saved, keeping any credit the recipe already had.
+     */
+    fun attachRecipePhoto(recipeId: String, picked: Uri) {
+        scope.launch {
+            val saved = withContext(Dispatchers.IO) {
+                runCatching {
+                    val credit = database.recipePhotoDao().getByRecipeId(recipeId)?.credit
+                        ?: RecipePhotos.DEFAULT_CREDIT
+                    RecipePhotoStore.savePickedPhoto(
+                        context, recipeId, picked, credit, System.currentTimeMillis(),
+                    )?.also { photo ->
+                        database.recipePhotoDao().upsert(with(SeedMapper) { photo.toEntity() })
+                    }
+                }.getOrNull()
+            }
+            statusMessage = if (saved != null) "Photo added." else "That photo could not be added."
+            refresh()
+        }
+    }
+
+    /** Remove a recipe's photo: the record and the file. */
+    fun removeRecipePhoto(recipeId: String) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                val existing = database.recipePhotoDao().getByRecipeId(recipeId)
+                if (existing != null) {
+                    RecipePhotoStore.deleteFile(
+                        context, with(SeedMapper) { existing.toModel() },
+                    )
+                    database.recipePhotoDao().delete(recipeId)
+                }
+            }
+            refresh()
+        }
+    }
+
+    /** Save the credit stored with a recipe's photo. */
+    fun setRecipePhotoCredit(recipeId: String, credit: String) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                val existing = database.recipePhotoDao().getByRecipeId(recipeId)
+                    ?: return@withContext
+                database.recipePhotoDao().upsert(
+                    existing.copy(
+                        credit = RecipePhotos.creditOrDefault(credit),
+                        updatedAtMillis = System.currentTimeMillis(),
+                    ),
+                )
+            }
+            refresh()
+        }
+    }
+
+    /**
      * Reminders follow the stored state (Phase V2-4). Every reload after
      * a plan change (generate, swap, night-off toggle, reprice), a pantry
      * or stock change, a settings save, or a permission change replans
@@ -1152,6 +1226,11 @@ private fun DinnerBotApp(
                                     onRate = { rateRecipe(open.id, it) },
                                     nutritionByItemId = nutritionByItemId,
                                     nutritionByPantrySlug = nutritionByPantrySlug,
+                                    photo = recipePhotos[open.id],
+                                    photoFile = photoFiles[open.id],
+                                    onPhotoPicked = { attachRecipePhoto(open.id, it) },
+                                    onPhotoRemoved = { removeRecipePhoto(open.id) },
+                                    onPhotoCreditChange = { setRecipePhotoCredit(open.id, it) },
                                 )
                             } else {
                                 RecipeListScreen(
@@ -1159,6 +1238,7 @@ private fun DinnerBotApp(
                                     priceItems = priceItems,
                                     onRecipeClick = { openRecipeId = it.id },
                                     ratings = ratings,
+                                    photoFiles = photoFiles,
                                 )
                             }
                         }
@@ -1282,6 +1362,7 @@ private fun DinnerBotApp(
                                 onStartTopUpCheck = topUpReconSession(currentSettings)?.let { session ->
                                     { reconFlow = ReconFlow(session, ReconTarget.TOP_UP) }
                                 },
+                                photoFiles = photoFiles,
                             )
                             } else PlannerScreen(
                             plan = weekPlanView,
@@ -1333,6 +1414,7 @@ private fun DinnerBotApp(
                             onCookNight = { day ->
                                 storedPlan?.let { cookTarget = CookTarget(it.id, day) }
                             },
+                            photoFiles = photoFiles,
                         )
                         }
                         Tab.LIST -> {
@@ -1647,6 +1729,8 @@ private data class LoadedState(
     val nutritionEntries: List<IngredientNutrition>,
     val ranOutEvents: List<RanOutEvent>,
     val cookCheckoffs: List<CookCheckoff>,
+    val photos: Map<String, RecipePhoto>,
+    val photoFiles: Map<String, File>,
 )
 
 /** The Sunday gate's inputs, re-read from the store at request time. */

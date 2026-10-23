@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -22,11 +23,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.PlannedNight
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeRating
+import java.io.File
 
 internal val DAY_LABELS = mapOf(
     "MON" to "Monday", "TUE" to "Tuesday", "WED" to "Wednesday", "THU" to "Thursday",
@@ -87,6 +90,8 @@ internal fun NightCard(
     onRate: (RecipeRating?) -> Unit,
     /** Open this night's cook view (Phase V2-7): check-offs and ran-out marks. */
     onCook: () -> Unit = {},
+    /** The household's photo of this dinner, when one is attached (Epic issue #10). */
+    photoFile: File? = null,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -112,6 +117,16 @@ internal fun NightCard(
                 return@Column
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (photoFile != null) {
+                    RecipePhotoThumb(
+                        file = photoFile,
+                        contentDescription = "Photo of ${recipe?.title ?: night.recipeId}",
+                        modifier = Modifier
+                            .padding(end = 12.dp)
+                            .size(56.dp)
+                            .clip(MaterialTheme.shapes.small),
+                    )
+                }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(DAY_LABELS[night.day] ?: night.day, style = MaterialTheme.typography.titleSmall)
                     Text(recipe?.title ?: night.recipeId, style = MaterialTheme.typography.titleMedium)
@@ -166,6 +181,8 @@ fun PlannerScreen(
     onGenerateTwoWeeks: (() -> Unit)? = null,
     /** Open one night's cook view (Phase V2-7), by night code. */
     onCookNight: (String) -> Unit = {},
+    /** Household photo files by recipe id, for nights whose dinner has one (Epic issue #10). */
+    photoFiles: Map<String, File> = emptyMap(),
 ) {
     // The day whose not-cooking reason is being picked, if any.
     var reasonForDay by remember { mutableStateOf<String?>(null) }
@@ -232,6 +249,7 @@ fun PlannerScreen(
                 onCookThisNight = { onSetNightCooking(night.day, true, null) },
                 onRate = { rating -> onRate(night.recipeId, rating) },
                 onCook = { onCookNight(night.day) },
+                photoFile = photoFiles[night.recipeId],
             )
         }
 
