@@ -47,14 +47,17 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.battlesbudz.dinnerbot.core.data.BarcodeLinkEntity
+import com.battlesbudz.dinnerbot.core.data.CookCheckoffEntity
 import com.battlesbudz.dinnerbot.core.data.DinnerBotDatabase
 import com.battlesbudz.dinnerbot.core.data.PlanMapper
 import com.battlesbudz.dinnerbot.core.data.RecipeRatingEntity
+import com.battlesbudz.dinnerbot.core.data.ReconciliationMapper
 import com.battlesbudz.dinnerbot.core.data.SeedDataParser
 import com.battlesbudz.dinnerbot.core.data.SeedLoader
 import com.battlesbudz.dinnerbot.core.data.SeedMapper
 import com.battlesbudz.dinnerbot.core.model.BarcodeLink
 import com.battlesbudz.dinnerbot.core.model.BulkStock
+import com.battlesbudz.dinnerbot.core.model.CookCheckoff
 import com.battlesbudz.dinnerbot.core.model.Costing
 import com.battlesbudz.dinnerbot.core.model.DietPreset
 import com.battlesbudz.dinnerbot.core.model.DietPresets
@@ -62,16 +65,21 @@ import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
 import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
 import com.battlesbudz.dinnerbot.core.model.PantryItem
 import com.battlesbudz.dinnerbot.core.model.Perishables
+import com.battlesbudz.dinnerbot.core.model.PossibleOut
 import com.battlesbudz.dinnerbot.core.model.PriceItem
+import com.battlesbudz.dinnerbot.core.model.RanOutEvent
+import com.battlesbudz.dinnerbot.core.model.RanOutState
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeAdaptation
 import com.battlesbudz.dinnerbot.core.model.RecipeRating
+import com.battlesbudz.dinnerbot.core.model.ReconciledOut
 import com.battlesbudz.dinnerbot.feature.backup.BackupBarcodeLink
 import com.battlesbudz.dinnerbot.feature.backup.BackupData
 import com.battlesbudz.dinnerbot.feature.backup.BackupRecipeRating
 import com.battlesbudz.dinnerbot.feature.backup.BackupEngine
 import com.battlesbudz.dinnerbot.feature.grocerylist.GroceryRow
 import com.battlesbudz.dinnerbot.feature.grocerylist.GroceryListScreen
+import com.battlesbudz.dinnerbot.feature.grocerylist.ReconciliationMerge
 import com.battlesbudz.dinnerbot.feature.nutrition.NutritionScreen
 import com.battlesbudz.dinnerbot.feature.nutrition.NutritionWeekInput
 import com.battlesbudz.dinnerbot.feature.onboarding.HowItWorksScreen
@@ -80,11 +88,15 @@ import com.battlesbudz.dinnerbot.feature.onboarding.SettingsScreen
 import com.battlesbudz.dinnerbot.feature.onboarding.SetupWalkthrough
 import com.battlesbudz.dinnerbot.feature.pantry.PantryLogic
 import com.battlesbudz.dinnerbot.feature.pantry.PantryScreen
+import com.battlesbudz.dinnerbot.feature.pantry.ReconciliationWriteBack
 import com.battlesbudz.dinnerbot.feature.planner.FortnightPlannerScreen
 import com.battlesbudz.dinnerbot.feature.planner.PlannerScreen
+import com.battlesbudz.dinnerbot.feature.planner.Reconciliation
+import com.battlesbudz.dinnerbot.feature.planner.ReconciliationScreen
 import com.battlesbudz.dinnerbot.feature.planner.WeekPlanner
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceBookScreen
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceCorrection
+import com.battlesbudz.dinnerbot.feature.recipes.CookScreen
 import com.battlesbudz.dinnerbot.feature.recipes.RecipeDetailScreen
 import com.battlesbudz.dinnerbot.feature.recipes.RecipeListScreen
 import com.battlesbudz.dinnerbot.feature.reminders.ReminderPlanner
@@ -159,6 +171,12 @@ private fun DinnerBotApp(
     var ratings by remember { mutableStateOf<Map<String, RecipeRating>>(emptyMap()) }
     var barcodeLinks by remember { mutableStateOf<List<BarcodeLink>>(emptyList()) }
     var nutritionEntries by remember { mutableStateOf<List<IngredientNutrition>>(emptyList()) }
+    // Sunday reconciliation state (Phase V2-7): ran-out records and cook
+    // check-offs are user data, loaded with everything else.
+    var ranOutEvents by remember { mutableStateOf<List<RanOutEvent>>(emptyList()) }
+    var cookCheckoffs by remember { mutableStateOf<List<CookCheckoff>>(emptyList()) }
+    var cookTarget by remember { mutableStateOf<CookTarget?>(null) }
+    var reconFlow by remember { mutableStateOf<ReconFlow?>(null) }
     var presets by remember { mutableStateOf<List<DietPreset>>(emptyList()) }
     var tab by remember { mutableStateOf(Tab.RECIPES) }
     var openRecipeId by remember { mutableStateOf<String?>(null) }
@@ -228,9 +246,14 @@ private fun DinnerBotApp(
                 .map { with(SeedMapper) { it.toModel() } }
             val loadedNutrition = database.ingredientNutritionDao().getAll()
                 .map { with(SeedMapper) { it.toModel() } }
+            val loadedRanOut = database.ranOutDao().getAll()
+                .map { with(ReconciliationMapper) { it.toModel() } }
+            val loadedCheckoffs = database.cookCheckoffDao().getAll()
+                .map { with(ReconciliationMapper) { it.toModel() } }
             LoadedState(
                 s, r, p, pantry, stocks, plan, rows, plan2, rows2,
                 loadedRatings, loadedPresets, loadedLinks, loadedNutrition,
+                loadedRanOut, loadedCheckoffs,
             )
         }
         settings = loaded.settings
@@ -246,6 +269,8 @@ private fun DinnerBotApp(
         presets = loaded.presets
         barcodeLinks = loaded.barcodeLinks
         nutritionEntries = loaded.nutritionEntries
+        ranOutEvents = loaded.ranOutEvents
+        cookCheckoffs = loaded.cookCheckoffs
         loading = false
     }
 
@@ -259,6 +284,11 @@ private fun DinnerBotApp(
                 if (keepId == null) {
                     database.planDao().deleteAll()
                     database.groceryDao().deleteAll()
+                    // A fresh generation replaces the plans, and the cook
+                    // check-offs were working state for the replaced plans
+                    // (Phase V2-7). Ran-out records are NOT cleared: the
+                    // Sunday flow consumes them.
+                    database.cookCheckoffDao().deleteAll()
                 } else {
                     database.groceryDao().deleteForPlan(id)
                 }
@@ -341,6 +371,9 @@ private fun DinnerBotApp(
                 if (keepIds == null) {
                     database.planDao().deleteAll()
                     database.groceryDao().deleteAll()
+                    // Same replacement rule as a one-week generation: the
+                    // replaced plans' cook check-offs go with them.
+                    database.cookCheckoffDao().deleteAll()
                 } else {
                     database.groceryDao().deleteForPlan(id1)
                     database.groceryDao().deleteForPlan(id2)
@@ -386,6 +419,301 @@ private fun DinnerBotApp(
         )
         persistFortnight(fortnight, keepIds = null, forSettings = forSettings)
         tab = Tab.PLANNER
+    }
+
+    // ------------------------------------------------------------------
+    // Sunday reconciliation (Phase V2-7)
+    //
+    // Starting a new week is gated: when a finished prior week has
+    // anything to reconcile (ran-out marks waiting, or cooked dinners
+    // that used things up), the three-list flow opens BEFORE planning,
+    // its write-back corrects the pantry and stock state, and only then
+    // is the week planned, with the reconciled set merged into its list
+    // by the dedup rules. "Reconcile later" plans on last known state
+    // and leaves everything pending for the next attempt.
+    // ------------------------------------------------------------------
+
+    /** Stored plans whose week has finished and no reconciliation has consumed yet. */
+    fun finishedSourcePlans(forSettings: HouseholdSettings): List<Reconciliation.SourcePlan> {
+        val currentStart = currentWeekStart()
+        return listOfNotNull(storedPlan, storedPlan2)
+            .filter { it.weekStart < currentStart && it.id !in forSettings.reconciledPlanIds }
+            .sortedBy { it.weekStart }
+            .map { Reconciliation.SourcePlan(it.id, it.weekStart, it.nights) }
+    }
+
+    fun possibleOutsFor(
+        sources: List<Reconciliation.SourcePlan>,
+        forSettings: HouseholdSettings,
+    ): List<PossibleOut> = Reconciliation.inferPossibleOuts(
+        sourcePlans = sources,
+        recipesById = adaptationFor(forSettings).recipes.associateBy { it.id },
+        checkoffs = cookCheckoffs,
+        priceItems = priceItems,
+        pantryItems = pantryItems,
+        stockOnHand = PantryLogic.stockMap(bulkStocks),
+        pendingEvents = ranOutEvents,
+        recordedEvents = ranOutEvents,
+    )
+
+    /** The full Sunday session a new week is gated on, or null when nothing is pending. */
+    fun fullReconSession(forSettings: HouseholdSettings): Reconciliation.Session? {
+        val sources = finishedSourcePlans(forSettings)
+        if (sources.isEmpty()) return null
+        val pending = ranOutEvents.filter { it.state == RanOutState.PENDING }
+        val possibles = possibleOutsFor(sources, forSettings)
+        if (!Reconciliation.hasPendingReconciliation(sources, pending, possibles)) return null
+        return Reconciliation.buildSession(
+            Reconciliation.CheckKind.FULL, sources, ranOutEvents, possibles,
+            pantryItems, priceItems, PantryLogic.stockMap(bulkStocks),
+        )
+    }
+
+    /**
+     * The lighter check gating week 2's fresh top-up: due once week 2 has
+     * begun, while its fortnight stands, and only when something is
+     * pending from week 1's cooking. Completing it marks the fortnight
+     * consumed, so it is offered once.
+     */
+    fun topUpReconSession(forSettings: HouseholdSettings): Reconciliation.Session? {
+        val week1 = storedPlan ?: return null
+        val week2 = storedPlan2 ?: return null
+        if (week2.id in forSettings.reconciledPlanIds) return null
+        val week2Start = runCatching { LocalDate.parse(week2.weekStart) }.getOrNull() ?: return null
+        if (LocalDate.now().isBefore(week2Start)) return null
+        val sources = listOf(Reconciliation.SourcePlan(week1.id, week1.weekStart, week1.nights))
+        val pending = ranOutEvents.filter { it.state == RanOutState.PENDING }
+        val possibles = possibleOutsFor(sources, forSettings)
+        if (!Reconciliation.hasPendingReconciliation(sources, pending, possibles)) return null
+        return Reconciliation.buildSession(
+            Reconciliation.CheckKind.TOP_UP, sources, ranOutEvents, possibles,
+            pantryItems, priceItems, PantryLogic.stockMap(bulkStocks),
+        )
+    }
+
+    /**
+     * Merge a completed reconciliation's ran-out set into a planned week
+     * (the dedup rules): staple lines are added, ingredient lines only
+     * where a planned dinner uses the item, and nothing is ever doubled.
+     */
+    fun mergeResolvedIntoWeek(
+        plan: WeekPlanner.WeekPlan,
+        resolvedOuts: List<ReconciledOut>,
+        forSettings: HouseholdSettings,
+    ): WeekPlanner.WeekPlan {
+        if (resolvedOuts.none { it.priceItemId != null }) return plan
+        val recipesByIdLocal = adaptationFor(forSettings).recipes.associateBy { it.id }
+        val dinners = plan.nights.filterNot { it.notCooking }.mapNotNull { recipesByIdLocal[it.recipeId] }
+        val (needs, _) = Costing.aggregateNeeds(dinners, forSettings.householdSize, priceItems.associateBy { it.id })
+        val result = ReconciliationMerge.merge(
+            lines = plan.lines,
+            resolvedOuts = resolvedOuts,
+            priceItems = priceItems,
+            plannedItemIds = needs.map { it.item.id }.toSet(),
+            plannedNeedsBase = needs.associate { it.item.id to it.neededBase },
+            samsGateMet = plan.samsGateMet,
+            samsMonthlySavingsCents = plan.samsMonthlySavingsCents,
+        )
+        if (result.addedNames.isEmpty() && result.cashDeltaCents == 0) return plan
+        val notes = if (result.addedNames.isNotEmpty()) {
+            plan.notes + ("From Sunday's check, these ran out and are back on the list: " +
+                result.addedNames.joinToString(", ") + ".")
+        } else {
+            plan.notes
+        }
+        return plan.copy(
+            lines = result.lines,
+            cashNeededCents = plan.cashNeededCents + result.cashDeltaCents,
+            notes = notes,
+        )
+    }
+
+    /** Plan one week from an explicit pantry/stock state, with the reconciled set merged in. */
+    fun doGenerateWeek(
+        forSettings: HouseholdSettings,
+        planPantry: List<PantryItem>,
+        planStocks: List<BulkStock>,
+        resolvedOuts: List<ReconciledOut>,
+    ) {
+        variation += 1
+        val plan = WeekPlanner.generate(
+            settings = forSettings,
+            recipes = plannerPool(forSettings),
+            priceItems = priceItems,
+            stockOnHand = PantryLogic.stockMap(planStocks),
+            pantryOwnedNames = PantryLogic.ownedNames(planPantry),
+            weekStart = currentWeekStart(),
+            variation = variation,
+            ratings = ratings,
+        )
+        persistPlan(mergeResolvedIntoWeek(plan, resolvedOuts, forSettings), keepId = null, forSettings = forSettings)
+        tab = Tab.PLANNER
+    }
+
+    /** Plan two weeks from an explicit pantry/stock state, with the reconciled set merged into week 1. */
+    fun doGenerateFortnight(
+        forSettings: HouseholdSettings,
+        planPantry: List<PantryItem>,
+        planStocks: List<BulkStock>,
+        resolvedOuts: List<ReconciledOut>,
+    ) {
+        variation += 1
+        val week1Start = currentWeekStart()
+        val fortnight = WeekPlanner.generateFortnight(
+            settings = forSettings,
+            recipes = plannerPool(forSettings),
+            priceItems = priceItems,
+            stockOnHand = PantryLogic.stockMap(planStocks),
+            pantryOwnedNames = PantryLogic.ownedNames(planPantry),
+            week1Start = week1Start,
+            week2Start = LocalDate.parse(week1Start).plusWeeks(1).toString(),
+            variation = variation,
+            ratings = ratings,
+        )
+        val mergedWeek1 = mergeResolvedIntoWeek(fortnight.week1, resolvedOuts, forSettings)
+        persistFortnight(
+            WeekPlanner.composeFortnight(mergedWeek1, fortnight.week2, priceItems),
+            keepIds = null,
+            forSettings = forSettings,
+        )
+        tab = Tab.PLANNER
+    }
+
+    /** The Plan tab's generate buttons: the Sunday gate first, planning second. */
+    fun requestGenerateWeek(forSettings: HouseholdSettings) {
+        val session = fullReconSession(forSettings)
+        if (session != null) {
+            reconFlow = ReconFlow(session, ReconTarget.WEEK)
+        } else {
+            doGenerateWeek(forSettings, pantryItems, bulkStocks, emptyList())
+        }
+    }
+
+    fun requestGenerateFortnight(forSettings: HouseholdSettings) {
+        val session = fullReconSession(forSettings)
+        if (session != null) {
+            reconFlow = ReconFlow(session, ReconTarget.FORTNIGHT)
+        } else {
+            doGenerateFortnight(forSettings, pantryItems, bulkStocks, emptyList())
+        }
+    }
+
+    /** A stored plan as the planner's view type, for the top-up merge. */
+    fun storedWeekView(plan: PlanMapper.StoredPlan, rows: List<GroceryRow>): WeekPlanner.WeekPlan =
+        WeekPlanner.WeekPlan(
+            weekStart = plan.weekStart,
+            nights = plan.nights,
+            lines = rows.map { it.line },
+            cashNeededCents = plan.cashNeededCents,
+            foodCostCents = plan.foodCostCents,
+            samsMonthlySavingsCents = plan.samsMonthlySavingsCents,
+            samsGateMet = plan.samsMonthlySavingsCents >= Costing.SAMS_MONTHLY_GATE_CENTS,
+            deferredRestocks = emptyList(),
+            notes = plan.notes,
+        )
+
+    /**
+     * The top-up check completed: week 2 is repriced from the write-back
+     * state (its dinners unchanged) and the reconciled set merges into
+     * its lines, so the top-up shop carries what ran out during week 1.
+     */
+    fun applyTopUpOutcome(
+        forSettings: HouseholdSettings,
+        writeBack: ReconciliationWriteBack.Result,
+        resolvedOuts: List<ReconciledOut>,
+    ) {
+        val week1 = storedPlan ?: return
+        val week2 = storedPlan2 ?: return
+        val view1 = storedWeekView(week1, groceryRows)
+        val view2 = storedWeekView(week2, groceryRows2)
+        val owned = PantryLogic.ownedNames(writeBack.pantryItems)
+        val stock = PantryLogic.stockMap(writeBack.bulkStocks)
+        val adaptedById = adaptationFor(forSettings).recipes.associateBy { it.id }
+        val dinners = (view1.nights + view2.nights)
+            .filterNot { it.notCooking }
+            .mapNotNull { adaptedById[it.recipeId] }
+        val gate = WeekPlanner.fortnightGateForDinners(forSettings, dinners, priceItems)
+        val stock1 = WeekPlanner.projectedStockAfter(
+            forSettings, view1, adaptationFor(forSettings).recipes, priceItems, stock, owned, gate,
+        )
+        val repriced2 = WeekPlanner.recost(
+            settings = forSettings,
+            current = view2,
+            recipes = adaptationFor(forSettings).recipes,
+            priceItems = priceItems,
+            stockOnHand = stock1,
+            pantryOwnedNames = owned,
+            gateOverride = gate,
+        )
+        val merged2 = mergeResolvedIntoWeek(repriced2, resolvedOuts, forSettings)
+        persistFortnight(
+            WeekPlanner.composeFortnight(view1, merged2, priceItems),
+            keepIds = week1.id to week2.id,
+            forSettings = forSettings,
+        )
+    }
+
+    /**
+     * A reconciliation finished: persist its records, land the write-back
+     * (pantry flips and stock zeroing) BEFORE anything is planned, mark
+     * the consumed plans, and only then plan (or, for the top-up check,
+     * update week 2's list).
+     */
+    fun completeReconciliation(flow: ReconFlow, choices: Reconciliation.SessionChoices) {
+        val forSettings = settings ?: return
+        val outcome = Reconciliation.resolveSession(
+            flow.session, choices, priceItems, LocalDate.now().toString(),
+        )
+        val writeBack = ReconciliationWriteBack.apply(pantryItems, bulkStocks, outcome.resolvedOuts, priceItems)
+        reconFlow = null
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                outcome.eventsToSave.forEach { event ->
+                    database.ranOutDao().upsert(with(ReconciliationMapper) { event.toEntity() })
+                }
+                writeBack.pantryItems.forEach {
+                    database.pantryDao().upsert(with(SeedMapper) { it.toEntity() })
+                }
+                val standingIds = writeBack.bulkStocks.map { it.itemId }.toSet()
+                bulkStocks.map { it.itemId }.filter { it !in standingIds }.forEach {
+                    database.bulkStockDao().delete(it)
+                }
+                writeBack.bulkStocks.forEach {
+                    database.bulkStockDao().upsert(with(SeedMapper) { it.toEntity() })
+                }
+                val consumed = outcome.reconciledPlanIds +
+                    if (flow.target == ReconTarget.TOP_UP) listOfNotNull(storedPlan2?.id) else emptyList()
+                val newSettings = forSettings.copy(
+                    reconciledPlanIds = (forSettings.reconciledPlanIds + consumed).distinct(),
+                )
+                database.settingsDao().upsert(with(SeedMapper) { newSettings.toEntity() })
+                syncPantryStaples(database, newSettings)
+            }
+            when (flow.target) {
+                ReconTarget.WEEK ->
+                    doGenerateWeek(forSettings, writeBack.pantryItems, writeBack.bulkStocks, outcome.resolvedOuts)
+                ReconTarget.FORTNIGHT ->
+                    doGenerateFortnight(forSettings, writeBack.pantryItems, writeBack.bulkStocks, outcome.resolvedOuts)
+                ReconTarget.TOP_UP ->
+                    applyTopUpOutcome(forSettings, writeBack, outcome.resolvedOuts)
+            }
+            refresh()
+        }
+    }
+
+    /**
+     * "Reconcile later": pantry and stock state stay untouched, the week
+     * plans on last known state, and the ran-out list still waits at the
+     * top of the next attempt. Nothing is marked reconciled.
+     */
+    fun skipReconciliation(flow: ReconFlow) {
+        val forSettings = settings ?: return
+        reconFlow = null
+        when (flow.target) {
+            ReconTarget.WEEK -> doGenerateWeek(forSettings, pantryItems, bulkStocks, emptyList())
+            ReconTarget.FORTNIGHT -> doGenerateFortnight(forSettings, pantryItems, bulkStocks, emptyList())
+            ReconTarget.TOP_UP -> Unit
+        }
     }
 
     /** Set, change, or clear (null) one recipe's thumbs rating, then reload. */
@@ -630,7 +958,17 @@ private fun DinnerBotApp(
             }
             Column(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.weight(1f)) {
-                    when (tab) {
+                    val activeFlow = reconFlow
+                    if (activeFlow != null) {
+                        // The Sunday gate (Phase V2-7) takes the screen:
+                        // reconciliation runs before any planning, and the
+                        // tabs wait until it completes or is skipped.
+                        ReconciliationScreen(
+                            session = activeFlow.session,
+                            onComplete = { choices -> completeReconciliation(activeFlow, choices) },
+                            onSkip = { skipReconciliation(activeFlow) },
+                        )
+                    } else when (tab) {
                         Tab.RECIPES -> {
                             val open = openRecipeId?.let { recipesById[it] }
                             if (open != null) {
@@ -652,13 +990,70 @@ private fun DinnerBotApp(
                                 )
                             }
                         }
-                        Tab.PLANNER -> if (fortnightView != null && storedPlan != null && storedPlan2 != null) {
+                        Tab.PLANNER -> {
+                            val target = cookTarget
+                            val targetPlan = target?.let { t ->
+                                listOfNotNull(storedPlan, storedPlan2).firstOrNull { it.id == t.planId }
+                            }
+                            val targetNight = targetPlan?.nights?.firstOrNull { it.day == target?.day }
+                            val targetRecipe = targetNight?.let { recipesById[it.recipeId] }
+                            if (target != null && targetPlan != null && targetNight != null && targetRecipe != null) {
+                                // The cook view (Phase V2-7): tonight's
+                                // dinner with its check-offs and ran-out
+                                // marks, persisted per planned dinner.
+                                CookScreen(
+                                    dayLabel = DAY_LABELS[targetNight.day] ?: targetNight.day,
+                                    recipe = targetRecipe,
+                                    priceItems = priceItems,
+                                    householdSize = currentSettings.householdSize,
+                                    checkedKeys = cookCheckoffs
+                                        .filter { it.planId == target.planId && it.day == target.day && it.checked }
+                                        .map { it.itemKey }.toSet(),
+                                    ranOutKeys = ranOutEvents
+                                        .filter { it.state == RanOutState.PENDING }
+                                        .map { it.itemKey }.toSet(),
+                                    onToggleChecked = { key, checked ->
+                                        scope.launch {
+                                            withContext(Dispatchers.IO) {
+                                                database.cookCheckoffDao().upsert(
+                                                    CookCheckoffEntity(target.planId, target.day, key, checked),
+                                                )
+                                            }
+                                            refresh()
+                                        }
+                                    },
+                                    onToggleRanOut = { event, marked ->
+                                        scope.launch {
+                                            withContext(Dispatchers.IO) {
+                                                if (marked) {
+                                                    val already = database.ranOutDao()
+                                                        .getByState(RanOutState.PENDING.name)
+                                                        .any { it.itemKey == event.itemKey }
+                                                    if (!already) {
+                                                        database.ranOutDao().upsert(
+                                                            with(ReconciliationMapper) { event.toEntity() },
+                                                        )
+                                                    }
+                                                } else {
+                                                    database.ranOutDao()
+                                                        .deletePendingCookingMark(event.itemKey)
+                                                }
+                                            }
+                                            refresh()
+                                        }
+                                    },
+                                    today = LocalDate.now().toString(),
+                                    planId = target.planId,
+                                    pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
+                                    onBack = { cookTarget = null },
+                                )
+                            } else if (fortnightView != null && storedPlan != null && storedPlan2 != null) {
                             FortnightPlannerScreen(
                                 plan = fortnightView,
                                 recipesById = recipesById,
                                 budgetCents = currentSettings.weeklyBudgetCents,
-                                onRegenerateTwoWeeks = { generateTwoWeekPlan(currentSettings) },
-                                onPlanOneWeek = { generatePlan(currentSettings) },
+                                onRegenerateTwoWeeks = { requestGenerateFortnight(currentSettings) },
+                                onPlanOneWeek = { requestGenerateWeek(currentSettings) },
                                 onSwap = { weekIndex, day ->
                                     val swapped = WeekPlanner.swapDinnerFortnight(
                                         settings = currentSettings,
@@ -702,12 +1097,19 @@ private fun DinnerBotApp(
                                 ratings = ratings,
                                 onRate = { recipeId, rating -> rateRecipe(recipeId, rating) },
                                 outOfRotationCount = ratings.values.count { it == RecipeRating.DOWN },
+                                onCookNight = { weekIndex, day ->
+                                    val planId = if (weekIndex == 1) storedPlan?.id else storedPlan2?.id
+                                    if (planId != null) cookTarget = CookTarget(planId, day)
+                                },
+                                onStartTopUpCheck = topUpReconSession(currentSettings)?.let { session ->
+                                    { reconFlow = ReconFlow(session, ReconTarget.TOP_UP) }
+                                },
                             )
-                        } else PlannerScreen(
+                            } else PlannerScreen(
                             plan = weekPlanView,
                             recipesById = recipesById,
                             budgetCents = currentSettings.weeklyBudgetCents,
-                            onGenerate = { generatePlan(currentSettings) },
+                            onGenerate = { requestGenerateWeek(currentSettings) },
                             onSwap = { day ->
                                 val current = weekPlanView
                                 if (current != null && storedPlan != null) {
@@ -747,8 +1149,12 @@ private fun DinnerBotApp(
                             ratings = ratings,
                             onRate = { recipeId, rating -> rateRecipe(recipeId, rating) },
                             outOfRotationCount = ratings.values.count { it == RecipeRating.DOWN },
-                            onGenerateTwoWeeks = { generateTwoWeekPlan(currentSettings) },
+                            onGenerateTwoWeeks = { requestGenerateFortnight(currentSettings) },
+                            onCookNight = { day ->
+                                storedPlan?.let { cookTarget = CookTarget(it.id, day) }
+                            },
                         )
+                        }
                         Tab.LIST -> {
                             // Two-week plan: the list is the big trip (week
                             // 1's rows plus week 2's shelf-stable and frozen
@@ -756,17 +1162,19 @@ private fun DinnerBotApp(
                             // same category rule the planner used.
                             val priceById = priceItems.associateBy { it.id }
                             val isFortnightList = fortnightView != null
+                            // A week 2 line a reconciliation added shops
+                            // with the top-up (Phase V2-7), like the fresh
+                            // lines: the big trip predates the check.
+                            fun isTopUpRow(row: GroceryRow): Boolean =
+                                row.line.reconciliationAdded ||
+                                    Perishables.isTopUpLine(row.line, priceById[row.line.itemId])
                             val topUpRows = if (isFortnightList) {
-                                groceryRows2.filter {
-                                    Perishables.isTopUpLine(it.line, priceById[it.line.itemId])
-                                }
+                                groceryRows2.filter { isTopUpRow(it) }
                             } else {
                                 emptyList()
                             }
                             val bigTripRows = if (isFortnightList) {
-                                groceryRows + groceryRows2.filterNot {
-                                    Perishables.isTopUpLine(it.line, priceById[it.line.itemId])
-                                }
+                                groceryRows + groceryRows2.filterNot { isTopUpRow(it) }
                             } else {
                                 groceryRows
                             }
@@ -779,6 +1187,12 @@ private fun DinnerBotApp(
                                 scope.launch {
                                     withContext(Dispatchers.IO) {
                                         database.groceryDao().setChecked(row.rowId, checked)
+                                        // Buying a reconciled ran-out item
+                                        // restocks it (Phase V2-7): its
+                                        // record leaves the confirmed set.
+                                        if (checked) {
+                                            database.ranOutDao().markRestockedForItem(row.line.itemId)
+                                        }
                                     }
                                     refresh()
                                 }
@@ -863,6 +1277,13 @@ private fun DinnerBotApp(
                                 scope.launch {
                                     withContext(Dispatchers.IO) {
                                         database.pantryDao().upsert(with(SeedMapper) { toggled.toEntity() })
+                                        // Marking a staple owned again is
+                                        // how buying it back is recorded; a
+                                        // reconciled ran-out record for it
+                                        // restocks (Phase V2-7).
+                                        if (toggled.owned) {
+                                            database.ranOutDao().markRestockedForStaple(item.name)
+                                        }
                                         syncPantryStaples(database, currentSettings)
                                     }
                                     repriceStoredPlan(updatedPantry)
@@ -888,6 +1309,10 @@ private fun DinnerBotApp(
                                             database.bulkStockDao().delete(stock.itemId)
                                         } else {
                                             database.bulkStockDao().upsert(with(SeedMapper) { stock.toEntity() })
+                                            // Stock coming back in restocks a
+                                            // reconciled ran-out record for the
+                                            // item (Phase V2-7).
+                                            database.ranOutDao().markRestockedForItem(stock.itemId)
                                         }
                                     }
                                     refresh()
@@ -958,6 +1383,8 @@ private fun DinnerBotApp(
                                                 barcodeLinks = barcodeLinks.map { link ->
                                                     BackupBarcodeLink(link.barcode, link.itemId)
                                                 },
+                                                ranOutEvents = ranOutEvents,
+                                                cookCheckoffs = cookCheckoffs,
                                             ),
                                         )
                                         exportLauncher.launch("dinner-bot-backup.json")
@@ -1007,10 +1434,27 @@ private data class LoadedState(
     val presets: List<DietPreset>,
     val barcodeLinks: List<BarcodeLink>,
     val nutritionEntries: List<IngredientNutrition>,
+    val ranOutEvents: List<RanOutEvent>,
+    val cookCheckoffs: List<CookCheckoff>,
 )
 
 private fun currentWeekStart(): String =
     LocalDate.now().with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toString()
+
+/** Night code to shown label, for the cook view's header (Phase V2-7). */
+private val DAY_LABELS = mapOf(
+    "MON" to "Monday", "TUE" to "Tuesday", "WED" to "Wednesday", "THU" to "Thursday",
+    "FRI" to "Friday", "SAT" to "Saturday", "SUN" to "Sunday",
+)
+
+/** The planned dinner whose cook view is open (Phase V2-7). */
+private data class CookTarget(val planId: String, val day: String)
+
+/** What a completed Sunday reconciliation goes on to do (Phase V2-7). */
+private enum class ReconTarget { WEEK, FORTNIGHT, TOP_UP }
+
+/** A Sunday reconciliation in progress: its prepared lists and its target. */
+private data class ReconFlow(val session: Reconciliation.Session, val target: ReconTarget)
 
 /**
  * The effective notification state (Phase V2-4): Android versions before
@@ -1084,6 +1528,16 @@ private suspend fun applyBackup(database: DinnerBotDatabase, data: BackupData) {
         database.barcodeLinkDao().upsert(
             BarcodeLinkEntity(saved.barcode, saved.itemId, System.currentTimeMillis()),
         )
+    }
+    // Reconciliation state replaces wholesale (Phase V2-7): a pre-v4
+    // backup has no ran-out records or cook check-offs, which clears them.
+    database.ranOutDao().deleteAll()
+    data.ranOutEvents.forEach { saved ->
+        database.ranOutDao().upsert(with(ReconciliationMapper) { saved.toEntity() })
+    }
+    database.cookCheckoffDao().deleteAll()
+    data.cookCheckoffs.forEach { saved ->
+        database.cookCheckoffDao().upsert(with(ReconciliationMapper) { saved.toEntity() })
     }
     // Plans were priced from the old book; clear them so nothing stale lingers.
     database.planDao().deleteAll()

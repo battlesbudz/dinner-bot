@@ -10,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -44,6 +45,13 @@ fun FortnightPlannerScreen(
     ratings: Map<String, RecipeRating> = emptyMap(),
     onRate: (String, RecipeRating?) -> Unit = { _, _ -> },
     outOfRotationCount: Int = 0,
+    /** Open one night's cook view (Phase V2-7): (weekIndex, day). */
+    onCookNight: (Int, String) -> Unit = { _, _ -> },
+    /**
+     * The lighter Sunday check is due before week 2's top-up shop
+     * (Phase V2-7); non-null shows its invitation. Null hides it.
+     */
+    onStartTopUpCheck: (() -> Unit)? = null,
 ) {
     // (weekIndex, day) whose not-cooking reason is being picked, if any.
     var reasonFor by remember { mutableStateOf<Pair<Int, String>?>(null) }
@@ -60,6 +68,11 @@ fun FortnightPlannerScreen(
         }
         TextButton(onClick = onPlanOneWeek) {
             Text("Plan one week instead")
+        }
+        if (onStartTopUpCheck != null) {
+            OutlinedButton(onClick = onStartTopUpCheck, modifier = Modifier.fillMaxWidth()) {
+                Text("Quick check before week 2's top-up shop")
+            }
         }
 
         Card(modifier = Modifier.fillMaxWidth()) {
@@ -109,6 +122,7 @@ fun FortnightPlannerScreen(
             onNotCookingRequest = { day -> reasonFor = 1 to day },
             onSetNightCooking = onSetNightCooking,
             onRate = onRate,
+            onCookNight = onCookNight,
         )
         WeekSection(
             title = "Week 2 · starts ${plan.week2.weekStart}",
@@ -120,6 +134,7 @@ fun FortnightPlannerScreen(
             onNotCookingRequest = { day -> reasonFor = 2 to day },
             onSetNightCooking = onSetNightCooking,
             onRate = onRate,
+            onCookNight = onCookNight,
         )
 
         if (outOfRotationCount > 0) {
@@ -158,6 +173,7 @@ private fun WeekSection(
     onNotCookingRequest: (String) -> Unit,
     onSetNightCooking: (Int, String, Boolean, String?) -> Unit,
     onRate: (String, RecipeRating?) -> Unit,
+    onCookNight: (Int, String) -> Unit,
 ) {
     Text(title, style = MaterialTheme.typography.titleLarge)
     Text(
@@ -174,6 +190,7 @@ private fun WeekSection(
             onNotCookingRequest = { onNotCookingRequest(night.day) },
             onCookThisNight = { onSetNightCooking(weekIndex, night.day, true, null) },
             onRate = { rating -> onRate(night.recipeId, rating) },
+            onCook = { onCookNight(weekIndex, night.day) },
         )
     }
     week.notes.forEach { note ->

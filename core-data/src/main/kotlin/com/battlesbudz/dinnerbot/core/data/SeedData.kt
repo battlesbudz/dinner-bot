@@ -196,6 +196,7 @@ object SeedMapper {
         pantryStaplesJson = json.encodeToString(stringList, pantryStaples),
         onboardingComplete = onboardingComplete,
         remindersJson = json.encodeToString(ReminderSettings.serializer(), reminders),
+        reconciledPlanIdsJson = json.encodeToString(stringList, reconciledPlanIds),
     )
 
     fun SettingsEntity.toModel(): HouseholdSettings = HouseholdSettings(
@@ -211,6 +212,9 @@ object SeedMapper {
         // A pre-V2-4 row (or a damaged blob) reads as every reminder off.
         reminders = runCatching { json.decodeFromString(ReminderSettings.serializer(), remindersJson) }
             .getOrDefault(ReminderSettings()),
+        // A pre-V2-7 row reads as no plan reconciled yet.
+        reconciledPlanIds = runCatching { json.decodeFromString(stringList, reconciledPlanIdsJson) }
+            .getOrDefault(emptyList()),
     )
 }
 
