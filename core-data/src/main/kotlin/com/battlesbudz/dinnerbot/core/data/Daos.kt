@@ -172,6 +172,21 @@ interface BarcodeLinkDao {
 }
 
 @Dao
+interface IngredientNutritionDao {
+    @Query("SELECT COUNT(*) FROM ingredient_nutrition")
+    suspend fun count(): Int
+
+    @Query("SELECT * FROM ingredient_nutrition ORDER BY itemId")
+    suspend fun getAll(): List<IngredientNutritionEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(entries: List<IngredientNutritionEntity>)
+
+    @Query("DELETE FROM ingredient_nutrition")
+    suspend fun deleteAll()
+}
+
+@Dao
 interface SettingsDao {
     @Query("SELECT * FROM settings WHERE id = 1")
     suspend fun get(): SettingsEntity?

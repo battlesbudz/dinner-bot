@@ -5,7 +5,10 @@ import com.battlesbudz.dinnerbot.core.model.BulkStock
 import com.battlesbudz.dinnerbot.core.model.DietPreset
 import com.battlesbudz.dinnerbot.core.model.DietPresetsFile
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
+import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
 import com.battlesbudz.dinnerbot.core.model.MeasureUnit
+import com.battlesbudz.dinnerbot.core.model.NutritionFile
+import com.battlesbudz.dinnerbot.core.model.NutritionValues
 import com.battlesbudz.dinnerbot.core.model.PantryItem
 import com.battlesbudz.dinnerbot.core.model.PriceBookFile
 import com.battlesbudz.dinnerbot.core.model.PriceItem
@@ -17,6 +20,7 @@ import com.battlesbudz.dinnerbot.core.model.ReminderSettings
 import com.battlesbudz.dinnerbot.core.model.Store
 import com.battlesbudz.dinnerbot.core.model.StorePrice
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
@@ -28,6 +32,7 @@ object SeedDataParser {
     fun parseRecipes(text: String): List<Recipe> = json.decodeFromString<RecipesFile>(text).recipes
     fun parseDietPresets(text: String): List<DietPreset> =
         json.decodeFromString<DietPresetsFile>(text).presets
+    fun parseNutrition(text: String): NutritionFile = json.decodeFromString<NutritionFile>(text)
 }
 
 /** Pure conversions between core-model types and Room entities. Unit-testable on the JVM. */
@@ -69,6 +74,64 @@ object SeedMapper {
         alternates = runCatching { json.decodeFromString(storePriceList, alternatesJson) }
             .getOrDefault(emptyList()),
         freezeNote = freezeNote,
+    )
+
+    fun IngredientNutrition.toEntity(): IngredientNutritionEntity = IngredientNutritionEntity(
+        itemId = itemId,
+        pantryItem = pantryItem,
+        fdcId = fdcId,
+        fdcDescription = fdcDescription,
+        fdcDataType = fdcDataType,
+        closestMatch = closestMatch,
+        source = source,
+        caloriesKcal = per100g.caloriesKcal,
+        proteinG = per100g.proteinG,
+        fatG = per100g.fatG,
+        carbohydrateG = per100g.carbohydrateG,
+        fiberG = per100g.fiberG,
+        sugarsG = per100g.sugarsG,
+        sodiumMg = per100g.sodiumMg,
+        saturatedFatG = per100g.saturatedFatG,
+        cholesterolMg = per100g.cholesterolMg,
+        gramWeightsJson = json.encodeToString(
+            MapSerializer(
+                String.serializer(),
+                Double.serializer(),
+            ),
+            gramWeights,
+        ),
+        gramWeightSource = gramWeightSource,
+    )
+
+    fun IngredientNutritionEntity.toModel(): IngredientNutrition = IngredientNutrition(
+        itemId = itemId,
+        pantryItem = pantryItem,
+        fdcId = fdcId,
+        fdcDescription = fdcDescription,
+        fdcDataType = fdcDataType,
+        closestMatch = closestMatch,
+        source = source,
+        per100g = NutritionValues(
+            caloriesKcal = caloriesKcal,
+            proteinG = proteinG,
+            fatG = fatG,
+            carbohydrateG = carbohydrateG,
+            fiberG = fiberG,
+            sugarsG = sugarsG,
+            sodiumMg = sodiumMg,
+            saturatedFatG = saturatedFatG,
+            cholesterolMg = cholesterolMg,
+        ),
+        gramWeights = runCatching {
+            json.decodeFromString(
+                MapSerializer(
+                    String.serializer(),
+                    Double.serializer(),
+                ),
+                gramWeightsJson,
+            )
+        }.getOrDefault(emptyMap()),
+        gramWeightSource = gramWeightSource,
     )
 
     fun BarcodeLink.toEntity(): BarcodeLinkEntity = BarcodeLinkEntity(
@@ -211,6 +274,24 @@ class SeedLoader(private val db: DinnerBotDatabase) {
             }
         }
         return changed
+    }
+
+    /**
+     * Keep the stored nutrition entries identical to the bundled seed file
+     * (Phase V2-6). Nutrition entries are pure seed content, loaded and
+     * refreshed like the recipes: the app never lets the user edit them,
+     * so when the bundled file changes the stored rows are replaced from
+     * the asset. This touches ONLY the ingredient_nutrition table; every
+     * user table is untouched. Returns how many entries were written
+     * (0 when the stored set already matches the bundle).
+     */
+    suspend fun refreshSeedNutrition(nutritionJson: String): Int {
+        val bundled = SeedDataParser.parseNutrition(nutritionJson).entries
+        val stored = db.ingredientNutritionDao().getAll().map { with(SeedMapper) { it.toModel() } }
+        if (stored.associateBy { it.itemId } == bundled.associateBy { it.itemId }) return 0
+        db.ingredientNutritionDao().deleteAll()
+        db.ingredientNutritionDao().insertAll(bundled.map { with(SeedMapper) { it.toEntity() } })
+        return bundled.size
     }
 
     /**

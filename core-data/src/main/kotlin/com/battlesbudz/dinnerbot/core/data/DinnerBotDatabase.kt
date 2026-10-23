@@ -41,6 +41,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * row carries over untouched, which the instrumented migration test
  * proves from a populated v5 database.
  *
+ * Version 7 (Phase V2-6, v0.3.1) adds the ingredient_nutrition table
+ * through [MIGRATION_6_7]: one USDA FoodData Central entry per shipped
+ * ingredient, created empty on upgrade and filled from the bundled seed
+ * by the seed refresh. It is seed content, never user data; every v6
+ * table and row carries over untouched, which the instrumented
+ * migration test proves from a populated v6 database.
+ *
  * fallbackToDestructiveMigration remains only as a pre-1.0 safety net for
  * development installs; with a real migration registered for every version
  * step it never triggers on a real upgrade path.
@@ -56,8 +63,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         GroceryItemEntity::class,
         RecipeRatingEntity::class,
         BarcodeLinkEntity::class,
+        IngredientNutritionEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class DinnerBotDatabase : RoomDatabase() {
@@ -70,6 +78,7 @@ abstract class DinnerBotDatabase : RoomDatabase() {
     abstract fun groceryDao(): GroceryDao
     abstract fun recipeRatingDao(): RecipeRatingDao
     abstract fun barcodeLinkDao(): BarcodeLinkDao
+    abstract fun ingredientNutritionDao(): IngredientNutritionDao
 
     companion object {
         /** v2 to v3: create the recipe_ratings table. Nothing else changes. */
@@ -109,9 +118,26 @@ abstract class DinnerBotDatabase : RoomDatabase() {
             }
         }
 
+        /** v6 to v7: create the ingredient_nutrition table. Nothing else changes. */
+        val MIGRATION_6_7: Migration = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `ingredient_nutrition` (" +
+                        "`itemId` TEXT NOT NULL, `pantryItem` INTEGER NOT NULL, " +
+                        "`fdcId` INTEGER NOT NULL, `fdcDescription` TEXT NOT NULL, " +
+                        "`fdcDataType` TEXT NOT NULL, `closestMatch` INTEGER NOT NULL, " +
+                        "`source` TEXT NOT NULL, `caloriesKcal` REAL, `proteinG` REAL, " +
+                        "`fatG` REAL, `carbohydrateG` REAL, `fiberG` REAL, `sugarsG` REAL, " +
+                        "`sodiumMg` REAL, `saturatedFatG` REAL, `cholesterolMg` REAL, " +
+                        "`gramWeightsJson` TEXT NOT NULL, `gramWeightSource` TEXT, " +
+                        "PRIMARY KEY(`itemId`))",
+                )
+            }
+        }
+
         fun create(context: Context): DinnerBotDatabase =
             Room.databaseBuilder(context.applicationContext, DinnerBotDatabase::class.java, "dinner-bot.db")
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .fallbackToDestructiveMigration()
                 .build()
     }

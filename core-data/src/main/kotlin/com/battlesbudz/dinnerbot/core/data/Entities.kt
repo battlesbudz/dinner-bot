@@ -88,6 +88,35 @@ data class GroceryItemEntity(
     val checkedOff: Boolean,
 )
 
+/**
+ * One ingredient's USDA nutrition entry (Phase V2-6). Seed content,
+ * refreshed wholesale from the bundled nutrition.json; never user-edited,
+ * so a refresh can never destroy user data. The per-100 g columns are
+ * nullable exactly where FoodData Central publishes no value.
+ */
+@Entity(tableName = "ingredient_nutrition")
+data class IngredientNutritionEntity(
+    @PrimaryKey val itemId: String,
+    val pantryItem: Boolean,
+    val fdcId: Long,
+    val fdcDescription: String,
+    val fdcDataType: String,
+    val closestMatch: Boolean,
+    val source: String,
+    val caloriesKcal: Double?,
+    val proteinG: Double?,
+    val fatG: Double?,
+    val carbohydrateG: Double?,
+    val fiberG: Double?,
+    val sugarsG: Double?,
+    val sodiumMg: Double?,
+    val saturatedFatG: Double?,
+    val cholesterolMg: Double?,
+    /** JSON-encoded Map<String, Double>: grams for one unit of a non-weight unit, keyed by unit name. */
+    val gramWeightsJson: String = "{}",
+    val gramWeightSource: String? = null,
+)
+
 /** One learned barcode link per barcode (Phase V2-5); the barcode is the key. */
 @Entity(tableName = "barcode_links")
 data class BarcodeLinkEntity(

@@ -24,10 +24,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
 import com.battlesbudz.dinnerbot.core.model.Money
+import com.battlesbudz.dinnerbot.core.model.NutritionCalculator
+import com.battlesbudz.dinnerbot.core.model.NutritionField
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeRating
+import kotlin.math.roundToInt
 
 @Composable
 fun RecipeListScreen(
@@ -86,6 +90,8 @@ fun RecipeDetailScreen(
     modifier: Modifier = Modifier,
     rating: RecipeRating? = null,
     onRate: (RecipeRating?) -> Unit = {},
+    nutritionByItemId: Map<String, IngredientNutrition> = emptyMap(),
+    nutritionByPantrySlug: Map<String, IngredientNutrition> = emptyMap(),
 ) {
     val itemsById = remember(priceItems) { priceItems.associateBy { it.id } }
     var servings by remember(recipe.id) { mutableStateOf(recipe.servings) }
@@ -148,6 +154,51 @@ fun RecipeDetailScreen(
             style = MaterialTheme.typography.bodyMedium,
         )
 
+        // Nutrition per serving (Phase V2-6): computed from this recipe as
+        // this household cooks it (the recipe handed in is already
+        // won't-eat adapted) at the servings picked above. Estimates from
+        // USDA data; a field USDA has no value for is marked partial
+        // instead of printing a total that pretends to be whole.
+        val nutrition = remember(recipe, servings, nutritionByItemId, nutritionByPantrySlug) {
+            NutritionCalculator.recipeNutrition(recipe, servings, nutritionByItemId, nutritionByPantrySlug)
+        }
+        Text("Nutrition per serving (estimate)", style = MaterialTheme.typography.titleMedium)
+        listOf(
+            NutritionField.CALORIES,
+            NutritionField.PROTEIN,
+            NutritionField.FAT,
+            NutritionField.CARBOHYDRATE,
+            NutritionField.FIBER,
+            NutritionField.SODIUM,
+        ).forEach { field ->
+            val marker = if (field in nutrition.incompleteFields) " (partial)" else ""
+            Text(
+                "${field.label}: ${formatNutritionAmount(nutrition.perServing.value(field), field)}$marker",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        if (nutrition.isPartial) {
+            val names = nutrition.incompleteFields.sortedBy { it.ordinal }
+                .joinToString(", ") { it.label.lowercase() }
+            Text(
+                "Partial data: USDA FoodData Central has no $names value for one or more " +
+                    "ingredients here, so the $names total is incomplete.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (nutrition.closestMatchUsed) {
+            Text(
+                "Includes packaged foods matched to the closest USDA entry. " +
+                    "Estimates from USDA FoodData Central data.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        } else {
+            Text(
+                "Estimates from USDA FoodData Central data.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+
         Text("Ingredients", style = MaterialTheme.typography.titleMedium)
         recipe.scaledIngredients(servings).forEach { ingredient ->
             val name = when {
@@ -164,6 +215,16 @@ fun RecipeDetailScreen(
         recipe.steps.forEachIndexed { index, step ->
             Text("${index + 1}. $step", style = MaterialTheme.typography.bodyMedium)
         }
+    }
+}
+
+/** Whole numbers for kcal and mg, one trimmed decimal for grams; "no data" when USDA has none. */
+private fun formatNutritionAmount(value: Double?, field: NutritionField): String {
+    if (value == null) return "no data"
+    return when (field.unitLabel) {
+        "g" -> "${trimNumber(kotlin.math.round(value * 10) / 10.0)} g"
+        "mg" -> "${value.roundToInt()} mg"
+        else -> "${value.roundToInt()} kcal"
     }
 }
 

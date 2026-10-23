@@ -12,8 +12,8 @@ android {
         applicationId = "com.battlesbudz.dinnerbot"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.3.0"
+        versionCode = 10
+        versionName = "0.3.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -71,6 +71,7 @@ dependencies {
     implementation(project(":feature-pantry"))
     implementation(project(":feature-backup"))
     implementation(project(":feature-reminders"))
+    implementation(project(":feature-nutrition"))
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
