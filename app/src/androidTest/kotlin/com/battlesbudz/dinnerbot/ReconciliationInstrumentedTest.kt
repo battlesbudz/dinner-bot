@@ -160,56 +160,73 @@ class ReconciliationInstrumentedTest {
         }
     }
 
+    /** Name the stage a failure happened in; the message reaches the CI log. */
+    private fun stage(name: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (t: Throwable) {
+            throw AssertionError("SUNDAY STAGE FAILED: $name", t)
+        }
+    }
+
     @Test
     fun sundayFlowRunsInOrderBeforePlanning() {
         ActivityScenario.launch(MainActivity::class.java).use {
-            planAWeek()
+            stage("plan") { planAWeek() }
 
             // During the week: cook the first dinner and mark one of its
             // ingredients ran out. That pending mark is what the Sunday
             // gate opens for.
-            openFirstCookView()
-            composeRule.onAllNodes(hasTagPrefix(USED_PREFIX))[0]
-                .performScrollTo().performClick()
-            composeRule.onAllNodes(hasTagPrefix(RANOUT_PREFIX))[0]
-                .performScrollTo().performClick()
-            composeRule.onNodeWithText("Back to the week").performScrollTo().performClick()
-            waitForText("Swap")
-
-            // Roll the stored week's start back so it counts as finished.
-            // The gate re-reads the store when Regenerate is tapped.
-            val dbFile = context.getDatabasePath("dinner-bot.db")
-            val sqlite = android.database.sqlite.SQLiteDatabase.openDatabase(
-                dbFile.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READWRITE,
-            )
-            sqlite.execSQL("UPDATE plans SET weekStart = '2020-01-06'")
-            sqlite.close()
-
-            // Starting the new week opens reconciliation BEFORE any
-            // planning, on list 1: the things she marked ran out.
-            composeRule.onNodeWithText("Regenerate week").performScrollTo().performClick()
-            waitForText("These are the things you indicated you ran out of")
-            composeRule.waitUntil(timeoutMillis = 15_000) {
-                composeRule.onAllNodes(hasTagPrefix("recon-marked-"))
-                    .fetchSemanticsNodes().isNotEmpty()
+            stage("cook-and-mark") {
+                openFirstCookView()
+                composeRule.onAllNodes(hasTagPrefix(USED_PREFIX))[0]
+                    .performScrollTo().performClick()
+                composeRule.onAllNodes(hasTagPrefix(RANOUT_PREFIX))[0]
+                    .performScrollTo().performClick()
+                composeRule.onNodeWithText("Back to the week").performScrollTo().performClick()
+                waitForText("Swap")
             }
 
-            // List 2, then list 3, in Battles's order.
-            composeRule.onNodeWithText("Next").performScrollTo().performClick()
-            waitForText("Did you run out of these also?")
-            composeRule.onNodeWithText("Next").performScrollTo().performClick()
-            waitForText("Your pantry")
-            assertTrue(
-                composeRule.onAllNodes(hasTagPrefix("recon-pantry-"))
-                    .fetchSemanticsNodes().isNotEmpty(),
-            )
+            stage("open-flow") {
+                // Roll the stored week's start back so it counts as
+                // finished. The gate re-reads the store on Regenerate.
+                val dbFile = context.getDatabasePath("dinner-bot.db")
+                val sqlite = android.database.sqlite.SQLiteDatabase.openDatabase(
+                    dbFile.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READWRITE,
+                )
+                sqlite.execSQL("UPDATE plans SET weekStart = '2020-01-06'")
+                sqlite.close()
 
-            // Finish: the week plans only now, and the shopping list
-            // exists only after the plan, last in the flow.
-            composeRule.onNodeWithText("Finish and plan the week").performScrollTo().performClick()
-            waitForText("Swap")
-            composeRule.onNodeWithTag("tab-List").performClick()
-            waitForText("This week's shopping")
+                // Starting the new week opens reconciliation BEFORE any
+                // planning, on list 1: the things she marked ran out.
+                composeRule.onNodeWithText("Regenerate week").performScrollTo().performClick()
+                waitForText("These are the things you indicated you ran out of")
+                composeRule.waitUntil(timeoutMillis = 15_000) {
+                    composeRule.onAllNodes(hasTagPrefix("recon-marked-"))
+                        .fetchSemanticsNodes().isNotEmpty()
+                }
+            }
+
+            stage("lists-2-and-3") {
+                // List 2, then list 3, in Battles's order.
+                composeRule.onNodeWithText("Next").performScrollTo().performClick()
+                waitForText("Did you run out of these also?")
+                composeRule.onNodeWithText("Next").performScrollTo().performClick()
+                waitForText("Your pantry")
+                assertTrue(
+                    composeRule.onAllNodes(hasTagPrefix("recon-pantry-"))
+                        .fetchSemanticsNodes().isNotEmpty(),
+                )
+            }
+
+            stage("finish-and-shop") {
+                // Finish: the week plans only now, and the shopping list
+                // exists only after the plan, last in the flow.
+                composeRule.onNodeWithText("Finish and plan the week").performScrollTo().performClick()
+                waitForText("Swap")
+                composeRule.onNodeWithTag("tab-List").performClick()
+                waitForText("This week's shopping")
+            }
         }
     }
 
