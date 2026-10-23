@@ -30,6 +30,7 @@ class BackupShareTest {
     @Test fun shareTextTellsTheReceiverWhatImportingDoes() {
         assertTrue(BackupShare.SHARE_TEXT.contains("Import backup"))
         assertTrue(BackupShare.SHARE_TEXT.contains("replaces"))
+        assertTrue(BackupShare.SHARE_TEXT.contains("plans are not in the file"))
     }
 
     @Test fun importWordingSaysReplaceAndNotLiveSharing() {
@@ -37,5 +38,15 @@ class BackupShareTest {
         assertTrue(message.contains("replaces everything"))
         assertTrue(message.contains("not a live"))
         assertTrue(message.contains("last import wins"))
+    }
+
+    @Test fun importWordingAdmitsPlansAreClearedNotCarried() {
+        // A backup holds no plans: applyBackup clears the phone's plan
+        // and grocery rows (they were priced from the old book), so the
+        // warning must say that instead of implying the sender's plan
+        // arrives with the file.
+        val message = BackupShare.IMPORT_REPLACES_MESSAGE
+        assertTrue(message.contains("Plans and shopping lists are not in a backup"))
+        assertTrue(message.contains("clears"))
     }
 }

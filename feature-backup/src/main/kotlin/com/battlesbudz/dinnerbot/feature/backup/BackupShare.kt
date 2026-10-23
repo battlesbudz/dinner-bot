@@ -33,19 +33,26 @@ object BackupShare {
     const val SHARE_TEXT: String =
         "This is a Dinner Bot backup file. Open Dinner Bot on your phone, tap " +
             "Import backup in Settings, and pick this file. Importing replaces " +
-            "the Dinner Bot data on that phone with this backup's contents."
+            "that phone's settings, prices, pantry, stock, ratings, and barcode " +
+            "links with this backup's contents, and clears its current plan " +
+            "and shopping list — plans are not in the file."
 
     /**
      * The plain wording shown before an import runs (Epic issue #9's
      * acceptance: import copy is plain and accurate). Importing replaces
-     * the current data on this phone wholesale; it is a copy at a moment
-     * in time, not a live shared plan.
+     * the current data on this phone wholesale; plans and shopping lists
+     * are not part of a backup and are cleared by an import, not carried
+     * over; and a backup is a copy at a moment in time, not a live
+     * shared plan.
      */
     const val IMPORT_REPLACES_MESSAGE: String =
         "Importing replaces everything Dinner Bot holds on this phone — " +
             "settings, prices (including corrections made here), pantry, bulk " +
-            "stock, plans, recipe ratings, and barcode links — with the " +
-            "backup's contents.\n\n" +
+            "stock, recipe ratings, barcode links, and Sunday ran-out " +
+            "records — with the backup's contents.\n\n" +
+            "Plans and shopping lists are not in a backup. Importing clears " +
+            "this phone's current plan and list; you plan a fresh week from " +
+            "the imported prices.\n\n" +
             "A backup is a copy from the moment it was made, not a live " +
             "shared plan. If both phones keep planning afterwards, the two " +
             "copies drift apart, and the last import wins."
