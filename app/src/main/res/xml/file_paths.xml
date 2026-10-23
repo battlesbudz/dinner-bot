@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider paths (Epic issue #9): the only thing this provider can
+  serve is the backup share copy in the app cache. The shared file is
+  the Dinner Bot backup JSON, written fresh on each share; nothing else
+  on the phone is reachable through it.
+-->
+<paths>
+    <cache-path name="shared_backups" path="shared_backups/" />
+</paths>

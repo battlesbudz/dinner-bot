@@ -12,8 +12,8 @@ android {
         applicationId = "com.battlesbudz.dinnerbot"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.4.0"
+        versionCode = 12
+        versionName = "0.4.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -78,6 +78,8 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
     implementation(libs.activity.compose)
+    // FileProvider for the backup share sheet (Epic issue #9).
+    implementation(libs.core.ktx)
     implementation(libs.lifecycle.runtime.ktx)
     implementation(libs.coroutines.android)
     testImplementation(libs.junit)

@@ -2,6 +2,7 @@ package com.battlesbudz.dinnerbot
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +34,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.Composable
@@ -45,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import com.battlesbudz.dinnerbot.core.data.BarcodeLinkEntity
 import com.battlesbudz.dinnerbot.core.data.CookCheckoffEntity
@@ -78,6 +82,7 @@ import com.battlesbudz.dinnerbot.feature.backup.BackupBarcodeLink
 import com.battlesbudz.dinnerbot.feature.backup.BackupData
 import com.battlesbudz.dinnerbot.feature.backup.BackupRecipeRating
 import com.battlesbudz.dinnerbot.feature.backup.BackupEngine
+import com.battlesbudz.dinnerbot.feature.backup.BackupShare
 import com.battlesbudz.dinnerbot.feature.grocerylist.GroceryRow
 import com.battlesbudz.dinnerbot.feature.grocerylist.GroceryListScreen
 import com.battlesbudz.dinnerbot.feature.grocerylist.ReconciliationMerge
@@ -906,6 +911,71 @@ private fun DinnerBotApp(
         }
     }
 
+    // The import confirmation (Epic issue #9): importing replaces the
+    // data on this phone, and the wording says so before the picker
+    // opens, not after the damage is done.
+    var showImportConfirm by remember { mutableStateOf(false) }
+
+    /**
+     * The household's backup as JSON. Export saves this text and share
+     * sends this text: one file, two doors, exactly the D-V2-1 design.
+     */
+    fun currentBackupJson(): String {
+        val current = settings ?: OnboardingDefaults.initialSettings()
+        return BackupEngine.export(
+            BackupData(
+                settings = current,
+                priceItems = priceItems,
+                pantryItems = pantryItems,
+                bulkStock = bulkStocks,
+                recipeRatings = ratings.map { (id, rating) ->
+                    BackupRecipeRating(id, rating)
+                },
+                barcodeLinks = barcodeLinks.map { link ->
+                    BackupBarcodeLink(link.barcode, link.itemId)
+                },
+                ranOutEvents = ranOutEvents,
+                cookCheckoffs = cookCheckoffs,
+            ),
+        )
+    }
+
+    /**
+     * Share the backup file through the system share sheet (Epic issue
+     * #9). The JSON is written to the app cache's share directory, a
+     * FileProvider URI is handed to the sheet with a read grant, and the
+     * receiving phone imports the file like any other backup.
+     */
+    fun shareBackup() {
+        val text = currentBackupJson()
+        scope.launch {
+            val uri = withContext(Dispatchers.IO) {
+                runCatching {
+                    val file = BackupShare.shareFileIn(context.cacheDir)
+                    file.parentFile?.mkdirs()
+                    file.writeText(text, Charsets.UTF_8)
+                    FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file,
+                    )
+                }.getOrNull()
+            }
+            if (uri == null) {
+                statusMessage = "That backup could not be prepared for sharing."
+            } else {
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = BackupShare.MIME_TYPE
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    putExtra(Intent.EXTRA_SUBJECT, BackupShare.SHARE_SUBJECT)
+                    putExtra(Intent.EXTRA_TEXT, BackupShare.SHARE_TEXT)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(send, BackupShare.CHOOSER_TITLE))
+            }
+        }
+    }
+
     when {
         loading && settings == null -> Box(Modifier.fillMaxSize().padding(16.dp)) {
             Text("Loading Dinner Bot...")
@@ -1475,36 +1545,67 @@ private fun DinnerBotApp(
                             statusMessage?.let {
                                 Text(it, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
                             }
-                            Row(
+                            // Backup and sharing (Epic issue #9, D-V2-1):
+                            // the backup file IS the sharing. Export saves
+                            // it, Share sends the same file through the
+                            // system share sheet, and Import restores a
+                            // file on this phone, replacing what is here.
+                            Column(
                                 modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                Button(
-                                    onClick = {
-                                        pendingExport = BackupEngine.export(
-                                            BackupData(
-                                                settings = currentSettings,
-                                                priceItems = priceItems,
-                                                pantryItems = pantryItems,
-                                                bulkStock = bulkStocks,
-                                                recipeRatings = ratings.map { (id, rating) ->
-                                                    BackupRecipeRating(id, rating)
-                                                },
-                                                barcodeLinks = barcodeLinks.map { link ->
-                                                    BackupBarcodeLink(link.barcode, link.itemId)
-                                                },
-                                                ranOutEvents = ranOutEvents,
-                                                cookCheckoffs = cookCheckoffs,
-                                            ),
-                                        )
-                                        exportLauncher.launch("dinner-bot-backup.json")
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                ) { Text("Export backup") }
-                                Button(
-                                    onClick = { importLauncher.launch(arrayOf("application/json")) },
-                                    modifier = Modifier.weight(1f),
+                                Text(
+                                    "Backup and sharing",
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                Text(
+                                    "Export saves your Dinner Bot backup as a file. Share sends " +
+                                        "the same file through an app you already use — a message, " +
+                                        "a drive folder, email — so someone else in the household " +
+                                        "can import it on their phone. There is no Dinner Bot " +
+                                        "account or server; the file is the sharing.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            pendingExport = currentBackupJson()
+                                            exportLauncher.launch(BackupShare.FILE_NAME)
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                    ) { Text("Export backup") }
+                                    Button(
+                                        onClick = { shareBackup() },
+                                        modifier = Modifier.weight(1f),
+                                    ) { Text("Share backup") }
+                                }
+                                OutlinedButton(
+                                    onClick = { showImportConfirm = true },
+                                    modifier = Modifier.fillMaxWidth(),
                                 ) { Text("Import backup") }
+                            }
+                            if (showImportConfirm) {
+                                AlertDialog(
+                                    onDismissRequest = { showImportConfirm = false },
+                                    title = { Text("Import a backup?") },
+                                    text = { Text(BackupShare.IMPORT_REPLACES_MESSAGE) },
+                                    confirmButton = {
+                                        TextButton(
+                                            onClick = {
+                                                showImportConfirm = false
+                                                importLauncher.launch(arrayOf("application/json"))
+                                            },
+                                        ) { Text("Choose backup file") }
+                                    },
+                                    dismissButton = {
+                                        TextButton(
+                                            onClick = { showImportConfirm = false },
+                                        ) { Text("Cancel") }
+                                    },
+                                )
                             }
                         }
                     }
