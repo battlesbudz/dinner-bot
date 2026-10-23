@@ -28,7 +28,11 @@ data class RecipePhoto(
 /** Pure rules for recipe photo references (Epic issue #10). */
 object RecipePhotos {
 
-    /** App-local folder (under the app's files directory) holding photo files. */
+    /**
+     * App-local folder (under the app's no-backup files directory, so
+     * Android Auto Backup never uploads a photo off the phone) holding
+     * photo files.
+     */
     const val DIRECTORY_NAME: String = "recipe_photos"
 
     /**

@@ -130,6 +130,45 @@ class RecipePhotoInstrumentedTest {
         }
     }
 
+    /**
+     * A picked camera JPEG whose pixels are landscape but whose EXIF
+     * orientation says rotate 90 must be stored portrait: the store
+     * applies the orientation to the pixels, because the JPEG it writes
+     * carries no EXIF of its own. A successful save also leaves no
+     * temporary file behind (the write is temp-then-move, so a failed
+     * replacement can never truncate the previous photo).
+     */
+    @Test fun exifOrientationIsAppliedAndNoTempFileRemains() {
+        val source = File(context.cacheDir, "picked-exif.jpg")
+        FileOutputStream(source).use { out ->
+            Bitmap.createBitmap(240, 160, Bitmap.Config.ARGB_8888).apply {
+                eraseColor(Color.rgb(40, 120, 200))
+            }.compress(Bitmap.CompressFormat.JPEG, 90, out)
+        }
+        val exif = android.media.ExifInterface(source.path)
+        exif.setAttribute(
+            android.media.ExifInterface.TAG_ORIENTATION,
+            android.media.ExifInterface.ORIENTATION_ROTATE_90.toString(),
+        )
+        exif.saveAttributes()
+
+        val saved = RecipePhotoStore.savePickedPhoto(
+            context, "exif-recipe", Uri.fromFile(source), "Household photo", 2L,
+        )
+        assertNotNull(saved)
+        val stored = RecipePhotoStore.fileFor(context, saved!!)
+        assertTrue(stored.exists())
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeFile(stored.path, bounds)
+        assertTrue(
+            "stored photo must be portrait (was ${bounds.outWidth}x${bounds.outHeight})",
+            bounds.outHeight == 240 && bounds.outWidth == 160,
+        )
+        assertTrue(
+            File(RecipePhotoStore.directory(context), "${saved.fileName}.tmp").exists().not(),
+        )
+    }
+
     @Test fun photoDisplaysOnRecipeScreenAndWeekViewAndAbsentRecipeIsUnchanged() {
         ActivityScenario.launch(MainActivity::class.java).use {
             waitForText("Dinner Bot recipes")
