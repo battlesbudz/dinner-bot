@@ -136,6 +136,13 @@ data class GroceryLine(
     val estimatedPackPriceCents: Int,
     val portionCostCents: Int? = null,
     val checkedOff: Boolean = false,
+    /**
+     * True when this line exists (or was topped up to a full pack)
+     * because a Sunday reconciliation confirmed the item ran out
+     * (Phase V2-7). Inside a fortnight such a line for week 2 belongs to
+     * the top-up shop, never to the big trip that already happened.
+     */
+    val reconciliationAdded: Boolean = false,
 )
 
 @Serializable
@@ -165,6 +172,13 @@ data class HouseholdSettings(
     val onboardingComplete: Boolean = false,
     /** Local on-device reminders (Phase V2-4); every reminder starts off. */
     val reminders: ReminderSettings = ReminderSettings(),
+    /**
+     * Ids of stored plans whose cooking cycle a Sunday reconciliation has
+     * already consumed (Phase V2-7): a completed check, or the lighter
+     * week-2 check of a fortnight, marks its source plans here so the
+     * same week is never reconciled twice.
+     */
+    val reconciledPlanIds: List<String> = emptyList(),
 )
 
 object HouseholdRules {

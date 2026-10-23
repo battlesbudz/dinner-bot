@@ -42,13 +42,28 @@ object Costing {
     fun pantryCoveredItemIds(
         pantryOwnedNames: Collection<String>,
         items: Collection<PriceItem>,
-    ): Set<String> {
-        val pantryWords = pantryOwnedNames.map { normalizedWords(it) }.filter { it.isNotEmpty() }
-        if (pantryWords.isEmpty()) return emptySet()
-        return items.filter { item ->
-            val itemWords = normalizedWords(item.name)
-            itemWords.isNotEmpty() && pantryWords.any { words -> endsWithWords(itemWords, words) }
-        }.map { it.id }.toSet()
+    ): Set<String> = items
+        .filter { pantryNamesCoveringItem(it, pantryOwnedNames).isNotEmpty() }
+        .map { it.id }
+        .toSet()
+
+    /**
+     * The owned pantry entry names that cover [item] under the same
+     * whole-word-ending rule [pantryCoveredItemIds] uses. The Sunday
+     * reconciliation write-back (Phase V2-7) flips exactly these entries
+     * to not owned when their item is confirmed ran out, so the planner
+     * stops treating the item as already home.
+     */
+    fun pantryNamesCoveringItem(
+        item: PriceItem,
+        pantryOwnedNames: Collection<String>,
+    ): List<String> {
+        val itemWords = normalizedWords(item.name)
+        if (itemWords.isEmpty()) return emptyList()
+        return pantryOwnedNames.filter { name ->
+            val words = normalizedWords(name)
+            words.isNotEmpty() && endsWithWords(itemWords, words)
+        }
     }
 
     /** True when [words] ends with [suffix] as whole words; a full-length suffix is an exact match. */

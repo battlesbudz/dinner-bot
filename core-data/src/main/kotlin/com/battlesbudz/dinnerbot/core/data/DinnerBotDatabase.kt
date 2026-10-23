@@ -48,6 +48,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * table and row carries over untouched, which the instrumented
  * migration test proves from a populated v6 database.
  *
+ * Version 8 (Phase V2-7, v0.4.0) adds the Sunday reconciliation state
+ * through [MIGRATION_7_8]: the ran_out_events and cook_checkoffs tables
+ * (both created empty; they are working state that accumulates from the
+ * upgrade on), grocery_items.reconciliationAdded (whether a line came
+ * from a reconciliation), and settings.reconciledPlanIdsJson (the plan
+ * ids whose cycles a reconciliation has consumed). Every v7 table and
+ * row carries over untouched, which the instrumented migration test
+ * proves from a populated v7 database.
+ *
  * fallbackToDestructiveMigration remains only as a pre-1.0 safety net for
  * development installs; with a real migration registered for every version
  * step it never triggers on a real upgrade path.
@@ -64,8 +73,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RecipeRatingEntity::class,
         BarcodeLinkEntity::class,
         IngredientNutritionEntity::class,
+        RanOutEventEntity::class,
+        CookCheckoffEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class DinnerBotDatabase : RoomDatabase() {
@@ -79,6 +90,8 @@ abstract class DinnerBotDatabase : RoomDatabase() {
     abstract fun recipeRatingDao(): RecipeRatingDao
     abstract fun barcodeLinkDao(): BarcodeLinkDao
     abstract fun ingredientNutritionDao(): IngredientNutritionDao
+    abstract fun ranOutDao(): RanOutDao
+    abstract fun cookCheckoffDao(): CookCheckoffDao
 
     companion object {
         /** v2 to v3: create the recipe_ratings table. Nothing else changes. */
@@ -135,9 +148,36 @@ abstract class DinnerBotDatabase : RoomDatabase() {
             }
         }
 
+        /** v7 to v8: Sunday reconciliation state (Phase V2-7). Additive only. */
+        val MIGRATION_7_8: Migration = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `ran_out_events` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `itemKey` TEXT NOT NULL, " +
+                        "`displayName` TEXT NOT NULL, `stapleSide` INTEGER NOT NULL, " +
+                        "`priceItemId` TEXT, `bulkItemId` TEXT, `pantryStapleName` TEXT, " +
+                        "`dateMarked` TEXT NOT NULL, `source` TEXT NOT NULL, `state` TEXT NOT NULL, " +
+                        "`cyclePlanId` TEXT)",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `cook_checkoffs` (" +
+                        "`planId` TEXT NOT NULL, `day` TEXT NOT NULL, `itemKey` TEXT NOT NULL, " +
+                        "`checked` INTEGER NOT NULL, PRIMARY KEY(`planId`, `day`, `itemKey`))",
+                )
+                db.execSQL(
+                    "ALTER TABLE `grocery_items` ADD COLUMN `reconciliationAdded` INTEGER NOT NULL DEFAULT 0",
+                )
+                db.execSQL(
+                    "ALTER TABLE `settings` ADD COLUMN `reconciledPlanIdsJson` TEXT NOT NULL DEFAULT '[]'",
+                )
+            }
+        }
+
         fun create(context: Context): DinnerBotDatabase =
             Room.databaseBuilder(context.applicationContext, DinnerBotDatabase::class.java, "dinner-bot.db")
-                .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(
+                    MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8,
+                )
                 .fallbackToDestructiveMigration()
                 .build()
     }

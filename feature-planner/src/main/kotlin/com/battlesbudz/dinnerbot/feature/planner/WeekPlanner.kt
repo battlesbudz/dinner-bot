@@ -394,8 +394,13 @@ object WeekPlanner {
         priceItems: List<PriceItem>,
     ): FortnightPlan {
         val itemsById = priceItems.associateBy { it.id }
-        val topUp = week2.lines.filter { Perishables.isTopUpLine(it, itemsById[it.itemId]) }
-        val bigTrip = week1.lines + week2.lines.filterNot { Perishables.isTopUpLine(it, itemsById[it.itemId]) }
+        // A week 2 line a Sunday reconciliation added (Phase V2-7) is
+        // shopped with the top-up, never with the big trip: the trip is
+        // already done by the time the week 2 check runs.
+        fun isTopUp(line: GroceryLine): Boolean =
+            line.reconciliationAdded || Perishables.isTopUpLine(line, itemsById[line.itemId])
+        val topUp = week2.lines.filter { isTopUp(it) }
+        val bigTrip = week1.lines + week2.lines.filterNot { isTopUp(it) }
         val notes = mutableListOf<String>()
         if (topUp.isNotEmpty()) {
             val topUpCash = topUp.sumOf { it.packsToBuy * it.estimatedPackPriceCents }

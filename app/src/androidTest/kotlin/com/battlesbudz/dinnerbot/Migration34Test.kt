@@ -140,10 +140,11 @@ class Migration34Test {
                 DinnerBotDatabase.MIGRATION_4_5,
                 DinnerBotDatabase.MIGRATION_5_6,
                 DinnerBotDatabase.MIGRATION_6_7,
+                DinnerBotDatabase.MIGRATION_7_8,
             )
             .build()
         try {
-            assertEquals(7, db.openHelper.readableDatabase.version)
+            assertEquals(8, db.openHelper.readableDatabase.version)
 
             // Corrected price and its flag survive; the new column starts empty.
             val onions = db.priceItemDao().getById("yellow-onions")!!

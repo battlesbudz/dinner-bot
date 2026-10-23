@@ -86,6 +86,9 @@ data class GroceryItemEntity(
     val packPriceCents: Int,
     val portionCostCents: Int?,
     val checkedOff: Boolean,
+    /** Phase V2-7: the line came from (or was topped up by) a Sunday reconciliation. */
+    @ColumnInfo(defaultValue = "0")
+    val reconciliationAdded: Boolean = false,
 )
 
 /**
@@ -153,4 +156,40 @@ data class SettingsEntity(
     /** JSON-encoded ReminderSettings (Phase V2-4); "{}" decodes to every reminder off. */
     @ColumnInfo(defaultValue = "'{}'")
     val remindersJson: String = "{}",
+    /** JSON-encoded List<String>: plan ids whose cycle a reconciliation consumed (Phase V2-7). */
+    @ColumnInfo(defaultValue = "[]")
+    val reconciledPlanIdsJson: String = "[]",
+)
+
+/**
+ * One dated ran-out record (Phase V2-7): marked while cooking, inferred
+ * and confirmed or dismissed at a Sunday reconciliation, or checked off
+ * the pantry list there. [source] and [state] store the enum names.
+ */
+@Entity(tableName = "ran_out_events")
+data class RanOutEventEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val itemKey: String,
+    val displayName: String,
+    val stapleSide: Boolean,
+    val priceItemId: String?,
+    val bulkItemId: String?,
+    val pantryStapleName: String?,
+    val dateMarked: String,
+    val source: String,
+    val state: String,
+    val cyclePlanId: String?,
+)
+
+/**
+ * Ingredient check-offs inside one planned dinner (Phase V2-7, step 0):
+ * working state for the cook view so a half-cooked night can be resumed.
+ * Cleared when the plan is replaced.
+ */
+@Entity(tableName = "cook_checkoffs", primaryKeys = ["planId", "day", "itemKey"])
+data class CookCheckoffEntity(
+    val planId: String,
+    val day: String,
+    val itemKey: String,
+    val checked: Boolean,
 )

@@ -63,6 +63,7 @@ object PlanMapper {
         packPriceCents = estimatedPackPriceCents,
         portionCostCents = portionCostCents,
         checkedOff = checkedOff,
+        reconciliationAdded = reconciliationAdded,
     )
 
     fun GroceryItemEntity.toModel(): GroceryLine = GroceryLine(
@@ -74,5 +75,6 @@ object PlanMapper {
         estimatedPackPriceCents = packPriceCents,
         portionCostCents = portionCostCents,
         checkedOff = checkedOff,
+        reconciliationAdded = reconciliationAdded,
     )
 }

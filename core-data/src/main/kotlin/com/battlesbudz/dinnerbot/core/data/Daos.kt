@@ -187,6 +187,76 @@ interface IngredientNutritionDao {
 }
 
 @Dao
+interface RanOutDao {
+    @Query("SELECT * FROM ran_out_events ORDER BY dateMarked, id")
+    suspend fun getAll(): List<RanOutEventEntity>
+
+    @Query("SELECT * FROM ran_out_events WHERE state = :state ORDER BY dateMarked, id")
+    suspend fun getByState(state: String): List<RanOutEventEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(event: RanOutEventEntity): Long
+
+    @Query("UPDATE ran_out_events SET state = :state WHERE id = :id")
+    suspend fun setState(id: Long, state: String)
+
+    /** Un-marking in the cook view removes that ingredient's pending cooking mark. */
+    @Query("DELETE FROM ran_out_events WHERE itemKey = :itemKey AND state = 'PENDING' AND source = 'COOKING'")
+    suspend fun deletePendingCookingMark(itemKey: String)
+
+    /** Restock bookkeeping: every confirmed record for one priced item. */
+    @Query("UPDATE ran_out_events SET state = 'RESTOCKED' WHERE state = 'CONFIRMED' AND priceItemId = :itemId")
+    suspend fun markRestockedForItem(itemId: String)
+
+    /** Restock bookkeeping: every confirmed record for one pantry staple name. */
+    @Query(
+        "UPDATE ran_out_events SET state = 'RESTOCKED' WHERE state = 'CONFIRMED' " +
+            "AND pantryStapleName = :name COLLATE NOCASE"
+    )
+    suspend fun markRestockedForStaple(name: String)
+
+    /**
+     * Retire carried inference once a session decides it: the confirmed
+     * or dismissed outcome row replaces the pending carry for the key.
+     */
+    @Query(
+        "DELETE FROM ran_out_events WHERE state = 'PENDING' " +
+            "AND source = 'INFERRED' AND itemKey IN (:keys)",
+    )
+    suspend fun deletePendingInferred(keys: List<String>)
+
+    @Query("DELETE FROM ran_out_events")
+    suspend fun deleteAll()
+}
+
+@Dao
+interface CookCheckoffDao {
+    @Query("SELECT * FROM cook_checkoffs")
+    suspend fun getAll(): List<CookCheckoffEntity>
+
+    @Query("SELECT * FROM cook_checkoffs WHERE planId = :planId")
+    suspend fun getForPlan(planId: String): List<CookCheckoffEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(checkoff: CookCheckoffEntity)
+
+    @Query("DELETE FROM cook_checkoffs WHERE planId = :planId")
+    suspend fun deleteForPlan(planId: String)
+
+    /**
+     * A night's check-offs belong to the dinner that was planned when
+     * they were ticked; when that dinner is replaced (a swap, or the
+     * night toggled off and on), they clear so a replacement dinner is
+     * never mistaken for cooked (Codex review, PR #20).
+     */
+    @Query("DELETE FROM cook_checkoffs WHERE planId = :planId AND day = :day")
+    suspend fun deleteForPlanAndDay(planId: String, day: String)
+
+    @Query("DELETE FROM cook_checkoffs")
+    suspend fun deleteAll()
+}
+
+@Dao
 interface SettingsDao {
     @Query("SELECT * FROM settings WHERE id = 1")
     suspend fun get(): SettingsEntity?

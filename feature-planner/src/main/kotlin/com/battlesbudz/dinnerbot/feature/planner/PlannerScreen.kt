@@ -85,6 +85,8 @@ internal fun NightCard(
     onNotCookingRequest: () -> Unit,
     onCookThisNight: () -> Unit,
     onRate: (RecipeRating?) -> Unit,
+    /** Open this night's cook view (Phase V2-7): check-offs and ran-out marks. */
+    onCook: () -> Unit = {},
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -125,6 +127,9 @@ internal fun NightCard(
                     TextButton(onClick = onNotCookingRequest) { Text("Not cooking") }
                 }
             }
+            // The cook view (Phase V2-7): tonight's ingredients with
+            // check-offs, and the ran-out marking Sunday's check consumes.
+            TextButton(onClick = onCook) { Text("Start cooking") }
             // Rate this dinner after cooking it. Tapping the active
             // thumb again clears the rating.
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -159,6 +164,8 @@ fun PlannerScreen(
     onSetNightCooking: (String, Boolean, String?) -> Unit = { _, _, _ -> },
     /** Plan two weeks on one trip instead (Phase V2-3); null hides the button. */
     onGenerateTwoWeeks: (() -> Unit)? = null,
+    /** Open one night's cook view (Phase V2-7), by night code. */
+    onCookNight: (String) -> Unit = {},
 ) {
     // The day whose not-cooking reason is being picked, if any.
     var reasonForDay by remember { mutableStateOf<String?>(null) }
@@ -224,6 +231,7 @@ fun PlannerScreen(
                 onNotCookingRequest = { reasonForDay = night.day },
                 onCookThisNight = { onSetNightCooking(night.day, true, null) },
                 onRate = { rating -> onRate(night.recipeId, rating) },
+                onCook = { onCookNight(night.day) },
             )
         }
 

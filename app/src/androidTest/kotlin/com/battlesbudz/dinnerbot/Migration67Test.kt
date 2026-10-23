@@ -140,10 +140,11 @@ class Migration67Test {
                 DinnerBotDatabase.MIGRATION_4_5,
                 DinnerBotDatabase.MIGRATION_5_6,
                 DinnerBotDatabase.MIGRATION_6_7,
+                DinnerBotDatabase.MIGRATION_7_8,
             )
             .build()
         try {
-            assertEquals(7, db.openHelper.readableDatabase.version)
+            assertEquals(8, db.openHelper.readableDatabase.version)
 
             // User data survives whole: corrected price, rating, barcode
             // link, pantry, stock, settings, and the saved plan.

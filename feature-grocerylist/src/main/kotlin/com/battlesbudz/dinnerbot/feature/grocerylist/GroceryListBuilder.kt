@@ -88,8 +88,12 @@ object GroceryListBuilder {
         priceItems: List<PriceItem>,
     ): FortnightSections {
         val itemsById = priceItems.associateBy { it.id }
-        val topUp = week2Lines.filter { Perishables.isTopUpLine(it, itemsById[it.itemId]) }
-        val bigTrip = week1Lines + week2Lines.filterNot { Perishables.isTopUpLine(it, itemsById[it.itemId]) }
+        // Reconciliation-added week 2 lines (Phase V2-7) shop with the
+        // top-up: the big trip predates the week 2 check that added them.
+        fun isTopUp(line: GroceryLine): Boolean =
+            line.reconciliationAdded || Perishables.isTopUpLine(line, itemsById[line.itemId])
+        val topUp = week2Lines.filter { isTopUp(it) }
+        val bigTrip = week1Lines + week2Lines.filterNot { isTopUp(it) }
         return FortnightSections(
             bigTripLines = bigTrip,
             topUpLines = topUp,
