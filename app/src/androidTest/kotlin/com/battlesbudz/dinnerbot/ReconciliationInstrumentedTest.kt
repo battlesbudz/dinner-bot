@@ -165,9 +165,19 @@ class ReconciliationInstrumentedTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             planAWeek()
 
-            // Roll the stored week's start back so it counts as finished;
-            // the in-memory state is stale, so the gate reads the finished
-            // plan from the store when Regenerate is tapped.
+            // During the week: cook the first dinner and mark one of its
+            // ingredients ran out. That pending mark is what the Sunday
+            // gate opens for.
+            openFirstCookView()
+            composeRule.onAllNodes(hasTagPrefix(USED_PREFIX))[0]
+                .performScrollTo().performClick()
+            composeRule.onAllNodes(hasTagPrefix(RANOUT_PREFIX))[0]
+                .performScrollTo().performClick()
+            composeRule.onNodeWithText("Back to the week").performScrollTo().performClick()
+            waitForText("Swap")
+
+            // Roll the stored week's start back so it counts as finished.
+            // The gate re-reads the store when Regenerate is tapped.
             val dbFile = context.getDatabasePath("dinner-bot.db")
             val sqlite = android.database.sqlite.SQLiteDatabase.openDatabase(
                 dbFile.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READWRITE,
@@ -175,14 +185,24 @@ class ReconciliationInstrumentedTest {
             sqlite.execSQL("UPDATE plans SET weekStart = '2020-01-06'")
             sqlite.close()
 
-            // Starting a new week opens reconciliation FIRST: the Sunday
-            // check shows before any new planning happens. (The stored
-            // plan was never cooked from, so lists 1 and 2 are empty and
-            // the flow opens on the pantry list.)
+            // Starting the new week opens reconciliation BEFORE any
+            // planning, on list 1: the things she marked ran out.
             composeRule.onNodeWithText("Regenerate week").performScrollTo().performClick()
-            waitForText("Sunday check")
-            composeRule.onAllNodesWithTag("recon-pantry-list").fetchSemanticsNodes()
-                .also { assertTrue(it.isNotEmpty()) }
+            waitForText("These are the things you indicated you ran out of")
+            composeRule.waitUntil(timeoutMillis = 15_000) {
+                composeRule.onAllNodes(hasTagPrefix("recon-marked-"))
+                    .fetchSemanticsNodes().isNotEmpty()
+            }
+
+            // List 2, then list 3, in Battles's order.
+            composeRule.onNodeWithText("Next").performScrollTo().performClick()
+            waitForText("Did you run out of these also?")
+            composeRule.onNodeWithText("Next").performScrollTo().performClick()
+            waitForText("Your pantry")
+            assertTrue(
+                composeRule.onAllNodes(hasTagPrefix("recon-pantry-"))
+                    .fetchSemanticsNodes().isNotEmpty(),
+            )
 
             // Finish: the week plans only now, and the shopping list
             // exists only after the plan, last in the flow.
