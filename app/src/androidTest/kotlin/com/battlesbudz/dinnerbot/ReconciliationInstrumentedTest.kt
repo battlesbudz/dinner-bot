@@ -69,7 +69,12 @@ class ReconciliationInstrumentedTest {
                     weeklyBudgetCents = 100_00,
                     wontEatJson = "[]",
                     dietNotes = "",
-                    pantryStaplesJson = "[]",
+                    // Onboarding's default: every staple pre-ticked, so
+                    // the seeded pantry is owned (list 3 has rows).
+                    pantryStaplesJson = "[\"Vegetable oil\",\"Butter\",\"Salt\"," +
+                        "\"Black pepper\",\"Garlic powder\",\"Onion powder\"," +
+                        "\"Chili powder\",\"Ground cumin\",\"Paprika\",\"Soy sauce\"," +
+                        "\"Long grain white rice\",\"Flour\",\"Sugar\"]",
                     onboardingComplete = true,
                 ),
             )
@@ -207,10 +212,12 @@ class ReconciliationInstrumentedTest {
                 }
             }
 
-            stage("lists-2-and-3") {
-                // List 2, then list 3, in Battles's order.
+            stage("list-2") {
                 composeRule.onNodeWithText("Next").performScrollTo().performClick()
                 waitForText("Did you run out of these also?")
+            }
+
+            stage("list-3") {
                 composeRule.onNodeWithText("Next").performScrollTo().performClick()
                 waitForText("Your pantry")
                 assertTrue(
