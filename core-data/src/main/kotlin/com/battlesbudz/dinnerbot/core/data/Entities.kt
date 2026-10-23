@@ -128,6 +128,20 @@ data class BarcodeLinkEntity(
     val createdAtMillis: Long,
 )
 
+/**
+ * One household photo per recipe (Epic issue #10): a reference to the
+ * image file in app-local storage plus its credit. Absence of a row
+ * means the recipe has no photo and renders exactly as before. The image
+ * bytes are never in the database and never in the backup file.
+ */
+@Entity(tableName = "recipe_photos")
+data class RecipePhotoEntity(
+    @PrimaryKey val recipeId: String,
+    val fileName: String,
+    val credit: String,
+    val updatedAtMillis: Long,
+)
+
 /** One thumbs rating per recipe (Phase V2-1); absence of a row means unrated. */
 @Entity(tableName = "recipe_ratings")
 data class RecipeRatingEntity(

@@ -1,12 +1,18 @@
 package com.battlesbudz.dinnerbot.feature.recipes
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -14,6 +20,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -23,6 +31,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
 import com.battlesbudz.dinnerbot.core.model.Money
@@ -30,7 +40,10 @@ import com.battlesbudz.dinnerbot.core.model.NutritionCalculator
 import com.battlesbudz.dinnerbot.core.model.NutritionField
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Recipe
+import com.battlesbudz.dinnerbot.core.model.RecipePhoto
+import com.battlesbudz.dinnerbot.core.model.RecipePhotos
 import com.battlesbudz.dinnerbot.core.model.RecipeRating
+import java.io.File
 import kotlin.math.roundToInt
 
 @Composable
@@ -40,6 +53,8 @@ fun RecipeListScreen(
     onRecipeClick: (Recipe) -> Unit,
     modifier: Modifier = Modifier,
     ratings: Map<String, RecipeRating> = emptyMap(),
+    /** Household photo files by recipe id, for recipes that have one (Epic issue #10). */
+    photoFiles: Map<String, File> = emptyMap(),
 ) {
     val itemsById = remember(priceItems) { priceItems.associateBy { it.id } }
     LazyColumn(
@@ -58,23 +73,37 @@ fun RecipeListScreen(
             Card(
                 modifier = Modifier.fillMaxWidth().clickable { onRecipeClick(recipe) },
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(recipe.title, style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "${recipe.mainProtein} · ${recipe.cuisine} · ${recipe.activeMinutes} min",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Text(
-                        "About ${Money(perServing).format()} per serving",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    when (ratings[recipe.id]) {
-                        RecipeRating.UP -> Text("👍 Liked", style = MaterialTheme.typography.bodySmall)
-                        RecipeRating.DOWN -> Text(
-                            "👎 Not for us: out of rotation",
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    photoFiles[recipe.id]?.let { file ->
+                        RecipePhotoImage(
+                            file = file,
+                            contentDescription = "Photo of ${recipe.title}",
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(MaterialTheme.shapes.small),
+                        )
+                    }
+                    Column {
+                        Text(recipe.title, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "${recipe.mainProtein} · ${recipe.cuisine} · ${recipe.activeMinutes} min",
                             style = MaterialTheme.typography.bodySmall,
                         )
-                        null -> Unit
+                        Text(
+                            "About ${Money(perServing).format()} per serving",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        when (ratings[recipe.id]) {
+                            RecipeRating.UP -> Text("👍 Liked", style = MaterialTheme.typography.bodySmall)
+                            RecipeRating.DOWN -> Text(
+                                "👎 Not for us: out of rotation",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            null -> Unit
+                        }
                     }
                 }
             }
@@ -92,6 +121,14 @@ fun RecipeDetailScreen(
     onRate: (RecipeRating?) -> Unit = {},
     nutritionByItemId: Map<String, IngredientNutrition> = emptyMap(),
     nutritionByPantrySlug: Map<String, IngredientNutrition> = emptyMap(),
+    /** The household's photo record for this recipe, if any (Epic issue #10). */
+    photo: RecipePhoto? = null,
+    /** The photo's file in app-local storage, when it exists on this phone. */
+    photoFile: File? = null,
+    /** A photo was picked from the phone's photos; the app copies it into local storage. */
+    onPhotoPicked: (Uri) -> Unit = {},
+    onPhotoRemoved: () -> Unit = {},
+    onPhotoCreditChange: (String) -> Unit = {},
 ) {
     val itemsById = remember(priceItems) { priceItems.associateBy { it.id } }
     var servings by remember(recipe.id) { mutableStateOf(recipe.servings) }
@@ -113,6 +150,58 @@ fun RecipeDetailScreen(
         )
         if (recipe.dietTags.isNotEmpty()) {
             Text(recipe.dietTags.joinToString(", "), style = MaterialTheme.typography.bodySmall)
+        }
+
+        // Household photo (Epic issue #10, D-V2-2): the household's own
+        // photo of this dinner, attached from the phone's photos through
+        // the system photo picker (no permission needed) and stored on
+        // this phone only. No photo is bundled with the app; a recipe
+        // with none shows the add entry and otherwise renders exactly
+        // as it did before photos existed.
+        val photoPicker = rememberLauncherForActivityResult(
+            ActivityResultContracts.PickVisualMedia(),
+        ) { picked -> if (picked != null) onPhotoPicked(picked) }
+        val pickPhoto = {
+            photoPicker.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+            )
+        }
+        Text("Photo", style = MaterialTheme.typography.titleMedium)
+        if (photoFile != null) {
+            RecipePhotoImage(
+                file = photoFile,
+                contentDescription = "Photo of ${recipe.title}",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .testTag("recipe-photo"),
+            )
+            var creditDraft by remember(photo?.recipeId, photo?.credit) {
+                mutableStateOf(photo?.credit ?: RecipePhotos.DEFAULT_CREDIT)
+            }
+            OutlinedTextField(
+                value = creditDraft,
+                onValueChange = { creditDraft = it },
+                label = { Text("Photo credit") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { onPhotoCreditChange(creditDraft) }) { Text("Save credit") }
+                TextButton(onClick = pickPhoto) { Text("Change photo") }
+                TextButton(onClick = onPhotoRemoved) { Text("Remove photo") }
+            }
+        } else {
+            Text(
+                "No photo yet. When you cook this dinner, add a photo of it from " +
+                    "your phone's photos. It is stored on this phone only.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OutlinedButton(
+                onClick = pickPhoto,
+                modifier = Modifier.testTag("add-recipe-photo"),
+            ) { Text("Add a photo") }
         }
 
         // Thumbs rating: set, change, or clear. The active thumb is the

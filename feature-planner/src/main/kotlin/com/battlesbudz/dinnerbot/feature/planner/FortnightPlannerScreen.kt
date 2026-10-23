@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeRating
+import java.io.File
 
 /**
  * Two-week view (Phase V2-3): both weeks of a fortnight, each with its own
@@ -52,6 +53,8 @@ fun FortnightPlannerScreen(
      * (Phase V2-7); non-null shows its invitation. Null hides it.
      */
     onStartTopUpCheck: (() -> Unit)? = null,
+    /** Household photo files by recipe id, for nights whose dinner has one (Epic issue #10). */
+    photoFiles: Map<String, File> = emptyMap(),
 ) {
     // (weekIndex, day) whose not-cooking reason is being picked, if any.
     var reasonFor by remember { mutableStateOf<Pair<Int, String>?>(null) }
@@ -123,6 +126,7 @@ fun FortnightPlannerScreen(
             onSetNightCooking = onSetNightCooking,
             onRate = onRate,
             onCookNight = onCookNight,
+            photoFiles = photoFiles,
         )
         WeekSection(
             title = "Week 2 · starts ${plan.week2.weekStart}",
@@ -135,6 +139,7 @@ fun FortnightPlannerScreen(
             onSetNightCooking = onSetNightCooking,
             onRate = onRate,
             onCookNight = onCookNight,
+            photoFiles = photoFiles,
         )
 
         if (outOfRotationCount > 0) {
@@ -174,6 +179,7 @@ private fun WeekSection(
     onSetNightCooking: (Int, String, Boolean, String?) -> Unit,
     onRate: (String, RecipeRating?) -> Unit,
     onCookNight: (Int, String) -> Unit,
+    photoFiles: Map<String, File> = emptyMap(),
 ) {
     Text(title, style = MaterialTheme.typography.titleLarge)
     Text(
@@ -191,6 +197,7 @@ private fun WeekSection(
             onCookThisNight = { onSetNightCooking(weekIndex, night.day, true, null) },
             onRate = { rating -> onRate(night.recipeId, rating) },
             onCook = { onCookNight(weekIndex, night.day) },
+            photoFile = photoFiles[night.recipeId],
         )
     }
     week.notes.forEach { note ->

@@ -15,6 +15,7 @@ import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Quantity
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeIngredient
+import com.battlesbudz.dinnerbot.core.model.RecipePhoto
 import com.battlesbudz.dinnerbot.core.model.RecipesFile
 import com.battlesbudz.dinnerbot.core.model.ReminderSettings
 import com.battlesbudz.dinnerbot.core.model.Store
@@ -144,6 +145,20 @@ object SeedMapper {
         barcode = barcode,
         itemId = itemId,
         createdAtMillis = createdAtMillis,
+    )
+
+    fun RecipePhoto.toEntity(): RecipePhotoEntity = RecipePhotoEntity(
+        recipeId = recipeId,
+        fileName = fileName,
+        credit = credit,
+        updatedAtMillis = updatedAtMillis,
+    )
+
+    fun RecipePhotoEntity.toModel(): RecipePhoto = RecipePhoto(
+        recipeId = recipeId,
+        fileName = fileName,
+        credit = credit,
+        updatedAtMillis = updatedAtMillis,
     )
 
     fun PantryItem.toEntity(): PantryItemEntity = PantryItemEntity(id = id, name = name, owned = owned)
