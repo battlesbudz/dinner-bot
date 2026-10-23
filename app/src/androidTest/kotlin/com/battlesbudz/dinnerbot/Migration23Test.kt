@@ -137,7 +137,7 @@ class Migration23Test {
             val stored = db.recipeRatingDao().getAll().single()
             assertEquals("r1", stored.recipeId)
             assertEquals("DOWN", stored.rating)
-            assertEquals(6, db.openHelper.readableDatabase.version)
+            assertEquals(7, db.openHelper.readableDatabase.version)
         } finally {
             db.close()
         }
