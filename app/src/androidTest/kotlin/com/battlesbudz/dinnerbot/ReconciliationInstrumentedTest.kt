@@ -226,13 +226,17 @@ class ReconciliationInstrumentedTest {
                 )
             }
 
-            stage("finish-and-shop") {
-                // Finish: the week plans only now, and the shopping list
-                // exists only after the plan, last in the flow.
+            stage("finish") {
+                // Finish: the week plans only now.
                 composeRule.onNodeWithText("Finish and plan the week").performScrollTo().performClick()
                 waitForText("Swap")
+            }
+
+            stage("shop") {
+                // The shopping list exists only after the plan, last in
+                // the flow.
                 composeRule.onNodeWithTag("tab-List").performClick()
-                waitForText("This week's shopping")
+                waitForText("Shopping list")
             }
         }
     }
