@@ -206,18 +206,28 @@ class WeeklyListRi3InstrumentedTest {
             awaitStep("covered row left the list") {
                 tagCount("covered-row-russet-potatoes") == 0
             }
-            awaitStep("potatoes row became a buy line") {
-                withDb { db ->
-                    val row = db.groceryDao().getForPlan("plan-ri3")
-                        .singleOrNull { it.itemId == "russet-potatoes" }
-                    row != null && row.packsToBuy == 1 && row.coveredByPantryName == null
+            // Poll the stored rows for the buy line; on failure the
+            // assertion names exactly what the rows are instead.
+            var rowsDump = ""
+            var bought = false
+            repeat(30) {
+                if (!bought) {
+                    withDb { db ->
+                        val rows = db.groceryDao().getForPlan("plan-ri3")
+                        rowsDump = rows.joinToString {
+                            "${it.itemId} packs=${it.packsToBuy} " +
+                                "covered=${it.coveredByPantryName} " +
+                                "uncrossed=${it.uncrossed} price=${it.packPriceCents}"
+                        }
+                        bought = rows.any {
+                            it.itemId == "russet-potatoes" && it.packsToBuy == 1 &&
+                                it.coveredByPantryName == null
+                        }
+                    }
+                    if (!bought) Thread.sleep(500)
                 }
             }
-            withDb { db ->
-                val row = db.groceryDao().getForPlan("plan-ri3")
-                    .single { it.itemId == "russet-potatoes" }
-                assertTrue(row.uncrossed)
-            }
+            assertTrue("rows after uncross: $rowsDump", bought)
             // Uncrossing is a list action only: the pantry still owns potatoes.
             withDb { db ->
                 assertTrue(db.pantryDao().getAll().single { it.name == "Potatoes" }.owned)
