@@ -167,7 +167,7 @@ class RecipeEditingInstrumentedTest {
     @Test fun libraryEditMarksPersistsAndRestores() {
         ActivityScenario.launch(MainActivity::class.java).use {
             openFirstRecipe()
-            composeRule.onNodeWithTag("edit-ingredients").performClick()
+            composeRule.onNodeWithTag("edit-ingredients").performScrollTo().performClick()
             waitForTag("ingredient-remove-0")
             composeRule.onNodeWithTag("ingredient-remove-0").performClick()
             composeRule.onNodeWithTag("editor-save").performClick()
@@ -199,7 +199,7 @@ class RecipeEditingInstrumentedTest {
     @Test fun editorQuantityChangeLandsOnTheSavedRecipe() {
         ActivityScenario.launch(MainActivity::class.java).use {
             openFirstRecipe()
-            composeRule.onNodeWithTag("edit-ingredients").performClick()
+            composeRule.onNodeWithTag("edit-ingredients").performScrollTo().performClick()
             waitForTag("ingredient-qty-0")
             composeRule.onNodeWithTag("ingredient-qty-0").performClick()
             waitForTag("qty-amount")
@@ -244,7 +244,7 @@ class RecipeEditingInstrumentedTest {
             assertTrue("tonight has ingredients to edit", before.size >= 2)
             val removedName = before.first()
 
-            composeRule.onNodeWithTag("edit-ingredients").performClick()
+            composeRule.onNodeWithTag("edit-ingredients").performScrollTo().performClick()
             waitForTag("ingredient-remove-0")
             composeRule.onNodeWithTag("ingredient-remove-0").performClick()
             composeRule.onNodeWithTag("editor-save").performClick()
@@ -277,7 +277,7 @@ class RecipeEditingInstrumentedTest {
             val before = ranOutRowNames()
             assertTrue(before.size >= 2)
 
-            composeRule.onNodeWithTag("edit-ingredients").performClick()
+            composeRule.onNodeWithTag("edit-ingredients").performScrollTo().performClick()
             waitForTag("ingredient-remove-0")
             composeRule.onNodeWithTag("ingredient-remove-0").performClick()
             composeRule.onNodeWithTag("editor-save").performClick()
