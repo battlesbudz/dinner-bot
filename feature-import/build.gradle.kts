@@ -5,7 +5,9 @@ plugins {
 }
 
 android {
-    namespace = "com.battlesbudz.dinnerbot.feature.import"
+    // The Kotlin package is feature.`import`; the namespace cannot be,
+    // because "import" is a Java keyword and AGP rejects it.
+    namespace = "com.battlesbudz.dinnerbot.feature.recipeimport"
     compileSdk = 35
     defaultConfig {
         minSdk = 26
