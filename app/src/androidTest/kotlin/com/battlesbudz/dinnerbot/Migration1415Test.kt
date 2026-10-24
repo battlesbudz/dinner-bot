@@ -80,35 +80,48 @@ class Migration1415Test {
                     items.first { it.id == "user-chicken-drumsticks" }.packPriceCents,
                 )
 
-                // Her import and the rest of the household's data.
-                val imported = db.importedRecipeDao().getAll()
-                    .map { with(SeedMapper) { it.toModel() } }
-                assertEquals(1, imported.size)
-                assertEquals("Her Imported Stew", imported.single().recipe.title)
-                assertEquals(5, db.recipeDao().getAll().size)
-                assertEquals(2, db.pantryDao().getAll().size)
-                assertEquals(1, db.bulkStockDao().getAll().size)
-                assertEquals("THUMBS_UP", db.recipeRatingDao().getAll().single().rating)
-                assertEquals("0012345678905", db.barcodeLinkDao().getAll().single().barcode)
-                assertEquals(1, db.ingredientNutritionDao().getAll().size)
-                assertEquals(1, db.recipePhotoDao().getAll().size)
-                val ranOut = db.ranOutDao().getAll()
-                    .map { with(ReconciliationMapper) { it.toModel() } }
-                assertEquals(RanOutState.PENDING, ranOut.single().state)
-                assertEquals(1, db.cookCheckoffDao().getAll().size)
-                assertEquals(1, db.scanSubstitutionDao().getAll().size)
+                // The rest of the household's data, exactly as the
+                // v13 -> v14 proof reads it.
+                val saltPantry = db.pantryDao().getAll().single()
+                assertEquals("Salt", saltPantry.name)
+                assertTrue(saltPantry.owned)
+                assertEquals(4.5, db.bulkStockDao().getAll().single().amount, 0.001)
+                val settings = with(SeedMapper) { db.settingsDao().get()!!.toModel() }
+                assertEquals(4, settings.householdSize)
+                assertEquals(8000, settings.weeklyBudgetCents)
+                assertEquals("UP", db.recipeRatingDao().getAll().single().rating)
+                assertEquals(
+                    "chicken-breast",
+                    db.barcodeLinkDao().getByBarcode("012345678905")!!.itemId,
+                )
+                assertEquals(189544L, db.ingredientNutritionDao().getAll().single().fdcId)
+                assertEquals("r1.jpg", db.recipePhotoDao().getAll().single().fileName)
+                val event = with(ReconciliationMapper) {
+                    db.ranOutDao().getAll().single().toModel()
+                }
+                assertEquals(RanOutState.PENDING, event.state)
+                assertTrue(db.cookCheckoffDao().getForPlan("plan-1").single().checked)
+                assertEquals(
+                    "chicken-breast",
+                    db.scanSubstitutionDao().getAll().single().originalItemId,
+                )
                 assertEquals(1, db.recipeOverrideDao().getAll().size)
-                val settings = db.settingsDao().get()
-                assertEquals(8000, settings?.weeklyBudgetCents)
+                val hers = db.importedRecipeDao().getAll().single()
+                assertEquals("imported-1", hers.id)
+                assertEquals("Her Imported Stew", hers.title)
 
                 // v0.5.2's own rows: the covered grocery line and the
                 // keep-prompt record survive the step untouched.
-                val plan = db.planDao().getRecent(1).single()
-                val rows = db.groceryDao().getForPlan(plan.id)
-                    .map { with(PlanMapper) { it.toModel() } }
+                val rows = db.groceryDao().getForPlan("plan-1")
                 assertEquals(2, rows.size)
-                val covered = rows.first { it.coveredByPantryName != null }
-                assertEquals("Potatoes", covered.coveredByPantryName)
+                val covered = rows.filter { it.coveredByPantryName != null }
+                assertEquals(1, covered.size)
+                assertEquals("Potatoes", covered.single().coveredByPantryName)
+                assertEquals(
+                    "chicken-breast",
+                    rows.single { it.itemId == "user-chicken-drumsticks" }
+                        .substitutedForItemId,
+                )
                 assertEquals(
                     setOf("her-chicken-soup"),
                     db.keepPromptDao().getAll().map { it.recipeId }.toSet(),

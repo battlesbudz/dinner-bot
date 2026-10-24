@@ -9,6 +9,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.printToString
@@ -187,15 +189,25 @@ class GuessBackfillInstrumentedTest {
 
             composeRule.onNodeWithTag("tab-Prices").performClick()
             waitForText("Price book")
-            // The item is visibly a guess in the book (scroll first:
-            // the lazy list only composes what is on screen).
-            composeRule.onNodeWithText("spring onions").performScrollTo()
+            // The item is visibly a guess in the book. It sits at the
+            // end of the lazy list, so swipe until it is composed.
+            var composed = false
+            repeat(25) {
+                if (!composed) {
+                    composed = composeRule.onAllNodesWithText("spring onions")
+                        .fetchSemanticsNodes().isNotEmpty()
+                    if (!composed) {
+                        composeRule.onRoot().performTouchInput { swipeUp() }
+                        Thread.sleep(300)
+                    }
+                }
+            }
+            assertTrue("the spring onions row never came into view", composed)
             waitForText("Guessed price", substring = true)
             val guessText = "$${guessCents / 100}.${(guessCents % 100).toString().padStart(2, '0')}"
             // Tap THIS item's price: another book item could share the
             // same dollar text, so pick the price node nearest the
             // item's name and tap it by coordinates.
-            composeRule.onNodeWithText("spring onions").performScrollTo()
             Thread.sleep(500)
             val nameBounds = composeRule.onAllNodesWithText("spring onions")
                 .fetchSemanticsNodes().single().boundsInRoot
