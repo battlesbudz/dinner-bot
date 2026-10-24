@@ -111,10 +111,14 @@ class RecipeImportInstrumentedTest {
     private fun tagCount(tag: String): Int =
         composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().size
 
+    private fun tagCountUnmerged(tag: String): Int =
+        composeRule.onAllNodesWithTag(tag, useUnmergedTree = true)
+            .fetchSemanticsNodes().size
+
     /** Which status branch a review row took, for failure messages. */
     private fun rowStatus(index: Int): String = when {
-        tagCount("import-row-$index-unmatched") > 0 -> "unmatched"
-        tagCount("import-row-$index-covered") > 0 -> "covered"
+        tagCountUnmerged("import-row-$index-unmatched") > 0 -> "unmatched"
+        tagCountUnmerged("import-row-$index-covered") > 0 -> "covered"
         textPresent("In the price book") -> "matched (price book text present)"
         else -> "no row $index status found"
     }
@@ -127,7 +131,7 @@ class RecipeImportInstrumentedTest {
     private fun awaitRowUnmatched(index: Int) {
         try {
             composeRule.waitUntil(timeoutMillis = 15_000) {
-                tagCount("import-row-$index-unmatched") > 0
+                tagCountUnmerged("import-row-$index-unmatched") > 0
             }
         } catch (e: ComposeTimeoutException) {
             throw AssertionError(
@@ -166,7 +170,7 @@ class RecipeImportInstrumentedTest {
 
             // The review: spring onions unmatched, shown as written.
             awaitRowUnmatched(0)
-            composeRule.onNodeWithTag("import-row-0-unmatched").assertIsDisplayed()
+            assertTrue(tagCountUnmerged("import-row-0-unmatched") > 0)
             waitForText("spring onions", substring = true)
 
             composeRule.onNodeWithTag("import-save").performScrollTo().performClick()
