@@ -101,6 +101,20 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * carries over untouched, which the instrumented migration test
  * proves from a populated v12 database.
  *
+ * Version 14 (Phase RI-3, v0.5.2) carries the weekly list's new line
+ * state through [MIGRATION_13_14]: grocery_items gains
+ * coveredByPantryName (the pantry entry a crossed-out line names; null
+ * on every stored buy line), uncrossed (a buy line Andrea uncrossed
+ * for its week; 0 on every stored row), and priceGuessCents (the
+ * placeholder guess a priced-less line carries; null on priced lines),
+ * and the keep_prompt_asked table is created empty (the first-cook
+ * keep prompt's asked-once record). The plan notes in the RI-3 plan
+ * expected the uncross state to ride the plan's existing per-plan
+ * state with no schema change if it could; it cannot — a grocery row
+ * is where this list's per-line state has always lived, next to its
+ * check-off — so the migration ships instead, as the plan provided
+ * for, with the populated-v13 upgrade test proving every row intact.
+ *
  * fallbackToDestructiveMigration remains only as a pre-1.0 safety net for
  * development installs; with a real migration registered for every version
  * step it never triggers on a real upgrade path.
@@ -123,8 +137,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ScanSubstitutionEntity::class,
         RecipeOverrideEntity::class,
         ImportedRecipeEntity::class,
+        KeepPromptEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = false,
 )
 abstract class DinnerBotDatabase : RoomDatabase() {
@@ -144,6 +159,7 @@ abstract class DinnerBotDatabase : RoomDatabase() {
     abstract fun scanSubstitutionDao(): ScanSubstitutionDao
     abstract fun recipeOverrideDao(): RecipeOverrideDao
     abstract fun importedRecipeDao(): ImportedRecipeDao
+    abstract fun keepPromptDao(): KeepPromptDao
 
     companion object {
         /** v2 to v3: create the recipe_ratings table. Nothing else changes. */
@@ -306,12 +322,40 @@ abstract class DinnerBotDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v13 to v14: the weekly list's per-line state (Phase RI-3).
+         * grocery_items gains the covered-line name, the uncross flag,
+         * and the placeholder-guess column — every stored row reads as
+         * an ordinary buy line under the defaults — and the
+         * keep_prompt_asked table is created empty. Additive only; no
+         * stored row is rewritten.
+         */
+        val MIGRATION_13_14: Migration = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `grocery_items` ADD COLUMN `coveredByPantryName` TEXT",
+                )
+                db.execSQL(
+                    "ALTER TABLE `grocery_items` ADD COLUMN `uncrossed` INTEGER NOT NULL DEFAULT 0",
+                )
+                db.execSQL(
+                    "ALTER TABLE `grocery_items` ADD COLUMN `priceGuessCents` INTEGER",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `keep_prompt_asked` (" +
+                        "`recipeId` TEXT NOT NULL, `askedAtMillis` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`recipeId`))",
+                )
+            }
+        }
+
         fun create(context: Context): DinnerBotDatabase =
             Room.databaseBuilder(context.applicationContext, DinnerBotDatabase::class.java, "dinner-bot.db")
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
                     MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
                     MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
+                    MIGRATION_13_14,
                 )
                 .fallbackToDestructiveMigration()
                 .build()

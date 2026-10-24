@@ -16,9 +16,14 @@ import com.battlesbudz.dinnerbot.core.model.Store
  * from the price book. The pantry staples are priced book items like
  * everything else (v0.4.3), so an unowned staple appears as a normal
  * priced line. A priced item an owned pantry entry matches by name
- * (see [Costing.pantryCoveredItemIds]) is already home and never appears
- * either; the decision lives in Costing, so this list and the plan total
- * are computed from the same covered set and cannot disagree.
+ * (see [Costing.pantryCoveredItemIds]) is already home: since Phase RI-3
+ * it stays ON the list as a crossed-out $0 line naming the covering
+ * pantry entry (Battles's weekly-list ruling), unless Andrea uncrossed
+ * it for this week, when it is a buy line at book price. An ingredient
+ * no book item prices (an imported recipe's as-written line) appears
+ * with a labeled placeholder guess in place of a price. The decisions
+ * all live in Costing, so this list and the plan total are computed
+ * from the same costing and cannot disagree.
  */
 object GroceryListBuilder {
 
@@ -36,6 +41,7 @@ object GroceryListBuilder {
         stockOnHand: Map<String, Quantity>,
         servings: Int,
         pantryOwnedNames: Set<String> = emptySet(),
+        uncrossedItemIds: Set<String> = emptySet(),
     ): BuiltList {
         val itemsById = priceItems.associateBy { it.id }
         val dinners = plan.nights.mapNotNull { recipesById[it.recipeId] }
@@ -45,9 +51,12 @@ object GroceryListBuilder {
             itemsById,
             stockOnHand,
             pantryCoveredItemIds = Costing.pantryCoveredItemIds(pantryOwnedNames, priceItems),
+            pantryOwnedNames = pantryOwnedNames,
+            uncrossedItemIds = uncrossedItemIds,
+            forList = true,
         )
         val byStore = costed.lines.groupBy { it.store }
-            .mapValues { (_, lines) -> lines.sumOf { it.packsToBuy * it.estimatedPackPriceCents } }
+            .mapValues { (_, lines) -> lines.sumOf { lineCashCents(it) } }
         return BuiltList(
             lines = costed.lines,
             cashByStoreCents = byStore,
@@ -56,8 +65,17 @@ object GroceryListBuilder {
         )
     }
 
-    /** Estimated cash for one line: packs times the per-pack estimate. */
-    fun lineCashCents(line: GroceryLine): Int = line.packsToBuy * line.estimatedPackPriceCents
+    /**
+     * Estimated cash for one line: packs times the per-pack estimate.
+     * A pantry-covered line (Phase RI-3) is $0 — it is already home. A
+     * line carrying a placeholder guess has no pack price; the guess IS
+     * its cash, labeled as a guess wherever the line shows.
+     */
+    fun lineCashCents(line: GroceryLine): Int = when {
+        line.coveredByPantryName != null -> 0
+        line.priceGuessCents != null -> line.priceGuessCents
+        else -> line.packsToBuy * line.estimatedPackPriceCents
+    }
 
     /**
      * The two shopping sections of a two-week plan (Phase V2-3): the one

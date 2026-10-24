@@ -127,6 +127,13 @@ fun GroceryListScreen(
      * is remembered. The caller writes all of it.
      */
     onSubstitute: (GroceryRow, PriceItem, String?, Int) -> Unit = { _, _, _, _ -> },
+    /**
+     * Uncross a pantry-covered line (Phase RI-3): the covered item
+     * becomes a buy line for this week at its book price. The caller
+     * reprices the week with the item uncrossed; the pantry itself is
+     * never written by uncrossing.
+     */
+    onUncross: (GroceryRow) -> Unit = {},
 ) {
     var editing by remember { mutableStateOf<GroceryRow?>(null) }
 
@@ -384,6 +391,18 @@ fun GroceryListScreen(
             if (cameraDeniedNote) {
                 CameraDeniedNote(modifier = Modifier.padding(top = 8.dp))
             }
+            // Placeholder guesses are part of the total (Phase RI-3):
+            // say so where the total is said, and each guessed line is
+            // marked on its own row.
+            if ((rows + topUpRows).any { it.line.priceGuessCents != null }) {
+                Text(
+                    "The total includes guesses for items with no price yet; those lines " +
+                        "are marked as guesses. The real price replaces the guess the " +
+                        "first time the item is scanned or its price is corrected.",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 8.dp).testTag("guess-total-note"),
+                )
+            }
         }
         if (twoWeekTrip) {
             item {
@@ -398,7 +417,7 @@ fun GroceryListScreen(
                 )
             }
         }
-        storeSections(rows, priceItemsById, onToggleChecked, onScanRow = { row ->
+        storeSections(rows, priceItemsById, onToggleChecked, onUncross, onScanRow = { row ->
             startScan(row.line.itemId, row)
         }) { editing = it }
         if (topUpRows.isNotEmpty()) {
@@ -413,7 +432,7 @@ fun GroceryListScreen(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            storeSections(topUpRows, priceItemsById, onToggleChecked, onScanRow = { row ->
+            storeSections(topUpRows, priceItemsById, onToggleChecked, onUncross, onScanRow = { row ->
                 startScan(row.line.itemId, row)
             }) { editing = it }
         }
@@ -437,6 +456,7 @@ private fun LazyListScope.storeSections(
     rows: List<GroceryRow>,
     priceItemsById: Map<String, PriceItem>,
     onToggleChecked: (GroceryRow, Boolean) -> Unit,
+    onUncross: (GroceryRow) -> Unit,
     onScanRow: (GroceryRow) -> Unit,
     onEditPrice: (GroceryRow) -> Unit,
 ) {
@@ -452,7 +472,7 @@ private fun LazyListScope.storeSections(
             )
         }
         items(storeRows, key = { it.rowId }) { row ->
-            GroceryRowView(row, priceItemsById, onToggleChecked, onScanRow, onEditPrice)
+            GroceryRowView(row, priceItemsById, onToggleChecked, onUncross, onScanRow, onEditPrice)
         }
     }
 }
@@ -480,10 +500,16 @@ private fun GroceryRowView(
     row: GroceryRow,
     priceItemsById: Map<String, PriceItem>,
     onToggleChecked: (GroceryRow, Boolean) -> Unit,
+    onUncross: (GroceryRow) -> Unit,
     onScanRow: (GroceryRow) -> Unit,
     onEditPrice: (GroceryRow) -> Unit,
 ) {
     val line = row.line
+    val coveringName = line.coveredByPantryName
+    if (coveringName != null) {
+        CoveredRowView(row, coveringName, onUncross)
+        return
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -503,6 +529,24 @@ private fun GroceryRowView(
                     if (line.packsToBuy > 1) " · buy ${line.packsToBuy} packs" else "",
                 style = MaterialTheme.typography.bodySmall,
             )
+            // An uncrossed line (Phase RI-3): in the pantry AND being
+            // bought this week, because the pantry's kind is wrong or
+            // more is wanted. The pantry itself was never changed.
+            if (line.uncrossed) {
+                Text(
+                    "In your pantry too — buying anyway this week",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            // A placeholder guess (Phase RI-3): no real price exists
+            // for this ingredient yet, so the line says so plainly
+            // instead of wearing a price it does not have.
+            if (line.priceGuessCents != null) {
+                Text(
+                    "No price yet — this is a guess from similar items in the price book",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             // A scan swap (PR v0.4.4) says what it replaced, so the
             // list never quietly differs from the plan.
             val swappedFor = BarcodeScanLogic.displacedOriginsOf(line.substitutedForItemId)
@@ -531,15 +575,88 @@ private fun GroceryRowView(
             }
         }
         Column(horizontalAlignment = Alignment.End) {
+            if (line.priceGuessCents != null) {
+                // A guessed line has no price to correct and no book
+                // item to scan against: the guess just shows, labeled
+                // by the note on the row.
+                Text(
+                    Money(line.priceGuessCents).format(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(8.dp),
+                )
+                Text(
+                    "guess",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
+            } else {
+                Text(
+                    Money(GroceryListBuilder.lineCashCents(line)).format(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.clickable { onEditPrice(row) }.padding(8.dp),
+                )
+                TextButton(
+                    onClick = { onScanRow(row) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                ) { Text("Scan", style = MaterialTheme.typography.bodySmall) }
+            }
+        }
+    }
+}
+
+/**
+ * A pantry-covered row (Phase RI-3, Battles's weekly-list ruling): the
+ * dinner needs this item and the pantry already has it, so the row is
+ * grayed and crossed through at $0 — the recipe ingredient's name on
+ * top, the covering pantry entry's name crossed out beneath it, marked
+ * as coming from the pantry. "Buy anyway" uncrosses it for this week
+ * (the pantry's potatoes are baby potatoes; the recipe needs russets):
+ * the row becomes a buy line at the book price, and the pantry's own
+ * state is never changed by uncrossing.
+ */
+@Composable
+private fun CoveredRowView(
+    row: GroceryRow,
+    coveringName: String,
+    onUncross: (GroceryRow) -> Unit,
+) {
+    val line = row.line
+    val gray = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        modifier = Modifier.fillMaxWidth().testTag("covered-row-${line.itemId}"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                Money(GroceryListBuilder.lineCashCents(line)).format(),
+                line.displayName,
                 style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.clickable { onEditPrice(row) }.padding(8.dp),
+                color = gray,
+                textDecoration = TextDecoration.LineThrough,
+            )
+            Text(
+                "$coveringName — from your pantry",
+                style = MaterialTheme.typography.bodyMedium,
+                color = gray,
+                textDecoration = TextDecoration.LineThrough,
+            )
+            Text(
+                "Need ${trimNumber(line.needed.amount)} ${line.needed.unit.label} · already home",
+                style = MaterialTheme.typography.bodySmall,
+                color = gray,
+            )
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                Money(0).format(),
+                style = MaterialTheme.typography.bodyLarge,
+                color = gray,
+                modifier = Modifier.padding(8.dp),
             )
             TextButton(
-                onClick = { onScanRow(row) },
+                onClick = { onUncross(row) },
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-            ) { Text("Scan", style = MaterialTheme.typography.bodySmall) }
+                modifier = Modifier.testTag("uncross-${line.itemId}"),
+            ) { Text("Buy anyway", style = MaterialTheme.typography.bodySmall) }
         }
     }
 }

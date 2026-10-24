@@ -69,6 +69,7 @@ class Migration1213Test {
                 DinnerBotDatabase.MIGRATION_10_11,
                 DinnerBotDatabase.MIGRATION_11_12,
                 DinnerBotDatabase.MIGRATION_12_13,
+                DinnerBotDatabase.MIGRATION_13_14,
             )
             .build()
 
@@ -83,7 +84,7 @@ class Migration1213Test {
     @Test fun upgradeFromV12KeepsEveryKindOfUserData() = runBlocking {
         val db = openMigrated()
         try {
-            assertEquals(13, db.openHelper.readableDatabase.version)
+            assertEquals(14, db.openHelper.readableDatabase.version)
 
             // Prices: the corrected one, the staple flag, the scan-added item.
             val breast = db.priceItemDao().getById("chicken-breast")!!

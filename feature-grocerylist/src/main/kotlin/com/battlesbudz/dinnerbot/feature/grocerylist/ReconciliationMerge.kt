@@ -71,7 +71,13 @@ object ReconciliationMerge {
         for (out in resolvedOuts) {
             val itemId = out.priceItemId ?: continue // unpriced staples are never list lines
             val item = itemsById[itemId] ?: continue
-            val existing = byItem[itemId]
+            // A pantry-covered line (Phase RI-3) is not a buy line: the
+            // item is on the list as already home, at $0. A confirmed
+            // ran-out means it is NOT home, so the covered line must not
+            // satisfy this merge — the item falls through to the add
+            // rules below and its covered line is replaced by the buy
+            // line they build.
+            val existing = byItem[itemId]?.takeUnless { it.coveredByPantryName != null }
             if (existing != null) {
                 // One line only. For a staple, top the need up to a full
                 // pack when the plan needed less than one: the maximum of
@@ -94,7 +100,9 @@ object ReconciliationMerge {
                     val line = costSingleLine(item, item.packQuantity.toBase()) ?: continue
                     val marked = line.copy(reconciliationAdded = true)
                     byItem[itemId] = marked
-                    order += itemId
+                    // A replaced covered line already holds this id's
+                    // place in the order; never list the item twice.
+                    if (itemId !in order) order += itemId
                     delta += cashOf(marked)
                     added += item.name
                 }
@@ -106,7 +114,7 @@ object ReconciliationMerge {
                     val line = costSingleLine(item, needBase) ?: continue
                     val marked = line.copy(reconciliationAdded = true)
                     byItem[itemId] = marked
-                    order += itemId
+                    if (itemId !in order) order += itemId
                     delta += cashOf(marked)
                     added += item.name
                 }

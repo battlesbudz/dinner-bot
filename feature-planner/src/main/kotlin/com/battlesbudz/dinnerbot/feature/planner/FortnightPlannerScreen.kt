@@ -55,6 +55,8 @@ fun FortnightPlannerScreen(
     onStartTopUpCheck: (() -> Unit)? = null,
     /** Household photo files by recipe id, for nights whose dinner has one (Epic issue #10). */
     photoFiles: Map<String, File> = emptyMap(),
+    /** Recipe ids whose cost is not accurately reflected yet (Phase RI-3); see PlannerScreen. */
+    unpricedRecipeIds: Set<String> = emptySet(),
 ) {
     // (weekIndex, day) whose not-cooking reason is being picked, if any.
     var reasonFor by remember { mutableStateOf<Pair<Int, String>?>(null) }
@@ -127,6 +129,7 @@ fun FortnightPlannerScreen(
             onRate = onRate,
             onCookNight = onCookNight,
             photoFiles = photoFiles,
+            unpricedRecipeIds = unpricedRecipeIds,
         )
         WeekSection(
             title = "Week 2 · starts ${plan.week2.weekStart}",
@@ -140,6 +143,7 @@ fun FortnightPlannerScreen(
             onRate = onRate,
             onCookNight = onCookNight,
             photoFiles = photoFiles,
+            unpricedRecipeIds = unpricedRecipeIds,
         )
 
         if (outOfRotationCount > 0) {
@@ -180,6 +184,7 @@ private fun WeekSection(
     onRate: (String, RecipeRating?) -> Unit,
     onCookNight: (Int, String) -> Unit,
     photoFiles: Map<String, File> = emptyMap(),
+    unpricedRecipeIds: Set<String> = emptySet(),
 ) {
     Text(title, style = MaterialTheme.typography.titleLarge)
     Text(
@@ -187,6 +192,12 @@ private fun WeekSection(
             "food cost of these dinners: ${Money(week.foodCostCents).format()}",
         style = MaterialTheme.typography.bodyMedium,
     )
+    if (week.nights.any { it.recipeId in unpricedRecipeIds }) {
+        Text(
+            "Includes guesses for a dinner whose ingredients are not all priced yet.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
     week.nights.forEach { night ->
         NightCard(
             night = night,
@@ -198,6 +209,12 @@ private fun WeekSection(
             onRate = { rating -> onRate(night.recipeId, rating) },
             onCook = { onCookNight(weekIndex, night.day) },
             photoFile = photoFiles[night.recipeId],
+            costNote = if (night.recipeId in unpricedRecipeIds) {
+                "Some ingredients have no price yet, so this dinner's cost is " +
+                    "a guess for now — it will be exact after the first shop."
+            } else {
+                null
+            },
         )
     }
     week.notes.forEach { note ->

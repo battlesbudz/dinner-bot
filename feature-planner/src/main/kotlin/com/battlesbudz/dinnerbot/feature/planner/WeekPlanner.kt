@@ -11,6 +11,7 @@ import com.battlesbudz.dinnerbot.core.model.PlannedNight
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Quantity
 import com.battlesbudz.dinnerbot.core.model.Recipe
+import com.battlesbudz.dinnerbot.core.model.RecipePricing
 import com.battlesbudz.dinnerbot.core.model.RecipeRating
 import com.battlesbudz.dinnerbot.core.model.Store
 
@@ -64,6 +65,15 @@ object WeekPlanner {
         val deferredRestocks: List<String>,
         /** Plain-language notes: deferred restocks, pantry gaps, budget warnings. */
         val notes: List<String>,
+        /**
+         * Ids of this week's not-yet-priced recipes Andrea added herself
+         * (Phase RI-3, ruling 5): at most one per generated week, its
+         * unpriced ingredients carrying placeholder guesses in the cash.
+         * Computed at generation from the book as it stands; the screens
+         * recompute the same set live for the dinner's not-accurate note,
+         * so the note clears itself the day the recipe prices for real.
+         */
+        val unpricedImportedRecipeIds: Set<String> = emptySet(),
     )
 
     fun generate(
@@ -201,6 +211,45 @@ object WeekPlanner {
         }
 
 
+        // The one-unpriced-imported cap (Phase RI-3, ruling 5): a
+        // generated week carries at most one of Andrea's own recipes
+        // whose ingredients are not all priced yet, so a week of
+        // first-time dinners can never hide its real cost behind
+        // guesses. Extras are swapped for the best unused priced
+        // candidates, or left unplanned when nothing priced is left;
+        // either way the note names the dinner that waits.
+        val unpricedChosen = chosen.filter { RecipePricing.isUnpricedUserRecipe(it, itemsById) }
+        if (unpricedChosen.size > 1) {
+            val extras = unpricedChosen.drop(1)
+            val chosenIdsNow = chosen.map { it.id }.toMutableSet()
+            val replacements = candidates.filter {
+                it.id !in chosenIdsNow && !RecipePricing.isUnpricedUserRecipe(it, itemsById)
+            }.iterator()
+            val capped = chosen.toMutableList()
+            for (extra in extras) {
+                val index = capped.indexOfFirst { it.id == extra.id }
+                if (index < 0) continue
+                if (replacements.hasNext()) {
+                    val replacement = replacements.next()
+                    capped[index] = replacement
+                    chosenIdsNow += replacement.id
+                } else {
+                    capped.removeAt(index)
+                }
+                notes += "Only one dinner whose ingredients are not all priced yet is " +
+                    "planned per week, so ${extra.title} waits for another week."
+            }
+            chosen = capped
+            costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
+            if (cap > 0 && costed.cashNeededCents > cap &&
+                notes.none { it.startsWith("Even the cheapest week") }
+            ) {
+                notes += "Even the cheapest week Dinner Bot can build from these recipes costs " +
+                    "${Money(costed.cashNeededCents).format()}, which is over the ${Money(cap).format()} " +
+                    "weekly budget. Nothing was hidden: that is the real number."
+            }
+        }
+
         // A generated week NEVER repeats a dinner. When fewer different
         // dinners are available than there are cook nights, plan the nights
         // that can be filled and say so plainly instead of wrapping the
@@ -227,6 +276,9 @@ object WeekPlanner {
             samsGateMet = costed.gate.useSams,
             deferredRestocks = deferred,
             notes = notes,
+            unpricedImportedRecipeIds = distinctChosen
+                .filter { RecipePricing.isUnpricedUserRecipe(it, itemsById) }
+                .map { it.id }.toSet(),
         )
     }
 
@@ -681,18 +733,28 @@ object WeekPlanner {
         val cookingIndexes = current.nights.indices.filter { !current.nights[it].notCooking }
         val trialSlot = cookingIndexes.indexOf(nightIndex)
         val inPlan = current.nights.filterNot { it.notCooking }.map { it.recipeId }.toSet()
-        val candidates = rankCandidates(settings, candidatePool, itemsById, stockOnHand, ratings)
-            .filter { it.id !in inPlan }
-        if (candidates.isEmpty()) return current
-
         val baseChosen = cookingIndexes.mapNotNull {
             EffectiveRecipes.resolveNight(current.nights[it], recipesById)
         }
         if (trialSlot < 0 || trialSlot >= baseChosen.size) return current
+        // The one-unpriced-imported cap holds for swaps too (Phase RI-3):
+        // when another night already carries the week's one not-yet-priced
+        // dinner of Andrea's, the swap may not bring in a second one.
+        val otherNightsHaveUnpriced = baseChosen.indices.any { i ->
+            i != trialSlot && RecipePricing.isUnpricedUserRecipe(baseChosen[i], itemsById)
+        }
+        val candidates = rankCandidates(settings, candidatePool, itemsById, stockOnHand, ratings)
+            .filter { it.id !in inPlan }
+            .filter { !otherNightsHaveUnpriced || !RecipePricing.isUnpricedUserRecipe(it, itemsById) }
+        if (candidates.isEmpty()) return current
+
         for (candidate in candidates) {
             val trial = baseChosen.toMutableList()
             trial[trialSlot] = candidate
-            val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
+            val costed = cost(
+                settings, trial, itemsById, stockOnHand, pantryOwnedNames, gateOverride,
+                uncrossedItemIds = uncrossedOf(current),
+            )
             val cap = settings.weeklyBudgetCents
             if (cap <= 0 || costed.cashNeededCents <= cap) {
                 val notes = current.notes.toMutableList()
@@ -719,7 +781,10 @@ object WeekPlanner {
         val fallback = candidates.first()
         val trial = baseChosen.toMutableList()
         trial[trialSlot] = fallback
-        val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
+        val costed = cost(
+            settings, trial, itemsById, stockOnHand, pantryOwnedNames, gateOverride,
+            uncrossedItemIds = uncrossedOf(current),
+        )
         return current.copy(
             nights = current.nights.mapIndexed { i, night ->
                 if (i == nightIndex) {
@@ -780,7 +845,10 @@ object WeekPlanner {
                 if (i == nightIndex) night.copy(notCooking = true, notCookingReason = reason) else night
             }
             val chosen = EffectiveRecipes.resolveDinners(nights, recipesById)
-            val costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
+            val costed = cost(
+                settings, chosen, itemsById, stockOnHand, pantryOwnedNames, gateOverride,
+                uncrossedItemIds = uncrossedOf(current),
+            )
             val notes = current.notes.toMutableList()
             return current.copy(
                 nights = nights,
@@ -799,19 +867,27 @@ object WeekPlanner {
         // dinner a new preset would exclude is still priced while it is
         // displayed in this week.
         val cookingIds = current.nights.filterNot { it.notCooking }.map { it.recipeId }.toSet()
+        val baseChosen = EffectiveRecipes.resolveDinners(current.nights, recipesById)
+        // The one-unpriced-imported cap holds here too (Phase RI-3): a
+        // night turned back on may not become the week's second
+        // not-yet-priced dinner of Andrea's.
+        val othersHaveUnpriced = baseChosen.any { RecipePricing.isUnpricedUserRecipe(it, itemsById) }
         val candidates = rankCandidates(settings, candidatePool, itemsById, stockOnHand, ratings)
             .filter { it.id !in cookingIds }
+            .filter { !othersHaveUnpriced || !RecipePricing.isUnpricedUserRecipe(it, itemsById) }
         if (candidates.isEmpty()) {
             return current.copy(
                 notes = (current.notes + "No other dinner is available to cook that night, so it " +
                     "stays marked not cooking.").distinct(),
             )
         }
-        val baseChosen = EffectiveRecipes.resolveDinners(current.nights, recipesById)
         val cap = settings.weeklyBudgetCents
         for (candidate in candidates) {
             val trial = baseChosen + candidate
-            val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
+            val costed = cost(
+                settings, trial, itemsById, stockOnHand, pantryOwnedNames, gateOverride,
+                uncrossedItemIds = uncrossedOf(current),
+            )
             if (cap <= 0 || costed.cashNeededCents <= cap) {
                 return restoredNight(current, nightIndex, candidate, trial, costed, settings, pantryOwnedNames)
             }
@@ -820,7 +896,10 @@ object WeekPlanner {
         // and say so, the same fallback swapDinner uses.
         val fallback = candidates.first()
         val trial = baseChosen + fallback
-        val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
+        val costed = cost(
+            settings, trial, itemsById, stockOnHand, pantryOwnedNames, gateOverride,
+            uncrossedItemIds = uncrossedOf(current),
+        )
         val restored = restoredNight(current, nightIndex, fallback, trial, costed, settings, pantryOwnedNames)
         return restored.copy(
             notes = (restored.notes + "Cooking that night again puts the week at " +
@@ -849,11 +928,19 @@ object WeekPlanner {
         stockOnHand: Map<String, Quantity>,
         pantryOwnedNames: Set<String>,
         gateOverride: Costing.SamsGateResult? = null,
+        uncrossedItemIds: Set<String>? = null,
     ): WeekPlan {
         val itemsById = priceItems.associateBy { it.id }
         val recipesById = recipes.associateBy { it.id }
         val chosen = EffectiveRecipes.resolveDinners(current.nights, recipesById)
-        val costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
+        // Uncross marks survive a reprice (Phase RI-3): by default they
+        // are read off the current week's lines, where the uncross
+        // action left them; the uncross action itself passes the set
+        // explicitly, with its new item added.
+        val costed = cost(
+            settings, chosen, itemsById, stockOnHand, pantryOwnedNames, gateOverride,
+            uncrossedItemIds = uncrossedItemIds ?: uncrossedOf(current),
+        )
         val checkedItemIds = current.lines.filter { it.checkedOff }.map { it.itemId }.toSet()
         val notes = current.notes.filterNot { it.startsWith(PANTRY_GAP_NOTE_PREFIX) }.toMutableList()
         return current.copy(
@@ -923,6 +1010,7 @@ object WeekPlanner {
         stockOnHand: Map<String, Quantity>,
         pantryOwnedNames: Set<String>,
         gateOverride: Costing.SamsGateResult? = null,
+        uncrossedItemIds: Set<String> = emptySet(),
     ): Costing.CostedWeek = Costing.costRecipes(
         chosen,
         settings.householdSize,
@@ -930,7 +1018,14 @@ object WeekPlanner {
         stockOnHand,
         pantryCoveredItemIds = Costing.pantryCoveredItemIds(pantryOwnedNames, itemsById.values),
         gateOverride = gateOverride,
+        pantryOwnedNames = pantryOwnedNames,
+        uncrossedItemIds = uncrossedItemIds,
+        forList = true,
     )
+
+    /** The uncrossed item ids a stored week already carries on its lines (Phase RI-3). */
+    private fun uncrossedOf(week: WeekPlan): Set<String> =
+        week.lines.filter { it.uncrossed }.map { it.itemId }.toSet()
 
     private fun dinnerFoodCost(recipe: Recipe, settings: HouseholdSettings, itemsById: Map<String, PriceItem>): Int =
         Costing.costRecipes(listOf(recipe), settings.householdSize, itemsById, emptyMap()).foodCostCents

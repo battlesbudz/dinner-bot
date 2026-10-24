@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.PlannedNight
@@ -92,6 +93,13 @@ internal fun NightCard(
     onCook: () -> Unit = {},
     /** The household's photo of this dinner, when one is attached (Epic issue #10). */
     photoFile: File? = null,
+    /**
+     * A note carried on the dinner itself (Phase RI-3): set when this
+     * dinner's cost is not accurately reflected yet because some of its
+     * ingredients have no price. Computed live by the caller from the
+     * book as it stands, so it clears itself when the recipe prices.
+     */
+    costNote: String? = null,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -142,6 +150,13 @@ internal fun NightCard(
                     TextButton(onClick = onNotCookingRequest) { Text("Not cooking") }
                 }
             }
+            if (costNote != null) {
+                Text(
+                    costNote,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.testTag("unpriced-note-${night.day}"),
+                )
+            }
             // The cook view (Phase V2-7): tonight's ingredients with
             // check-offs, and the ran-out marking Sunday's check consumes.
             TextButton(onClick = onCook) { Text("Start cooking") }
@@ -183,6 +198,14 @@ fun PlannerScreen(
     onCookNight: (String) -> Unit = {},
     /** Household photo files by recipe id, for nights whose dinner has one (Epic issue #10). */
     photoFiles: Map<String, File> = emptyMap(),
+    /**
+     * Recipe ids whose cost is not accurately reflected yet (Phase
+     * RI-3): Andrea's own recipes with ingredients still unpriced. The
+     * caller computes the set live from the price book; a night in the
+     * set carries the not-accurate note and the cash card says the
+     * total includes guesses.
+     */
+    unpricedRecipeIds: Set<String> = emptySet(),
 ) {
     // The day whose not-cooking reason is being picked, if any.
     var reasonForDay by remember { mutableStateOf<String?>(null) }
@@ -216,6 +239,12 @@ fun PlannerScreen(
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Cash needed this week", style = MaterialTheme.typography.titleSmall)
                 Text(Money(plan.cashNeededCents).format(), style = MaterialTheme.typography.headlineSmall)
+                if (plan.nights.any { it.recipeId in unpricedRecipeIds }) {
+                    Text(
+                        "Includes guesses for a dinner whose ingredients are not all priced yet.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
                 if (budgetCents > 0) {
                     Text(
                         "Weekly budget: ${Money(budgetCents).format()}",
@@ -250,6 +279,12 @@ fun PlannerScreen(
                 onRate = { rating -> onRate(night.recipeId, rating) },
                 onCook = { onCookNight(night.day) },
                 photoFile = photoFiles[night.recipeId],
+                costNote = if (night.recipeId in unpricedRecipeIds) {
+                    "Some ingredients have no price yet, so this dinner's cost is " +
+                        "a guess for now — it will be exact after the first shop."
+                } else {
+                    null
+                },
             )
         }
 

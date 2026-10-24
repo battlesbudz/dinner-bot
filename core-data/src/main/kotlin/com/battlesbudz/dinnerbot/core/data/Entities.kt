@@ -98,6 +98,33 @@ data class GroceryItemEntity(
      * before the column existed read null.
      */
     val substitutedForItemId: String? = null,
+    /**
+     * Phase RI-3: the owned pantry entry covering this line, when the
+     * line is on the list as already home (crossed through, $0). Null
+     * on every buy line. Rows written before the column existed read
+     * null.
+     */
+    val coveredByPantryName: String? = null,
+    /** Phase RI-3: this buy line exists because Andrea uncrossed a covered line for this week. */
+    @ColumnInfo(defaultValue = "0")
+    val uncrossed: Boolean = false,
+    /** Phase RI-3: the placeholder price guess carried by a priced-less line; null on priced lines. */
+    val priceGuessCents: Int? = null,
+)
+
+/**
+ * One asked-and-answered first-cook keep prompt (Phase RI-3): the row
+ * existing at all is the record that the prompt fired for this recipe,
+ * whatever she answered — a thumbs rating, or a dismissal, which
+ * records nothing else and never asks again. Working state, not
+ * household data: it does not ride in backups (a restored phone has no
+ * plans, so there is no first cook to ask about until she cooks again,
+ * and being asked once more there is harmless).
+ */
+@Entity(tableName = "keep_prompt_asked")
+data class KeepPromptEntity(
+    @PrimaryKey val recipeId: String,
+    val askedAtMillis: Long,
 )
 
 /**
