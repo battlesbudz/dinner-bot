@@ -1,7 +1,13 @@
 package com.battlesbudz.dinnerbot.feature.grocerylist.barcode
 
 import com.battlesbudz.dinnerbot.core.model.BarcodeLink
+import com.battlesbudz.dinnerbot.core.model.GroceryLine
+import com.battlesbudz.dinnerbot.core.model.PlannedNight
 import com.battlesbudz.dinnerbot.core.model.PriceItem
+import com.battlesbudz.dinnerbot.core.model.Quantity
+import com.battlesbudz.dinnerbot.core.model.Recipe
+import com.battlesbudz.dinnerbot.core.model.ScanSubstitution
+import com.battlesbudz.dinnerbot.core.model.Store
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceCorrection
 
 /**
@@ -18,11 +24,37 @@ import com.battlesbudz.dinnerbot.feature.pricebook.PriceCorrection
  *   a scan source note. Scanning never invents a price: the cents always
  *   come from the shelf in front of Andrea, typed by her, exactly like a
  *   tap-to-correct.
+ *
+ * The v0.4.4 rework (Battles's field reports on the v0.4.2 build) adds:
+ *
+ * - A scanned product that is not in the book can be ADDED from the
+ *   link picker: [buildUserItem] makes the price book item from the
+ *   form she fills in (name prefilled from the Open Food Facts hint,
+ *   the scan's store as home store, the shelf price she types). The id
+ *   carries the "user-" prefix no seed id uses, so seed refreshes,
+ *   which only ever touch seed ids, can never overwrite or drop it.
+ * - A scan from a shopping line that names a DIFFERENT item can
+ *   substitute: [substituteLine] builds the line that goes on THIS
+ *   week's list at the typed price, marked with the planned item it
+ *   replaced, and [foldSubstitutedLines] keeps the swap standing when
+ *   the week is repriced, with the cash and food deltas computed
+ *   honestly. The original item's book price is never touched by a
+ *   substitution; the recipe and future weeks are never touched at all.
+ * - Substitutions are remembered ([rememberedSubstitution]): the next
+ *   time the same original item is scanned from a line, the most recent
+ *   swap for it (the one made for the same dinner when the context
+ *   matches) is surfaced as a suggestion. Nothing applies itself.
  */
 object BarcodeScanLogic {
 
     /** The price book source note recorded on corrections that came from a scan. */
     const val SCAN_SOURCE: String = "Corrected by barcode scan"
+
+    /** The price book source note on items created from a scan (PR v0.4.4). */
+    const val NEW_ITEM_SOURCE: String = "Added by barcode scan"
+
+    /** Prefix of every user-added item id; no seed id uses it. */
+    const val USER_ITEM_ID_PREFIX: String = "user-"
 
     sealed interface Resolution {
         /** The code is linked; [item] is the price book item it names. */
@@ -82,6 +114,170 @@ object BarcodeScanLogic {
      */
     fun scanTargetsRow(scannedItemId: String, rowItemId: String?): Boolean =
         rowItemId != null && rowItemId == scannedItemId
+
+    /** A display name reduced to the slug half of a user-added item id. */
+    fun slugFor(name: String): String {
+        val slug = name.lowercase()
+            .map { ch -> if (ch.isLetterOrDigit()) ch else '-' }
+            .joinToString("")
+            .replace(Regex("-+"), "-")
+            .trim('-')
+        return slug.ifEmpty { "item" }
+    }
+
+    /**
+     * The id for a user-added item: "user-" plus a slug of its name,
+     * numbered (-2, -3, ...) when the plain id is already taken. Seed
+     * ids never carry the prefix, so a user id can never collide with a
+     * seed row the refresh owns.
+     */
+    fun newItemId(name: String, existingIds: Set<String>): String {
+        val base = USER_ITEM_ID_PREFIX + slugFor(name)
+        if (base !in existingIds) return base
+        var n = 2
+        while ("$base-$n" in existingIds) n++
+        return "$base-$n"
+    }
+
+    /**
+     * The price book item a scan creates for a product the book did not
+     * have (Battles's sugar case: the lookup named it, the book did not
+     * hold it, and the old flow dead-ended). Every field comes from the
+     * form Andrea filled in; the typed price is the pack price, flagged
+     * user-corrected like any price she enters, with [NEW_ITEM_SOURCE]
+     * noting the door it came through. From here the item is an
+     * ordinary book item: the planner costs it, backups carry it, and
+     * the seed refresh leaves it alone.
+     */
+    fun buildUserItem(
+        name: String,
+        category: String,
+        homeStore: Store,
+        packDescription: String,
+        packQuantity: Quantity,
+        shelfPriceCents: Int,
+        checkedDate: String,
+        existingIds: Set<String>,
+    ): PriceItem {
+        val trimmedName = name.trim()
+        require(trimmedName.isNotEmpty()) { "a new item needs a name" }
+        require(shelfPriceCents > 0) { "price must be positive" }
+        require(packQuantity.amount > 0.0) { "pack quantity must be positive" }
+        return PriceItem(
+            id = newItemId(trimmedName, existingIds),
+            name = trimmedName,
+            category = category.trim().ifEmpty { "Other" },
+            homeStore = homeStore,
+            packDescription = packDescription.trim(),
+            packQuantity = packQuantity,
+            packPriceCents = shelfPriceCents,
+            pricePerUnitCents = shelfPriceCents.toDouble() / packQuantity.amount,
+            checkedDate = checkedDate,
+            source = NEW_ITEM_SOURCE,
+            userCorrected = true,
+        )
+    }
+
+    /**
+     * The line a substitution puts on THIS week's list: one pack of the
+     * substitute at the typed shelf price, at the store the planned line
+     * was shopping, marked with the planned item it replaced so
+     * repricing keeps the swap (see [foldSubstitutedLines]) and the
+     * record can be written. The planned recipe is not consulted and
+     * not changed; the original item keeps its own book price.
+     */
+    fun substituteLine(original: GroceryLine, substitute: PriceItem, shelfPriceCents: Int): GroceryLine {
+        require(shelfPriceCents > 0) { "price must be positive" }
+        require(substitute.id != original.itemId) { "a substitution names a different item" }
+        return GroceryLine(
+            itemId = substitute.id,
+            displayName = substitute.name,
+            store = original.store,
+            needed = substitute.packQuantity,
+            packsToBuy = 1,
+            estimatedPackPriceCents = shelfPriceCents,
+            portionCostCents = shelfPriceCents,
+            substitutedForItemId = original.itemId,
+        )
+    }
+
+    /** A repriced week's lines with its scan substitutions folded back in, and the money deltas. */
+    data class SubstitutedFold(
+        val lines: List<GroceryLine>,
+        /** Add to the repriced cash total: carried swaps in, displaced planned lines out. */
+        val cashDeltaCents: Int,
+        /** Add to the repriced food cost on the same basis. */
+        val foodDeltaCents: Int,
+    )
+
+    /**
+     * Fold a stored week's scan substitutions into a fresh repricing,
+     * the same contract the Sunday reconciliation merge established for
+     * its lines: each planned line a swap displaced stays off the fresh
+     * list, and each swap line the fresh costing does not already carry
+     * (under its own item) is carried over at its scanned price with
+     * its check-off state intact. The deltas price exactly those two
+     * movements, so the week's totals stay the honest sum of its lines.
+     */
+    fun foldSubstitutedLines(current: List<GroceryLine>, fresh: List<GroceryLine>): SubstitutedFold {
+        val swaps = current.filter { it.substitutedForItemId != null }
+        if (swaps.isEmpty()) return SubstitutedFold(fresh, 0, 0)
+        val displacedIds = swaps.map { it.substitutedForItemId!! }.toSet()
+        val displaced = fresh.filter { it.itemId in displacedIds }
+        val kept = fresh.filter { it.itemId !in displacedIds }
+        val keptIds = kept.map { it.itemId }.toSet()
+        val carried = swaps.filter { it.itemId !in keptIds }
+        fun cash(lines: List<GroceryLine>): Int = lines.sumOf { it.packsToBuy * it.estimatedPackPriceCents }
+        fun food(lines: List<GroceryLine>): Int = lines.sumOf { it.portionCostCents ?: 0 }
+        return SubstitutedFold(
+            lines = kept + carried,
+            cashDeltaCents = cash(carried) - cash(displaced),
+            foodDeltaCents = food(carried) - food(displaced),
+        )
+    }
+
+    /**
+     * The remembered substitution to suggest for [originalItemId]: the
+     * most recent swap recorded for it, preferring the one made for the
+     * same dinner when [recipeId] names the current context. Null when
+     * the pairing was never swapped, so a different item never inherits
+     * another item's memory. A suggestion only; nothing applies itself.
+     */
+    fun rememberedSubstitution(
+        records: List<ScanSubstitution>,
+        originalItemId: String,
+        recipeId: String? = null,
+    ): ScanSubstitution? {
+        val matches = records.filter { it.originalItemId == originalItemId }
+        if (matches.isEmpty()) return null
+        if (recipeId != null) {
+            matches.filter { it.recipeId == recipeId }
+                .maxByOrNull { it.createdAtMillis }
+                ?.let { return it }
+        }
+        return matches.maxByOrNull { it.createdAtMillis }
+    }
+
+    /**
+     * The recipe context of a swap from a line for [originalItemId]:
+     * the one dinner on the week that uses the item, when there is
+     * exactly one. Two dinners using it (or none) means the context is
+     * not knowable, and the record is written without one.
+     */
+    fun recipeContextFor(
+        originalItemId: String,
+        nights: List<PlannedNight>,
+        recipesById: Map<String, Recipe>,
+    ): String? {
+        val recipeIds = nights.asSequence()
+            .filterNot { it.notCooking }
+            .mapNotNull { recipesById[it.recipeId] }
+            .filter { recipe -> recipe.ingredients.any { it.priceItemId == originalItemId } }
+            .map { it.id }
+            .distinct()
+            .toList()
+        return recipeIds.singleOrNull()
+    }
 
     /**
      * Pull a product name out of an Open Food Facts product response, or

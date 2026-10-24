@@ -83,4 +83,22 @@ class PlanMapperTest {
         val back = with(PlanMapper) { line.toEntity("plan-1").toModel() }
         assertEquals(line, back)
     }
+
+    @Test fun substitutedGroceryLineRoundTripsThroughEntity() {
+        // PR v0.4.4: the swap marker is what lets a repricing keep the
+        // substitution; it must survive the store exactly.
+        val line = GroceryLine(
+            itemId = "user-chicken-drumsticks",
+            displayName = "Chicken drumsticks",
+            store = Store.ALDI,
+            needed = Quantity(4.0, MeasureUnit.POUND),
+            packsToBuy = 1,
+            estimatedPackPriceCents = 499,
+            portionCostCents = 499,
+            substitutedForItemId = "chicken-breast",
+        )
+        val entity = with(PlanMapper) { line.toEntity("plan-1") }
+        assertEquals("chicken-breast", entity.substitutedForItemId)
+        assertEquals(line, with(PlanMapper) { entity.toModel() })
+    }
 }

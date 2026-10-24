@@ -92,6 +92,12 @@ data class GroceryItemEntity(
     /** Phase V2-7: the line came from (or was topped up by) a Sunday reconciliation. */
     @ColumnInfo(defaultValue = "0")
     val reconciliationAdded: Boolean = false,
+    /**
+     * PR v0.4.4: the planned item this line was swapped in for by a
+     * barcode scan, or null for an ordinary planner line. Rows written
+     * before the column existed read null.
+     */
+    val substitutedForItemId: String? = null,
 )
 
 /**
@@ -121,6 +127,24 @@ data class IngredientNutritionEntity(
     /** JSON-encoded Map<String, Double>: grams for one unit of a non-weight unit, keyed by unit name. */
     val gramWeightsJson: String = "{}",
     val gramWeightSource: String? = null,
+)
+
+/**
+ * One remembered barcode-scan substitution (PR v0.4.4): a planned item
+ * was swapped for a scanned product for one week only, and the app keeps
+ * the pairing so it can suggest the same swap next time. [planId] and
+ * [recipeId] are context, both nullable; a record restored from a backup
+ * carries no plan id.
+ */
+@Entity(tableName = "scan_substitutions")
+data class ScanSubstitutionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val planId: String? = null,
+    val originalItemId: String,
+    val substituteItemId: String,
+    val recipeId: String? = null,
+    val substitutePriceCents: Int,
+    val createdAtMillis: Long,
 )
 
 /** One learned barcode link per barcode (Phase V2-5); the barcode is the key. */

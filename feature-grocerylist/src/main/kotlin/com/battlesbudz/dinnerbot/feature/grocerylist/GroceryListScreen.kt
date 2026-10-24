@@ -39,17 +39,23 @@ import com.battlesbudz.dinnerbot.core.model.Costing
 import com.battlesbudz.dinnerbot.core.model.GroceryLine
 import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.PriceItem
+import com.battlesbudz.dinnerbot.core.model.ScanSubstitution
 import com.battlesbudz.dinnerbot.core.model.Store
 import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.BarcodeScanLogic
 import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.BarcodeScannerDialog
 import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.LinkBarcodeDialog
+import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.NewItemFormDialog
 import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.ScanPriceDialog
+import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.SubstituteChoiceDialog
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceCorrection
+import java.time.LocalDate
 
 /** One persisted shopping row, as displayed. [rowId] is the Room row id. */
 data class GroceryRow(
     val rowId: Long,
     val line: GroceryLine,
+    /** The plan this row belongs to; empty when the caller does not track it. */
+    val planId: String = "",
 )
 
 private fun storeLabel(store: Store): String = when (store) {
@@ -98,6 +104,27 @@ fun GroceryListScreen(
      * store corrects that store's price, never the home store's.
      */
     onScanLineCorrected: (GroceryRow, Int) -> Unit = { _, _ -> },
+    /** Remembered scan substitutions (PR v0.4.4); the substitute flow surfaces the matching one. */
+    scanSubstitutions: List<ScanSubstitution> = emptyList(),
+    /**
+     * Recipe context per listed item (PR v0.4.4): an item id mapped to
+     * the one planned dinner that uses it, when there is exactly one,
+     * so the remembered-swap suggestion prefers the swap made for this
+     * dinner.
+     */
+    substitutionRecipeContext: Map<String, String?> = emptyMap(),
+    /**
+     * A price book item created from a scan (PR v0.4.4): the caller
+     * saves it to the book and links the scanned barcode to it.
+     */
+    onScanNewItem: (PriceItem, String) -> Unit = { _, _ -> },
+    /**
+     * A this-week-only substitution (PR v0.4.4): the row's planned line
+     * comes off this week's list, the scanned item goes on at the typed
+     * price, the item joins the book first when it is new, and the swap
+     * is remembered. The caller writes all of it.
+     */
+    onSubstitute: (GroceryRow, PriceItem, String?, Int) -> Unit = { _, _, _, _ -> },
 ) {
     var editing by remember { mutableStateOf<GroceryRow?>(null) }
 
@@ -119,6 +146,18 @@ fun GroceryListScreen(
     var pickedItem by remember { mutableStateOf<PriceItem?>(null) }
     var relinking by remember { mutableStateOf(false) }
     var cameraDeniedNote by remember { mutableStateOf(false) }
+    // PR v0.4.4: the add-a-new-item path. [showNewItemForm] opens the
+    // form from the link picker; [formPrefillName] carries the lookup's
+    // hint into it; [pendingNewItem] holds an item the form just built
+    // during a line scan until the substitute choice is made (a general
+    // scan saves it immediately instead).
+    var showNewItemForm by remember { mutableStateOf(false) }
+    var formPrefillName by remember { mutableStateOf<String?>(null) }
+    var pendingNewItem by remember { mutableStateOf<PriceItem?>(null) }
+    val todayIso = remember { LocalDate.now().toString() }
+    val itemCategories = remember(priceItems) {
+        (priceItems.map { it.category }.distinct().sorted() + "Other").distinct()
+    }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -136,6 +175,9 @@ fun GroceryListScreen(
         scanRow = row
         pickedItem = null
         relinking = false
+        showNewItemForm = false
+        formPrefillName = null
+        pendingNewItem = null
         if (cameraGranted) {
             scanning = true
         } else {
@@ -149,6 +191,9 @@ fun GroceryListScreen(
         relinking = false
         scanPreferredItemId = null
         scanRow = null
+        showNewItemForm = false
+        formPrefillName = null
+        pendingNewItem = null
     }
 
     val priceItemsById = remember(priceItems) { priceItems.associateBy { it.id } }
@@ -168,8 +213,29 @@ fun GroceryListScreen(
     val activeCode = scannedCode
     if (activeCode != null) {
         val resolved = scanResolution
-        val displayItem = pickedItem ?: (resolved as? BarcodeScanLogic.Resolution.Linked)?.item
+        val displayItem = pendingNewItem ?: pickedItem
+            ?: (resolved as? BarcodeScanLogic.Resolution.Linked)?.item
         when {
+            showNewItemForm -> NewItemFormDialog(
+                barcode = activeCode,
+                suggestedName = formPrefillName,
+                initialStore = scanRow?.line?.store ?: Store.ALDI,
+                categories = itemCategories,
+                today = todayIso,
+                existingIds = priceItemsById.keys,
+                onConfirm = { item ->
+                    showNewItemForm = false
+                    if (scanRow != null) {
+                        // A line scan still owes the substitute choice;
+                        // the item is saved by whichever choice she makes.
+                        pendingNewItem = item
+                    } else {
+                        onScanNewItem(item, activeCode)
+                        clearScan()
+                    }
+                },
+                onDismiss = { showNewItemForm = false },
+            )
             relinking || displayItem == null -> LinkBarcodeDialog(
                 barcode = activeCode,
                 candidates = BarcodeScanLogic.linkCandidates(
@@ -184,16 +250,24 @@ fun GroceryListScreen(
                     relinking = false
                     pickedItem = item
                 },
+                onAddNew = { hint ->
+                    formPrefillName = hint
+                    relinking = false
+                    showNewItemForm = true
+                },
                 onSkip = { clearScan() },
             )
             else -> {
                 // A scan launched from a line, naming that line's own
                 // item, corrects the line itself: the row's store
-                // governs the write, like a tap on the line's price. Any
-                // other scan corrects the item's book pack price.
+                // governs the write, like a tap on the line's price. A
+                // line scan naming a DIFFERENT item offers the
+                // this-week-only substitution (PR v0.4.4). Any other
+                // scan corrects the item's book pack price.
                 val lineRow = scanRow?.takeIf {
                     BarcodeScanLogic.scanTargetsRow(displayItem.id, it.line.itemId)
                 }
+                val fromRow = scanRow
                 if (lineRow != null) {
                     val lineCash = GroceryListBuilder.lineCashCents(lineRow.line)
                     ScanPriceDialog(
@@ -210,10 +284,44 @@ fun GroceryListScreen(
                         onDismiss = { clearScan() },
                         onRelink = if (pickedItem == null) ({ relinking = true }) else null,
                     )
+                } else if (fromRow != null) {
+                    val remembered = BarcodeScanLogic.rememberedSubstitution(
+                        scanSubstitutions,
+                        fromRow.line.itemId,
+                        substitutionRecipeContext[fromRow.line.itemId],
+                    )
+                    SubstituteChoiceDialog(
+                        scannedItem = displayItem,
+                        lineDisplayName = fromRow.line.displayName,
+                        initialCents = displayItem.packPriceCents,
+                        remembered = remembered,
+                        rememberedSubstituteName = remembered?.let {
+                            priceItemsById[it.substituteItemId]?.name
+                        },
+                        onSubstitute = { cents ->
+                            onSubstitute(fromRow, displayItem, activeCode, cents)
+                            clearScan()
+                        },
+                        onSavePriceOnly = { cents ->
+                            if (pendingNewItem != null) {
+                                onScanNewItem(
+                                    BarcodeScanLogic.scanCorrection(displayItem, cents),
+                                    activeCode,
+                                )
+                            } else {
+                                onScanPriceCorrected(
+                                    BarcodeScanLogic.scanCorrection(displayItem, cents),
+                                )
+                            }
+                            clearScan()
+                        },
+                        onDismiss = { clearScan() },
+                    )
                 } else {
                     ScanPriceDialog(
                         item = displayItem,
-                        headerText = "The price book says ${Money(displayItem.packPriceCents).format()} " +
+                        headerText = "The price book's last saved price is " +
+                            "${Money(displayItem.packPriceCents).format()} " +
                             "for ${displayItem.packDescription}. Type the shelf price for the " +
                             "pack; your number is saved to the price book.",
                         initialCents = displayItem.packPriceCents,
@@ -388,6 +496,15 @@ private fun GroceryRowView(
                     if (line.packsToBuy > 1) " · buy ${line.packsToBuy} packs" else "",
                 style = MaterialTheme.typography.bodySmall,
             )
+            // A scan swap (PR v0.4.4) says what it replaced, so the
+            // list never quietly differs from the plan.
+            line.substitutedForItemId?.let { originalId ->
+                Text(
+                    "Swapped in for ${priceItemsById[originalId]?.name ?: "a planned item"}" +
+                        " — this week only",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             // Freeze guidance (Phase V2-2): when a Sam's bulk pack
             // is being bought, say how much will be left over and
             // how to freeze it. Guidance only, no tracking.

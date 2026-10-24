@@ -155,6 +155,15 @@ data class GroceryLine(
      * the top-up shop, never to the big trip that already happened.
      */
     val reconciliationAdded: Boolean = false,
+    /**
+     * Set when this line is on the list because a barcode scan swapped it
+     * in for a planned item (PR v0.4.4): the value is the planned item's
+     * price book id, whose line this one replaced for THIS week only. The
+     * marker is how repricing the week keeps the swap (the planned line
+     * stays off, this line stays on at its scanned price) instead of
+     * regenerating it away. The recipe and future weeks never see it.
+     */
+    val substitutedForItemId: String? = null,
 )
 
 @Serializable

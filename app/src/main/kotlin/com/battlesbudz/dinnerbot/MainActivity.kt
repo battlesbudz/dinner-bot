@@ -81,13 +81,16 @@ import com.battlesbudz.dinnerbot.core.model.RecipePhoto
 import com.battlesbudz.dinnerbot.core.model.RecipePhotos
 import com.battlesbudz.dinnerbot.core.model.RecipeRating
 import com.battlesbudz.dinnerbot.core.model.ReconciledOut
+import com.battlesbudz.dinnerbot.core.model.ScanSubstitution
 import com.battlesbudz.dinnerbot.feature.backup.BackupBarcodeLink
 import com.battlesbudz.dinnerbot.feature.backup.BackupData
 import com.battlesbudz.dinnerbot.feature.backup.BackupRecipeRating
 import com.battlesbudz.dinnerbot.feature.backup.BackupEngine
+import com.battlesbudz.dinnerbot.feature.backup.BackupScanSubstitution
 import com.battlesbudz.dinnerbot.feature.backup.BackupShare
 import com.battlesbudz.dinnerbot.feature.grocerylist.GroceryRow
 import com.battlesbudz.dinnerbot.feature.grocerylist.GroceryListScreen
+import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.BarcodeScanLogic
 import com.battlesbudz.dinnerbot.feature.grocerylist.ReconciliationMerge
 import com.battlesbudz.dinnerbot.feature.nutrition.NutritionScreen
 import com.battlesbudz.dinnerbot.feature.nutrition.NutritionWeekInput
@@ -188,6 +191,10 @@ private fun DinnerBotApp(
     var recipePhotos by remember { mutableStateOf<Map<String, RecipePhoto>>(emptyMap()) }
     var photoFiles by remember { mutableStateOf<Map<String, File>>(emptyMap()) }
     var barcodeLinks by remember { mutableStateOf<List<BarcodeLink>>(emptyList()) }
+    // Remembered scan substitutions (PR v0.4.4): user data, loaded
+    // with everything else; the list screen surfaces the matching one
+    // as a suggestion when the same line is scanned again.
+    var scanSubstitutions by remember { mutableStateOf<List<ScanSubstitution>>(emptyList()) }
     var nutritionEntries by remember { mutableStateOf<List<IngredientNutrition>>(emptyList()) }
     // Sunday reconciliation state (Phase V2-7): ran-out records and cook
     // check-offs are user data, loaded with everything else.
@@ -251,12 +258,12 @@ private fun DinnerBotApp(
             }
             val rows = plan?.let { pl ->
                 database.groceryDao().getForPlan(pl.id).map {
-                    GroceryRow(it.rowId, with(PlanMapper) { it.toModel() })
+                    GroceryRow(it.rowId, with(PlanMapper) { it.toModel() }, pl.id)
                 }
             } ?: emptyList()
             val rows2 = plan2?.let { pl ->
                 database.groceryDao().getForPlan(pl.id).map {
-                    GroceryRow(it.rowId, with(PlanMapper) { it.toModel() })
+                    GroceryRow(it.rowId, with(PlanMapper) { it.toModel() }, pl.id)
                 }
             } ?: emptyList()
             val loadedRatings = database.recipeRatingDao().getAll().mapNotNull { entity ->
@@ -279,11 +286,13 @@ private fun DinnerBotApp(
                 .map { with(ReconciliationMapper) { it.toModel() } }
             val loadedCheckoffs = database.cookCheckoffDao().getAll()
                 .map { with(ReconciliationMapper) { it.toModel() } }
+            val loadedSubstitutions = database.scanSubstitutionDao().getAll()
+                .map { with(SeedMapper) { it.toModel() } }
             LoadedState(
                 s, r, p, pantry, stocks, plan, rows, plan2, rows2,
                 loadedRatings, loadedPresets, loadedLinks, loadedNutrition,
                 loadedRanOut, loadedCheckoffs, loadedPhotoById, loadedPhotoFiles,
-                addedStaples,
+                addedStaples, loadedSubstitutions,
             )
         }
         settings = loaded.settings
@@ -303,6 +312,7 @@ private fun DinnerBotApp(
         nutritionEntries = loaded.nutritionEntries
         ranOutEvents = loaded.ranOutEvents
         cookCheckoffs = loaded.cookCheckoffs
+        scanSubstitutions = loaded.scanSubstitutions
         staplesAddedAtLoad = loaded.staplesAdded
         loading = false
     }
@@ -1019,6 +1029,15 @@ private fun DinnerBotApp(
                 },
                 ranOutEvents = ranOutEvents,
                 cookCheckoffs = cookCheckoffs,
+                scanSubstitutions = scanSubstitutions.map { record ->
+                    BackupScanSubstitution(
+                        originalItemId = record.originalItemId,
+                        substituteItemId = record.substituteItemId,
+                        recipeId = record.recipeId,
+                        substitutePriceCents = record.substitutePriceCents,
+                        createdAtMillis = record.createdAtMillis,
+                    )
+                },
             ),
         )
     }
@@ -1162,6 +1181,27 @@ private fun DinnerBotApp(
             }
 
             /**
+             * The same protection for scan substitutions (PR v0.4.4): a
+             * recost knows nothing about a this-week swap, so without
+             * this fold repricing would quietly put the planned line
+             * back and drop the item Andrea actually bought. The pure
+             * fold lives with the scan logic; this applies its lines
+             * and money deltas.
+             */
+            fun keepSubstitutedLines(
+                current: WeekPlanner.WeekPlan,
+                repriced: WeekPlanner.WeekPlan,
+            ): WeekPlanner.WeekPlan {
+                val fold = BarcodeScanLogic.foldSubstitutedLines(current.lines, repriced.lines)
+                if (fold.lines == repriced.lines) return repriced
+                return repriced.copy(
+                    lines = fold.lines,
+                    cashNeededCents = repriced.cashNeededCents + fold.cashDeltaCents,
+                    foodCostCents = repriced.foodCostCents + fold.foodDeltaCents,
+                )
+            }
+
+            /**
              * Pantry ownership feeds costing: when a staple is marked owned,
              * added, or marked not owned, the current week is repriced in
              * place (same dinners, new costing) and persisted, so its list
@@ -1193,7 +1233,8 @@ private fun DinnerBotApp(
                         pantryOwnedNames = owned,
                         gateOverride = gate,
                     )
-                    val kept1 = keepMergedLines(view, repriced1)
+                    val merged1 = keepMergedLines(view, repriced1)
+                    val kept1 = keepSubstitutedLines(view, merged1)
                     val stock1 = WeekPlanner.projectedStockAfter(
                         currentSettings, repriced1, adaptation.recipes, priceItems, stock, owned, gate,
                     )
@@ -1201,8 +1242,10 @@ private fun DinnerBotApp(
                     // packs coming home, but the projection derives stock
                     // from recipe needs and cannot see them; week 2 must
                     // not buy the same pack twice (Codex review, PR #23).
+                    // The pack read uses the merged fold only: a swapped
+                    // line is a purchase, not stock the projection tracks.
                     val stockForWeek2 = WeekPlanner.stockWithMergedPacks(
-                        stock1, kept1.lines, repriced1.lines, priceItems,
+                        stock1, merged1.lines, repriced1.lines, priceItems,
                     )
                     val repriced2 = WeekPlanner.recost(
                         settings = currentSettings,
@@ -1213,7 +1256,7 @@ private fun DinnerBotApp(
                         pantryOwnedNames = owned,
                         gateOverride = gate,
                     )
-                    val kept2 = keepMergedLines(view2, repriced2)
+                    val kept2 = keepSubstitutedLines(view2, keepMergedLines(view2, repriced2))
                     val changed = kept1.lines != view.lines ||
                         kept1.cashNeededCents != view.cashNeededCents ||
                         kept1.notes != view.notes ||
@@ -1229,15 +1272,18 @@ private fun DinnerBotApp(
                     }
                     return
                 }
-                val repriced = keepMergedLines(
+                val repriced = keepSubstitutedLines(
                     view,
-                    WeekPlanner.recost(
-                        settings = currentSettings,
-                        current = view,
-                        recipes = adaptation.recipes,
-                        priceItems = priceItems,
-                        stockOnHand = PantryLogic.stockMap(bulkStocks),
-                        pantryOwnedNames = PantryLogic.ownedNames(forPantryItems),
+                    keepMergedLines(
+                        view,
+                        WeekPlanner.recost(
+                            settings = currentSettings,
+                            current = view,
+                            recipes = adaptation.recipes,
+                            priceItems = priceItems,
+                            stockOnHand = PantryLogic.stockMap(bulkStocks),
+                            pantryOwnedNames = PantryLogic.ownedNames(forPantryItems),
+                        ),
                     ),
                 )
                 if (repriced.lines != view.lines ||
@@ -1568,6 +1614,56 @@ private fun DinnerBotApp(
                                     refresh()
                                 }
                             },
+                            scanSubstitutions = scanSubstitutions,
+                            substitutionRecipeContext = run {
+                                // The dinner context of each listed item,
+                                // from the plans actually stored: the one
+                                // cooking night that uses it, when there
+                                // is exactly one across the stored weeks.
+                                val contexts = mutableMapOf<String, String?>()
+                                (bigTripRows + topUpRows).forEach { row ->
+                                    if (row.line.itemId !in contexts) {
+                                        val plan = listOfNotNull(storedPlan, storedPlan2)
+                                            .firstOrNull { it.id == row.planId }
+                                        contexts[row.line.itemId] = plan?.let {
+                                            BarcodeScanLogic.recipeContextFor(
+                                                row.line.itemId, it.nights, recipesById,
+                                            )
+                                        }
+                                    }
+                                }
+                                contexts
+                            },
+                            onScanNewItem = { item, barcode ->
+                                scope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        saveScannedNewItem(database, item, barcode)
+                                    }
+                                    refresh()
+                                }
+                            },
+                            onSubstitute = { row, substitute, barcode, shelfPriceCents ->
+                                // The recipe context is read from the
+                                // stored plan the row belongs to, so the
+                                // remembered swap names its dinner when
+                                // exactly one dinner uses the item.
+                                val plan = listOfNotNull(storedPlan, storedPlan2)
+                                    .firstOrNull { it.id == row.planId }
+                                val recipeId = plan?.let {
+                                    BarcodeScanLogic.recipeContextFor(
+                                        row.line.itemId, it.nights, recipesById,
+                                    )
+                                }
+                                scope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        applyScanSubstitution(
+                                            database, row, substitute, barcode,
+                                            shelfPriceCents, recipeId,
+                                        )
+                                    }
+                                    refresh()
+                                }
+                            },
                             )
                         }
                         Tab.NUTRITION -> NutritionScreen(
@@ -1790,6 +1886,8 @@ private data class LoadedState(
     val photoFiles: Map<String, File>,
     /** Price book items the seed refresh added during this load (v0.4.3 staples). */
     val staplesAdded: Int,
+    /** Remembered scan substitutions (PR v0.4.4). */
+    val scanSubstitutions: List<ScanSubstitution>,
 )
 
 /** The Sunday gate's inputs, re-read from the store at request time. */
@@ -1871,6 +1969,91 @@ private suspend fun correctLinePrice(database: DinnerBotDatabase, row: GroceryRo
     database.groceryDao().updatePackPrice(row.rowId, newPackPrice)
 }
 
+/**
+ * A product the price book did not have, added from a scan (PR v0.4.4):
+ * the item is saved to the book as an ordinary item and the scanned
+ * barcode is linked to it, so the next scan of the same package recalls
+ * the item with the price typed here.
+ */
+private suspend fun saveScannedNewItem(database: DinnerBotDatabase, item: PriceItem, barcode: String) {
+    database.priceItemDao().upsert(with(SeedMapper) { item.toEntity() })
+    database.barcodeLinkDao().upsert(
+        BarcodeLinkEntity(barcode, item.id, System.currentTimeMillis()),
+    )
+}
+
+/**
+ * A this-week-only scan substitution (PR v0.4.4, Battles's drumsticks
+ * case). Writes, in order:
+ *
+ * 1. The substitute's price, store-aware like every scan write: the
+ *    pack price when the line shops at the item's home store, that
+ *    store's per-unit alternate otherwise. A substitute the book did
+ *    not have joins the book here, at the typed price. The ORIGINAL
+ *    item's price is never touched.
+ * 2. The barcode's link, when the scan carried one.
+ * 3. The row surgery: the planned row comes off this week's list and
+ *    the substitute's row goes on, marked with what it replaced, and
+ *    the stored plan's cash and food totals move by the exact
+ *    difference. The recipe and future weeks are not touched.
+ * 4. The remembered record, so the same swap is suggested next time.
+ */
+private suspend fun applyScanSubstitution(
+    database: DinnerBotDatabase,
+    row: GroceryRow,
+    substitute: PriceItem,
+    barcode: String?,
+    shelfPriceCents: Int,
+    recipeId: String?,
+) {
+    val stored = database.priceItemDao().getById(substitute.id)
+        ?.let { with(SeedMapper) { it.toModel() } }
+    val base = stored ?: substitute
+    val priced = if (row.line.store == base.homeStore) {
+        BarcodeScanLogic.scanCorrection(base, shelfPriceCents)
+    } else {
+        PriceCorrection.applyAlternatePrice(
+            base,
+            row.line.store,
+            shelfPriceCents.toDouble() / base.packQuantity.amount,
+            source = BarcodeScanLogic.SCAN_SOURCE,
+        )
+    }
+    database.priceItemDao().upsert(with(SeedMapper) { priced.toEntity() })
+    if (barcode != null) {
+        database.barcodeLinkDao().upsert(
+            BarcodeLinkEntity(barcode, priced.id, System.currentTimeMillis()),
+        )
+    }
+    val newLine = BarcodeScanLogic.substituteLine(row.line, priced, shelfPriceCents)
+    database.groceryDao().deleteRow(row.rowId)
+    database.groceryDao().insert(with(PlanMapper) { newLine.toEntity(row.planId) })
+    val planEntity = database.planDao().getById(row.planId)
+    if (planEntity != null) {
+        val plan = with(PlanMapper) { planEntity.toStoredPlan() }
+        val updated = plan.copy(
+            cashNeededCents = plan.cashNeededCents -
+                row.line.packsToBuy * row.line.estimatedPackPriceCents +
+                newLine.packsToBuy * newLine.estimatedPackPriceCents,
+            foodCostCents = plan.foodCostCents -
+                (row.line.portionCostCents ?: 0) + (newLine.portionCostCents ?: 0),
+        )
+        database.planDao().insert(with(PlanMapper) { updated.toEntity() })
+    }
+    database.scanSubstitutionDao().insert(
+        with(SeedMapper) {
+            ScanSubstitution(
+                planId = row.planId.ifEmpty { null },
+                originalItemId = row.line.itemId,
+                substituteItemId = priced.id,
+                recipeId = recipeId,
+                substitutePriceCents = shelfPriceCents,
+                createdAtMillis = System.currentTimeMillis(),
+            ).toEntity()
+        },
+    )
+}
+
 private suspend fun applyBackup(database: DinnerBotDatabase, data: BackupData) {
     database.settingsDao().upsert(with(SeedMapper) { data.settings.toEntity() })
     database.priceItemDao().deleteAll()
@@ -1902,6 +2085,25 @@ private suspend fun applyBackup(database: DinnerBotDatabase, data: BackupData) {
     database.cookCheckoffDao().deleteAll()
     data.cookCheckoffs.forEach { saved ->
         database.cookCheckoffDao().upsert(with(ReconciliationMapper) { saved.toEntity() })
+    }
+    // Remembered scan substitutions replace wholesale (PR v0.4.4): a
+    // pre-v5 backup has none, which clears them. The plan the swap
+    // happened in is not carried by the file, so restored records have
+    // none; the pairing memory is what matters.
+    database.scanSubstitutionDao().deleteAll()
+    data.scanSubstitutions.forEach { saved ->
+        database.scanSubstitutionDao().insert(
+            with(SeedMapper) {
+                ScanSubstitution(
+                    planId = null,
+                    originalItemId = saved.originalItemId,
+                    substituteItemId = saved.substituteItemId,
+                    recipeId = saved.recipeId,
+                    substitutePriceCents = saved.substitutePriceCents,
+                    createdAtMillis = saved.createdAtMillis,
+                ).toEntity()
+            },
+        )
     }
     // Plans were priced from the old book; clear them so nothing stale lingers.
     database.planDao().deleteAll()
