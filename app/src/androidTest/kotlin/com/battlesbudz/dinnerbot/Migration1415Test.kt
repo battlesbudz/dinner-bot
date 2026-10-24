@@ -64,16 +64,21 @@ class Migration1415Test {
         try {
             assertEquals(15, db.openHelper.writableDatabase.version)
             runBlocking {
-                // The book: 42 seed items plus her scan-added one,
-                // every price a real one — nothing guess-marked.
+                // The book's three fixture items (a corrected seed
+                // item, a flagged staple, her scan-added one), every
+                // price a real one — nothing guess-marked.
                 val items = db.priceItemDao().getAll()
                     .map { with(SeedMapper) { it.toModel() } }
-                assertEquals(43, items.size)
+                assertEquals(3, items.size)
                 assertTrue(items.none { it.guessPriced })
                 val breast = items.first { it.id == "chicken-breast" }
                 assertEquals(799, breast.packPriceCents)
                 assertTrue(breast.userCorrected)
                 assertTrue(items.first { it.id == "salt" }.staple)
+                assertEquals(
+                    499,
+                    items.first { it.id == "user-chicken-drumsticks" }.packPriceCents,
+                )
 
                 // Her import and the rest of the household's data.
                 val imported = db.importedRecipeDao().getAll()
@@ -94,7 +99,7 @@ class Migration1415Test {
                 assertEquals(1, db.scanSubstitutionDao().getAll().size)
                 assertEquals(1, db.recipeOverrideDao().getAll().size)
                 val settings = db.settingsDao().get()
-                assertEquals(15000, settings?.weeklyBudgetCents)
+                assertEquals(8000, settings?.weeklyBudgetCents)
 
                 // v0.5.2's own rows: the covered grocery line and the
                 // keep-prompt record survive the step untouched.
@@ -118,15 +123,15 @@ class Migration1415Test {
         val db = openMigrated()
         try {
             runBlocking {
-                val entity = db.priceItemDao().getById("eggs")!!
+                val entity = db.priceItemDao().getById("salt")!!
                 assertFalse(entity.guessPriced)
                 db.priceItemDao().upsert(entity.copy(guessPriced = true))
-                assertTrue(db.priceItemDao().getById("eggs")!!.guessPriced)
-                val model = with(SeedMapper) { db.priceItemDao().getById("eggs")!!.toModel() }
+                assertTrue(db.priceItemDao().getById("salt")!!.guessPriced)
+                val model = with(SeedMapper) { db.priceItemDao().getById("salt")!!.toModel() }
                 assertTrue(model.guessPriced)
                 // And clearing it (the first real price) sticks.
                 db.priceItemDao().upsert(entity.copy(guessPriced = false, packPriceCents = 199))
-                val cleared = db.priceItemDao().getById("eggs")!!
+                val cleared = db.priceItemDao().getById("salt")!!
                 assertFalse(cleared.guessPriced)
                 assertEquals(199, cleared.packPriceCents)
             }

@@ -192,11 +192,11 @@ class RecipeImportInstrumentedTest {
             // guess-priced item of their own and linked the recipe.
             assertEquals("flour", model.recipe.ingredients[1].priceItemId)
             val createdId = model.recipe.ingredients[0].priceItemId
-            assertEquals("user-spring-onions", createdId)
+            assertEquals("user-spring-onion", createdId)
             assertEquals(null, model.recipe.ingredients[0].pantryItem)
             val items = runBlocking { db.priceItemDao().getAll() }
             assertEquals(43, items.size)
-            val created = items.single { it.id == "user-spring-onions" }
+            val created = items.single { it.id == "user-spring-onion" }
             assertEquals("spring onions", created.name)
             assertTrue(created.guessPriced)
             assertTrue(created.packPriceCents > 0)

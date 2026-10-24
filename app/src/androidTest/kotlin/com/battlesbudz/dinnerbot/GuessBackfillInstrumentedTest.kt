@@ -136,7 +136,7 @@ class GuessBackfillInstrumentedTest {
             repeat(40) {
                 if (!created) {
                     created = withDb { db ->
-                        db.priceItemDao().getById("user-spring-onions") != null
+                        db.priceItemDao().getById("user-spring-onion") != null
                     }
                     if (!created) Thread.sleep(500)
                 }
@@ -151,7 +151,7 @@ class GuessBackfillInstrumentedTest {
             val items = db.priceItemDao().getAll()
             // The seed book (42) plus exactly one created item.
             assertEquals(43, items.size)
-            val created = items.single { it.id == "user-spring-onions" }
+            val created = items.single { it.id == "user-spring-onion" }
             assertEquals("spring onions", created.name)
             assertTrue(created.guessPriced)
             assertTrue(created.packPriceCents > 0)
@@ -159,7 +159,7 @@ class GuessBackfillInstrumentedTest {
             val stored = db.importedRecipeDao().getAll()
                 .map { with(SeedMapper) { it.toModel() } }
             val ingredients = stored.single().recipe.ingredients
-            assertEquals("user-spring-onions", ingredients[0].priceItemId)
+            assertEquals("user-spring-onion", ingredients[0].priceItemId)
             assertEquals(null, ingredients[0].pantryItem)
             assertEquals("flour", ingredients[1].priceItemId)
             assertEquals(null, ingredients[1].pantryItem)
@@ -178,7 +178,7 @@ class GuessBackfillInstrumentedTest {
             repeat(40) {
                 if (guessCents == 0) {
                     guessCents = withDb { db ->
-                        db.priceItemDao().getById("user-spring-onions")?.packPriceCents ?: 0
+                        db.priceItemDao().getById("user-spring-onion")?.packPriceCents ?: 0
                     }
                     if (guessCents == 0) Thread.sleep(500)
                 }
@@ -217,7 +217,7 @@ class GuessBackfillInstrumentedTest {
             repeat(40) {
                 if (!corrected) {
                     corrected = withDb { db ->
-                        val item = db.priceItemDao().getById("user-spring-onions")
+                        val item = db.priceItemDao().getById("user-spring-onion")
                         item != null && !item.guessPriced && item.packPriceCents == 145
                     }
                     if (!corrected) Thread.sleep(500)
@@ -225,7 +225,7 @@ class GuessBackfillInstrumentedTest {
             }
             assertTrue("the correction never landed", corrected)
             withDb { db ->
-                assertFalse(db.priceItemDao().getById("user-spring-onions")!!.guessPriced)
+                assertFalse(db.priceItemDao().getById("user-spring-onion")!!.guessPriced)
             }
         }
     }
