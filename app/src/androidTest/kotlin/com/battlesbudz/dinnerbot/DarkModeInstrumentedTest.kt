@@ -93,6 +93,13 @@ class DarkModeInstrumentedTest {
 
     @After fun tearDown() {
         setNightMode(false)
+        // Wait for the flip back to settle before the next test class
+        // launches anything: a configuration change landing mid-test
+        // in a later class would recreate its activity under it.
+        val deadline = SystemClock.uptimeMillis() + 10_000
+        while (isNight() && SystemClock.uptimeMillis() < deadline) {
+            SystemClock.sleep(100)
+        }
         context.deleteDatabase("dinner-bot.db")
     }
 
