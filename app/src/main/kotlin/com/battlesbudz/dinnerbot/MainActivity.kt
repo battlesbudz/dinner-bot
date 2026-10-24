@@ -69,7 +69,6 @@ import com.battlesbudz.dinnerbot.core.model.DietPresets
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
 import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
 import com.battlesbudz.dinnerbot.core.model.PantryItem
-import com.battlesbudz.dinnerbot.core.model.Perishables
 import com.battlesbudz.dinnerbot.core.model.PossibleOut
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.RanOutEvent
@@ -1192,7 +1191,9 @@ private fun DinnerBotApp(
                 current: WeekPlanner.WeekPlan,
                 repriced: WeekPlanner.WeekPlan,
             ): WeekPlanner.WeekPlan {
-                val fold = BarcodeScanLogic.foldSubstitutedLines(current.lines, repriced.lines)
+                val fold = BarcodeScanLogic.foldSubstitutedLines(
+                    current.lines, repriced.lines, priceItems.associateBy { it.id },
+                )
                 if (fold.lines == repriced.lines) return repriced
                 return repriced.copy(
                     lines = fold.lines,
@@ -1531,8 +1532,9 @@ private fun DinnerBotApp(
                             // with the top-up (Phase V2-7), like the fresh
                             // lines: the big trip predates the check.
                             fun isTopUpRow(row: GroceryRow): Boolean =
-                                row.line.reconciliationAdded ||
-                                    Perishables.isTopUpLine(row.line, priceById[row.line.itemId])
+                                BarcodeScanLogic.isTopUpPurchase(
+                                    row.line, priceById[row.line.itemId],
+                                )
                             val topUpRows = if (isFortnightList) {
                                 groceryRows2.filter { isTopUpRow(it) }
                             } else {
@@ -2090,14 +2092,20 @@ private suspend fun applyScanSubstitution(
     val mergeTarget = database.groceryDao().getForPlan(row.planId)
         .filter { it.rowId != row.rowId }
         .firstOrNull {
-            // Same item, same store, same trip (big trip vs Week 2
-            // top-up): a line differing on any of those is a separate
-            // purchase, and merging into it would mislabel the store
-            // section, the price, or the schedule (Codex, PR #24). A
-            // reconciliation-added line never absorbs a swap either.
+            // Same item, same store, same effective trip (the list's
+            // own section rule: a plain perishable line and a
+            // reconciliation line both shop the Week 2 top-up, while
+            // a reconciliation line for a shelf-stable item does not
+            // shop with the big trip). A line differing on any of
+            // those is a separate purchase, and merging into it would
+            // mislabel the store section, the price, or the schedule
+            // (Codex, PR #24). A line already carrying a swap never
+            // absorbs another.
             it.itemId == priced.id && it.store == row.line.store.name &&
-                it.reconciliationAdded == row.line.reconciliationAdded &&
-                it.substitutedForItemId == null && !it.reconciliationAdded
+                it.substitutedForItemId == null &&
+                BarcodeScanLogic.isTopUpPurchase(
+                    with(PlanMapper) { it.toModel() }, priced,
+                ) == BarcodeScanLogic.isTopUpPurchase(newLine, priced)
         }
     database.groceryDao().deleteRow(row.rowId)
     if (mergeTarget != null) {

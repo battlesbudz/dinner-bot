@@ -8,6 +8,7 @@ import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Quantity
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.ScanSubstitution
+import com.battlesbudz.dinnerbot.core.model.Perishables
 import com.battlesbudz.dinnerbot.core.model.Store
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceCorrection
 import kotlin.math.ceil
@@ -77,6 +78,21 @@ object BarcodeScanLogic {
     /** The first displaced origin of a line, its primary pairing. */
     fun primaryOriginOf(line: GroceryLine): String? =
         displacedOriginsOf(line.substitutedForItemId).firstOrNull()
+
+    /**
+     * The trip a line is bought on, the list's own section rule
+     * (MainActivity's isTopUpRow): a reconciliation-added line shops
+     * with the Week 2 top-up, and so does any line for a perishable
+     * item; everything else rides the big trip. Merge and fold
+     * decisions compare THIS, not the raw reconciliation flag: two
+     * lines for one item can carry different flags and still be the
+     * same purchase (a plain perishable line and a reconciliation
+     * line both shop the top-up), and two same-flag lines can be
+     * different purchases when one was reconciliation-added for a
+     * shelf-stable item (Codex, PR #24).
+     */
+    fun isTopUpPurchase(line: GroceryLine, item: PriceItem?): Boolean =
+        line.reconciliationAdded || Perishables.isTopUpLine(line, item)
 
     /** The marker a swap of [original] carries: its origins, then itself. */
     private fun markerFor(original: GroceryLine): String =
@@ -305,7 +321,7 @@ object BarcodeScanLogic {
             "a swap merges only into a line shopping at the same store; " +
                 "a different store keeps the purchases separate"
         }
-        require(existing.reconciliationAdded == swap.reconciliationAdded) {
+        require(isTopUpPurchase(existing, item) == isTopUpPurchase(swap, item)) {
             "a swap merges only into a line on the same trip; a big-trip " +
                 "line and a Week 2 top-up line stay separate purchases"
         }
@@ -394,21 +410,36 @@ object BarcodeScanLogic {
      * carried swap lines in, displaced planned lines out, displaced
      * fresh lines for a carried swap's item out.
      */
-    fun foldSubstitutedLines(current: List<GroceryLine>, fresh: List<GroceryLine>): SubstitutedFold {
+    fun foldSubstitutedLines(
+        current: List<GroceryLine>,
+        fresh: List<GroceryLine>,
+        itemById: Map<String, PriceItem> = emptyMap(),
+    ): SubstitutedFold {
         val swaps = current.filter { it.substitutedForItemId != null }
         if (swaps.isEmpty()) return SubstitutedFold(fresh, 0, 0)
         val displacedIds = swaps.flatMap { displacedOriginsOf(it.substitutedForItemId) }.toSet()
         val kept = fresh.filter { it.itemId !in displacedIds }.toMutableList()
         val carried = mutableListOf<GroceryLine>()
         for (swap in swaps) {
-            // The same purchase only when store AND trip match, the
-            // write path's own merge rule: a fresh line from the other
-            // trip (big trip vs Week 2 top-up) is a different purchase
-            // whose need the swap does not include, and dropping it
-            // would lose that dinner and move the buy (Codex, PR #24).
-            val freshIndex = kept.indexOfFirst {
-                it.itemId == swap.itemId && it.store == swap.store &&
-                    it.reconciliationAdded == swap.reconciliationAdded
+            // The same purchase only when store AND effective trip
+            // match, the write path's own merge rule, and only when
+            // the stored week holds no separate plain line for the
+            // item: a fresh line from another trip, or for a dinner
+            // whose stored line the swap never merged with, is a
+            // different purchase whose need the swap does not include,
+            // and dropping it would lose that dinner and move the
+            // buy (Codex, PR #24).
+            val hasSeparateLine = current.any {
+                it.itemId == swap.itemId && it.substitutedForItemId == null
+            }
+            val freshIndex = if (hasSeparateLine) {
+                -1
+            } else {
+                kept.indexOfFirst {
+                    it.itemId == swap.itemId && it.store == swap.store &&
+                        isTopUpPurchase(it, itemById[it.itemId]) ==
+                        isTopUpPurchase(swap, itemById[swap.itemId])
+                }
             }
             if (freshIndex >= 0) {
                 // The stored line carries whole, at its stored price:

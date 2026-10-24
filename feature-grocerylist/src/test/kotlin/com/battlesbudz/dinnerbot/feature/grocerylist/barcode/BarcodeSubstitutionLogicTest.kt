@@ -14,6 +14,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 /**
@@ -308,6 +309,53 @@ class BarcodeSubstitutionLogicTest {
             drumstickLines.map { it.reconciliationAdded }.sorted(),
         )
         assertTrue(fold.lines.none { it.itemId == "chicken-breast" })
+    }
+
+    @Test fun mergeFollowsTheEffectiveTripNotTheRawFlag() {
+        // Codex, PR #24: a plain perishable line and a reconciliation
+        // line for the same item both shop the Week 2 top-up, so a
+        // swap merges across the flag difference; for a shelf-stable
+        // item the same flag difference IS a different trip and the
+        // merge is refused.
+        val perishable = item("user-chicken-drumsticks", "Chicken drumsticks", 499)
+            .copy(category = "Meat")
+        val existingRecon = line(perishable).copy(reconciliationAdded = true)
+        val plainSwap = BarcodeScanLogic.substituteLine(line(breast), perishable, 499)
+        val merged = BarcodeScanLogic.mergeSwapIntoLine(existingRecon, plainSwap, perishable)
+        assertEquals("chicken-breast", merged.substitutedForItemId)
+        assertTrue(merged.reconciliationAdded)
+
+        val shelfStable = perishable.copy(category = "Dry and canned")
+        val reconSwap = BarcodeScanLogic.substituteLine(
+            line(breast).copy(reconciliationAdded = true), shelfStable, 499,
+        )
+        try {
+            BarcodeScanLogic.mergeSwapIntoLine(line(shelfStable), reconSwap, shelfStable)
+            fail("a shelf-stable top-up swap must not merge into a big-trip line")
+        } catch (expected: IllegalArgumentException) {
+            // The trips differ; the purchases stay separate.
+        }
+    }
+
+    @Test fun foldDropsTheFreshLineForAMergedTopUpLine() {
+        // The write path merged the swap into a reconciliation line
+        // for a perishable item (same effective trip): the stored
+        // week holds only the merged marked line, and the fold drops
+        // the fresh one-dinner line it already includes.
+        val perishable = item("user-chicken-drumsticks", "Chicken drumsticks", 499)
+            .copy(category = "Meat")
+        val merged = BarcodeScanLogic.mergeSwapIntoLine(
+            line(perishable).copy(reconciliationAdded = true),
+            BarcodeScanLogic.substituteLine(line(breast), perishable, 499),
+            perishable,
+        )
+        val fold = BarcodeScanLogic.foldSubstitutedLines(
+            listOf(merged),
+            listOf(line(breast), line(perishable)),
+            mapOf(perishable.id to perishable),
+        )
+        assertEquals(listOf("user-chicken-drumsticks"), fold.lines.map { it.itemId })
+        assertEquals("chicken-breast", fold.lines.single().substitutedForItemId)
     }
 
     @Test fun foldKeepsACrossStoreFreshLineAsASeparatePurchase() {
