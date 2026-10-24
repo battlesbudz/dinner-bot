@@ -256,6 +256,10 @@ object BarcodeScanLogic {
         }
         require(existing.substitutedForItemId == null) { "only a plain line absorbs a swap" }
         require(swap.substitutedForItemId != null) { "the absorbed line must be a swap" }
+        require(existing.store == swap.store) {
+            "a swap merges only into a line shopping at the same store; " +
+                "a different store keeps the purchases separate"
+        }
         val combinedNeedInPackUnit = Costing.amountInPackUnit(existing.needed, item) +
             Costing.amountInPackUnit(swap.needed, item)
         val packsForCombined = ceil(combinedNeedInPackUnit / item.packQuantity.amount - PACK_EPSILON)
@@ -291,22 +295,26 @@ object BarcodeScanLogic {
      * with its check-off state intact.
      *
      * When the fresh costing buys the substitute on its own (another
-     * dinner in the week needs it too), the swap MERGES into that fresh
-     * line instead of duplicating it: the fresh line stands at its
-     * fresh price, takes the swap's marker so the displacement
-     * survives the NEXT reprice as well (a marker dropped here would
-     * quietly resurrect the planned line one reprice later), and takes
-     * the swap's food portion on top of its own, because the merged
-     * line now feeds both dinners. No second pack is charged: one
-     * line, one purchase, two dinners' portions. A second swap for the
-     * same substitute in the same week has no unmarked fresh line left
-     * to merge into and carries as its own line: two swaps were two
-     * packs in the cart.
+     * dinner in the week needs it too), the stored swap line CARRIES
+     * AS A WHOLE and the fresh line drops — when they shop at the
+     * same store, so they are the same purchase. That is the only
+     * honest read of the stored state: the write path already merged
+     * the swap into the week's purchase for this item (see
+     * [mergeSwapIntoLine]), so the stored line's need, pack count and
+     * portion already cover both dinners. Rebuilding it from the
+     * fresh line would shrink the purchase back to one dinner's and
+     * double-count the other's portion. Only the per-pack price
+     * refreshes from the fresh costing, the way a reprice refreshes
+     * every other line. A fresh line for the item at a DIFFERENT store
+     * is a separate purchase and stands; the swap carries alongside
+     * it. A second swap for the same substitute has no fresh line
+     * left to displace and carries as its own line: two swaps were
+     * two packs in the cart.
      *
      * The deltas are computed from the line sums themselves (final
      * lines minus fresh lines), so they price exactly the movements:
-     * carried swap lines in, displaced planned lines out, and a merged
-     * line's added portion in, with its cash unchanged.
+     * carried swap lines in, displaced planned lines out, displaced
+     * fresh lines for a carried swap's item out.
      */
     fun foldSubstitutedLines(current: List<GroceryLine>, fresh: List<GroceryLine>): SubstitutedFold {
         val swaps = current.filter { it.substitutedForItemId != null }
@@ -315,16 +323,12 @@ object BarcodeScanLogic {
         val kept = fresh.filter { it.itemId !in displacedIds }.toMutableList()
         val carried = mutableListOf<GroceryLine>()
         for (swap in swaps) {
-            val mergeIndex = kept.indexOfFirst {
-                it.itemId == swap.itemId && it.substitutedForItemId == null
+            val freshIndex = kept.indexOfFirst {
+                it.itemId == swap.itemId && it.store == swap.store
             }
-            if (mergeIndex >= 0) {
-                val target = kept[mergeIndex]
-                kept[mergeIndex] = target.copy(
-                    substitutedForItemId = swap.substitutedForItemId,
-                    portionCostCents = (target.portionCostCents ?: 0) +
-                        (swap.portionCostCents ?: 0),
-                )
+            if (freshIndex >= 0) {
+                val freshLine = kept.removeAt(freshIndex)
+                carried += swap.copy(estimatedPackPriceCents = freshLine.estimatedPackPriceCents)
             } else {
                 carried += swap
             }

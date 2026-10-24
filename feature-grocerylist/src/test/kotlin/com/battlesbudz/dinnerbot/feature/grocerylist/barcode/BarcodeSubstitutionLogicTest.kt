@@ -230,26 +230,51 @@ class BarcodeSubstitutionLogicTest {
         assertEquals(0, fold.foodDeltaCents)
     }
 
-    @Test fun foldDoesNotDuplicateASubstituteTheFreshCostingAlreadyBuys() {
-        // Another dinner this week already buys drumsticks on its own:
-        // the fresh line stands at its fresh price, the swap line is not
-        // added twice, and the displaced breast line still comes off.
-        // Crucially the fresh line takes the swap's marker (Codex, PR
-        // #24): without it the NEXT reprice would forget the swap and
-        // resurrect the breast line.
+    @Test fun foldCarriesAWriteTimeMergedSwapWholeAndDropsTheFreshLine() {
+        // The stored state after a write-time merge (Codex, PR #24):
+        // one marked line whose need (4 lb), packs (2) and portion
+        // (850) already cover both dinners. The fresh costing
+        // regenerates the displaced breast and a one-dinner drumstick
+        // line. The fold carries the stored line whole and drops the
+        // fresh one: rebuilding from the fresh line would shrink the
+        // purchase back to one dinner's and double-count its portion.
+        // Only the per-pack price refreshes (499 stored, 525 fresh).
+        val storedMerged = GroceryLine(
+            itemId = "user-chicken-drumsticks", displayName = "Chicken drumsticks",
+            store = Store.ALDI, needed = Quantity(4.0, MeasureUnit.POUND),
+            packsToBuy = 2, estimatedPackPriceCents = 499, portionCostCents = 850,
+            substitutedForItemId = "chicken-breast",
+        )
+        val freshDrumsticks = item("user-chicken-drumsticks", "Chicken drumsticks", 525)
+        val current = listOf(line(rice), storedMerged)
+        val fresh = listOf(line(rice), line(breast), line(freshDrumsticks))
+        val fold = BarcodeScanLogic.foldSubstitutedLines(current, fresh)
+        val carried = fold.lines.single { it.itemId == "user-chicken-drumsticks" }
+        assertEquals(Quantity(4.0, MeasureUnit.POUND), carried.needed)
+        assertEquals(2, carried.packsToBuy)
+        assertEquals(850, carried.portionCostCents)
+        assertEquals(525, carried.estimatedPackPriceCents)
+        assertEquals("chicken-breast", carried.substitutedForItemId)
+        assertEquals(189 + 2 * 525 - (189 + 836 + 525), fold.cashDeltaCents)
+        assertEquals(189 + 850 - (189 + 836 + 525), fold.foodDeltaCents)
+    }
+
+    @Test fun foldKeepsACrossStoreFreshLineAsASeparatePurchase() {
+        // The substitute is bought at Aldi by the swap and at Walmart
+        // by another dinner's own line: separate purchases at separate
+        // stores. Both stand; only the displaced breast comes off.
         val drumsticks = item("user-chicken-drumsticks", "Chicken drumsticks", 499)
         val swappedLine = BarcodeScanLogic.substituteLine(line(breast), drumsticks, 499)
-        val current = listOf(swappedLine)
-        val fresh = listOf(line(breast), line(drumsticks))
-        val fold = BarcodeScanLogic.foldSubstitutedLines(current, fresh)
-        assertEquals(listOf("user-chicken-drumsticks"), fold.lines.map { it.itemId })
-        assertEquals("chicken-breast", fold.lines.single().substitutedForItemId)
-        // No second pack is charged (the fresh line's $4.99 stands),
-        // but the line now feeds both dinners: its portion is the fresh
-        // dinner's $4.99 plus the swapped dinner's $4.99 (Codex, PR #24).
-        assertEquals(-836, fold.cashDeltaCents)
-        assertEquals(998, fold.lines.single().portionCostCents)
-        assertEquals(-836 + 499, fold.foodDeltaCents)
+        val walmartLine = line(drumsticks).copy(store = Store.WALMART)
+        val fold = BarcodeScanLogic.foldSubstitutedLines(
+            listOf(swappedLine),
+            listOf(line(breast), walmartLine),
+        )
+        assertEquals(
+            listOf(Store.WALMART, Store.ALDI),
+            fold.lines.map { it.store },
+        )
+        assertEquals(998 - 1335, fold.cashDeltaCents)
     }
 
     @Test fun foldMergedMarkerSurvivesASecondReprice() {
@@ -294,9 +319,8 @@ class BarcodeSubstitutionLogicTest {
             drumstickLines.map { it.substitutedForItemId }.toSet(),
         )
         assertEquals(499 - 836 - 620, fold.cashDeltaCents)
-        // The merged line carries both dinners' portions for its item.
-        val merged = drumstickLines.single { it.substitutedForItemId == "chicken-breast" }
-        assertEquals(998, merged.portionCostCents)
+        // Each carried line keeps its own dinner's portion.
+        assertTrue(drumstickLines.all { it.portionCostCents == 499 })
     }
 
     @Test fun chainedSwapKeepsTheRootDisplacedItem() {

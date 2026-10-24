@@ -107,12 +107,14 @@ fun GroceryListScreen(
     /** Remembered scan substitutions (PR v0.4.4); the substitute flow surfaces the matching one. */
     scanSubstitutions: List<ScanSubstitution> = emptyList(),
     /**
-     * Recipe context per listed item (PR v0.4.4): an item id mapped to
-     * the one planned dinner that uses it, when there is exactly one,
-     * so the remembered-swap suggestion prefers the swap made for this
-     * dinner.
+     * Recipe context per listed item (PR v0.4.4): a (plan id, item id)
+     * pair mapped to the one planned dinner of THAT plan that uses the
+     * item, when there is exactly one, so the remembered-swap
+     * suggestion prefers the swap made for this dinner. Keyed per plan
+     * because a fortnight can use the same item in different dinners
+     * in each week.
      */
-    substitutionRecipeContext: Map<String, String?> = emptyMap(),
+    substitutionRecipeContext: Map<Pair<String, String>, String?> = emptyMap(),
     /**
      * A price book item created from a scan (PR v0.4.4): the caller
      * saves it to the book and links the scanned barcode to it.
@@ -292,7 +294,7 @@ fun GroceryListScreen(
                     val remembered = BarcodeScanLogic.rememberedSubstitution(
                         scanSubstitutions,
                         rootItemId,
-                        substitutionRecipeContext[rootItemId],
+                        substitutionRecipeContext[fromRow.planId to rootItemId],
                     )
                     SubstituteChoiceDialog(
                         scannedItem = displayItem,

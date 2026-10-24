@@ -1623,13 +1623,14 @@ private fun DinnerBotApp(
                                 // A swapped line keys by its ROOT planned
                                 // item: the dinner uses that item, and the
                                 // remembered-swap memory is paired to it.
-                                val contexts = mutableMapOf<String, String?>()
+                                val contexts = mutableMapOf<Pair<String, String>, String?>()
                                 (bigTripRows + topUpRows).forEach { row ->
                                     val rootId = row.line.substitutedForItemId ?: row.line.itemId
-                                    if (rootId !in contexts) {
+                                    val key = row.planId to rootId
+                                    if (key !in contexts) {
                                         val plan = listOfNotNull(storedPlan, storedPlan2)
                                             .firstOrNull { it.id == row.planId }
-                                        contexts[rootId] = plan?.let {
+                                        contexts[key] = plan?.let {
                                             BarcodeScanLogic.recipeContextFor(
                                                 rootId, it.nights, recipesById,
                                             )
@@ -2045,7 +2046,11 @@ private suspend fun applyScanSubstitution(
     val mergeTarget = database.groceryDao().getForPlan(row.planId)
         .filter { it.rowId != row.rowId }
         .firstOrNull {
-            it.itemId == priced.id && it.substitutedForItemId == null && !it.reconciliationAdded
+            // Same item AND same store: a line shopping elsewhere is a
+            // separate purchase, and merging into it would mislabel
+            // both the store section and the price (Codex, PR #24).
+            it.itemId == priced.id && it.store == row.line.store.name &&
+                it.substitutedForItemId == null && !it.reconciliationAdded
         }
     database.groceryDao().deleteRow(row.rowId)
     if (mergeTarget != null) {
