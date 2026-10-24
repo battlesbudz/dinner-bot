@@ -440,11 +440,17 @@ class BarcodeSubstitutionLogicTest {
         val smallNeed = line(breast).copy(needed = Quantity(1.0, MeasureUnit.POUND))
         val bigSwap = BarcodeScanLogic.substituteLine(smallNeed, bigPack, 750)
         assertEquals(160, BarcodeScanLogic.correctedSwapPortion(bigSwap, bigPack, 800))
-        // An alternate-store line's price is its need cost, so the
-        // portion is the corrected total itself.
-        val alternate = swapped.copy(store = Store.WALMART)
-        val samsHome = drumsticks.copy(homeStore = Store.SAMS_CLUB)
-        assertEquals(450, BarcodeScanLogic.correctedSwapPortion(alternate, samsHome, 450))
+        // A swap line prices per pack at ANY store (Codex, PR #24):
+        // at Walmart for a Sam's item, a 2 lb need from a 4 lb pack
+        // corrected to $4.00 a pack portions at 200, not the total.
+        val samsPack = drumsticks.copy(
+            homeStore = Store.SAMS_CLUB,
+            packQuantity = Quantity(4.0, MeasureUnit.POUND),
+        )
+        val walmartSwap = BarcodeScanLogic.substituteLine(
+            line(breast).copy(store = Store.WALMART), samsPack, 400,
+        )
+        assertEquals(200, BarcodeScanLogic.correctedSwapPortion(walmartSwap, samsPack, 400))
     }
 
     // ---- Piece 3: the remembered substitution ----

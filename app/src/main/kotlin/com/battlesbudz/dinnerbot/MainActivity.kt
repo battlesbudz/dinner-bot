@@ -1972,7 +1972,8 @@ private suspend fun syncPantryStaples(database: DinnerBotDatabase, settings: Hou
  */
 private suspend fun correctLinePrice(database: DinnerBotDatabase, row: GroceryRow, totalCents: Int) {
     val entity = database.priceItemDao().getById(row.line.itemId)
-    var newPackPrice = totalCents
+    val isSwapLine = row.line.substitutedForItemId != null
+    var rowPrice = totalCents
     var correctedItem: PriceItem? = null
     if (entity != null) {
         val item = with(SeedMapper) { entity.toModel() }
@@ -1983,7 +1984,7 @@ private suspend fun correctLinePrice(database: DinnerBotDatabase, row: GroceryRo
             database.priceItemDao().upsert(
                 with(SeedMapper) { PriceCorrection.applyPackPrice(item, perPack).toEntity() },
             )
-            newPackPrice = perPack
+            rowPrice = perPack
         } else {
             val neededInPackUnit = Costing.amountInPackUnit(row.line.needed, item)
             if (neededInPackUnit > 0.0) {
@@ -1994,20 +1995,29 @@ private suspend fun correctLinePrice(database: DinnerBotDatabase, row: GroceryRo
                     },
                 )
             }
+            if (isSwapLine) {
+                // The book's alternate still derives from total over
+                // need, but the ROW of a swap prices per pack at any
+                // store (it was built from a scanned pack): storing the
+                // line total here would multiply it by the pack count
+                // wherever the row's cash is computed (Codex, PR #24).
+                rowPrice = (totalCents.toDouble() / row.line.packsToBuy.coerceAtLeast(1))
+                    .roundToInt().coerceAtLeast(1)
+            }
         }
     }
     // A swapped row's portion is frozen at its scanned rate (the fold
     // carries the line whole), so the correction recomputes it from
-    // the corrected price; a planner line's portion is rebuilt at the
-    // next reprice and needs no write here (PR v0.4.4, Codex).
+    // the corrected per-pack price; a planner line's portion is
+    // rebuilt at the next reprice and needs no write here (PR v0.4.4).
     val item = correctedItem
-    if (item != null && row.line.substitutedForItemId != null) {
+    if (item != null && isSwapLine) {
         database.groceryDao().updatePackPriceAndPortion(
-            row.rowId, newPackPrice,
-            BarcodeScanLogic.correctedSwapPortion(row.line, item, newPackPrice),
+            row.rowId, rowPrice,
+            BarcodeScanLogic.correctedSwapPortion(row.line, item, rowPrice),
         )
     } else {
-        database.groceryDao().updatePackPrice(row.rowId, newPackPrice)
+        database.groceryDao().updatePackPrice(row.rowId, rowPrice)
     }
 }
 

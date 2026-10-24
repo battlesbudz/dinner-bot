@@ -348,25 +348,20 @@ object BarcodeScanLogic {
 
     /**
      * The food portion of a swap line after its price is corrected
-     * (a tap on its price, or a rescan) to [newPackPriceCents]
-     * (Codex, PR #24). A correction updates the row's pack price but
-     * a swap line is carried whole at reprice, so without this its
-     * portion would keep the pre-correction rate forever. The portion
-     * follows the line's own representation: at the item's home store,
-     * the line's need at the corrected per-unit rate (a merged line's
-     * combined need included); at an alternate store the line's price
-     * IS the cost of its quantity, so the portion is that price, the
-     * typed total for the whole line.
+     * (a tap on its price, or a rescan) to [correctedPerPackCents],
+     * the corrected price of ONE pack (Codex, PR #24). A correction
+     * updates the row's pack price but a swap line is carried whole
+     * at reprice, so without this its portion would keep the
+     * pre-correction rate forever. A swap line prices per pack at
+     * whatever store it sits (it was built from a scanned pack), so
+     * the portion is always the line's need at the corrected per-unit
+     * rate, a merged line's combined need included.
      */
-    fun correctedSwapPortion(line: GroceryLine, item: PriceItem, newPackPriceCents: Int): Int {
+    fun correctedSwapPortion(line: GroceryLine, item: PriceItem, correctedPerPackCents: Int): Int {
         require(line.itemId == item.id) { "the portion recompute is for the line's own item" }
         require(line.substitutedForItemId != null) { "only swap lines carry a frozen portion" }
-        return if (line.store == item.homeStore) {
-            val needInPackUnit = Costing.amountInPackUnit(line.needed, item)
-            (needInPackUnit * newPackPriceCents / item.packQuantity.amount).roundToInt()
-        } else {
-            newPackPriceCents
-        }
+        val needInPackUnit = Costing.amountInPackUnit(line.needed, item)
+        return (needInPackUnit * correctedPerPackCents / item.packQuantity.amount).roundToInt()
     }
 
     /** A repriced week's lines with its scan substitutions folded back in, and the money deltas. */
