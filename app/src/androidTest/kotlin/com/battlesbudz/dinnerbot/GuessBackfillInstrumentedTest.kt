@@ -211,22 +211,18 @@ class GuessBackfillInstrumentedTest {
             val guessText = "$${guessCents / 100}.${(guessCents % 100).toString().padStart(2, '0')}"
             // Tap THIS item's price: another book item could share the
             // same dollar text, so pick the price node nearest the
-            // item's name and tap it by coordinates.
-            Thread.sleep(500)
+            // item's name and fire its click action directly (no
+            // display coordinates — those are offset by the status bar
+            // from the semantics bounds).
             val nameBounds = composeRule.onAllNodesWithText("spring onions")
                 .fetchSemanticsNodes().single().boundsInRoot
-            val priceBounds = composeRule.onAllNodesWithText(guessText)
+            val priceNodes = composeRule.onAllNodesWithText(guessText)
                 .fetchSemanticsNodes()
-                .minByOrNull {
-                    kotlin.math.abs(it.boundsInRoot.top - nameBounds.top) +
-                        kotlin.math.abs(it.boundsInRoot.left - nameBounds.left)
-                }!!.boundsInRoot
-            androidx.test.uiautomator.UiDevice
-                .getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation())
-                .click(
-                    (priceBounds.left + priceBounds.right).toInt() / 2,
-                    (priceBounds.top + priceBounds.bottom).toInt() / 2,
-                )
+            val bestIndex = priceNodes.indices.minByOrNull { i ->
+                kotlin.math.abs(priceNodes[i].boundsInRoot.top - nameBounds.top) +
+                    kotlin.math.abs(priceNodes[i].boundsInRoot.left - nameBounds.left)
+            } ?: throw AssertionError("no price node reads $guessText")
+            composeRule.onAllNodesWithText(guessText)[bestIndex].performClick()
             waitForText("Pack price for", substring = true)
             composeRule.onNode(hasSetTextAction()).performTextReplacement("1.45")
             composeRule.onNodeWithText("Save").performClick()
