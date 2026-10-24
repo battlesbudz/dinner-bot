@@ -1193,19 +1193,26 @@ private fun DinnerBotApp(
                         pantryOwnedNames = owned,
                         gateOverride = gate,
                     )
+                    val kept1 = keepMergedLines(view, repriced1)
                     val stock1 = WeekPlanner.projectedStockAfter(
                         currentSettings, repriced1, adaptation.recipes, priceItems, stock, owned, gate,
+                    )
+                    // Merged Sam's packs folded back into week 1 are real
+                    // packs coming home, but the projection derives stock
+                    // from recipe needs and cannot see them; week 2 must
+                    // not buy the same pack twice (Codex review, PR #23).
+                    val stockForWeek2 = WeekPlanner.stockWithMergedPacks(
+                        stock1, kept1.lines, repriced1.lines, priceItems,
                     )
                     val repriced2 = WeekPlanner.recost(
                         settings = currentSettings,
                         current = view2,
                         recipes = adaptation.recipes,
                         priceItems = priceItems,
-                        stockOnHand = stock1,
+                        stockOnHand = stockForWeek2,
                         pantryOwnedNames = owned,
                         gateOverride = gate,
                     )
-                    val kept1 = keepMergedLines(view, repriced1)
                     val kept2 = keepMergedLines(view2, repriced2)
                     val changed = kept1.lines != view.lines ||
                         kept1.cashNeededCents != view.cashNeededCents ||

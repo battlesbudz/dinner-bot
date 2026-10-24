@@ -388,6 +388,41 @@ object WeekPlanner {
     }
 
     /**
+     * Fold a week's reconciliation-merged Sam's packs into a stock
+     * projection. [projectedStockAfter] derives stock from recipe needs,
+     * so a merged pack for an item the week does not cook (a pure
+     * restock line) never enters its projection; passing the projection
+     * on to the next week as-is would buy the same pack twice. Lines
+     * the costing itself produced ([costedLines]) are already in the
+     * projection and are not counted again; only merged lines with no
+     * costed counterpart add their packs.
+     */
+    fun stockWithMergedPacks(
+        stock: Map<String, Quantity>,
+        weekLines: List<GroceryLine>,
+        costedLines: List<GroceryLine>,
+        priceItems: List<PriceItem>,
+    ): Map<String, Quantity> {
+        val itemsById = priceItems.associateBy { it.id }
+        val costedIds = costedLines.map { it.itemId }.toSet()
+        val result = stock.toMutableMap()
+        var changed = false
+        for (line in weekLines) {
+            if (!line.reconciliationAdded || line.itemId in costedIds) continue
+            val item = itemsById[line.itemId] ?: continue
+            if (item.homeStore != Store.SAMS_CLUB) continue
+            val totalBase = (result[item.id]?.toBase() ?: 0.0) +
+                line.packsToBuy * item.packQuantity.toBase()
+            result[item.id] = Quantity(
+                totalBase / item.packQuantity.unit.toBaseFactor,
+                item.packQuantity.unit,
+            )
+            changed = true
+        }
+        return if (changed) result else stock
+    }
+
+    /**
      * Compose the shopping sections and trip total for two week plans.
      * Used by [generateFortnight] and by callers rebuilding the view of a
      * stored fortnight, so the split shown is always the split planned.
