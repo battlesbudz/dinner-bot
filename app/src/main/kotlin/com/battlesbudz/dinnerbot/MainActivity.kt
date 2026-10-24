@@ -144,7 +144,10 @@ class MainActivity : ComponentActivity() {
                 SeedLoader(database).seedIfEmpty(priceJson, recipesJson)
                 SeedLoader(database).refreshSeedRecipes(recipesJson)
                 SeedLoader(database).refreshSeedPriceNotes(priceJson)
-                SeedLoader(database).addMissingSeedPriceItems(priceJson)
+                // addMissingSeedPriceItems deliberately runs only in the
+                // app's load effect: its count drives the one-time reprice
+                // of stored plans when the book gains items (v0.4.3), and
+                // this warm-up racing it would consume the count.
                 SeedLoader(database).refreshSeedNutrition(nutritionJson)
             }
         }
@@ -198,6 +201,7 @@ private fun DinnerBotApp(
     var variation by remember { mutableStateOf(0) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var reloadKey by remember { mutableStateOf(0) }
+    var staplesAddedAtLoad by remember { mutableStateOf(0) }
     var showHowItWorks by remember { mutableStateOf(false) }
 
     // ---- Notification permission (Phase V2-4) ----
@@ -221,7 +225,8 @@ private fun DinnerBotApp(
             SeedLoader(database).seedIfEmpty(loadAsset("pricebook.json"), loadAsset("recipes.json"))
             SeedLoader(database).refreshSeedRecipes(loadAsset("recipes.json"))
             SeedLoader(database).refreshSeedPriceNotes(loadAsset("pricebook.json"))
-            SeedLoader(database).addMissingSeedPriceItems(loadAsset("pricebook.json"))
+            val addedStaples = SeedLoader(database)
+                .addMissingSeedPriceItems(loadAsset("pricebook.json"))
             SeedLoader(database).refreshSeedNutrition(loadAsset("nutrition.json"))
             val loadedPresets = runCatching {
                 SeedDataParser.parseDietPresets(loadAsset("diet-presets.json"))
@@ -278,6 +283,7 @@ private fun DinnerBotApp(
                 s, r, p, pantry, stocks, plan, rows, plan2, rows2,
                 loadedRatings, loadedPresets, loadedLinks, loadedNutrition,
                 loadedRanOut, loadedCheckoffs, loadedPhotoById, loadedPhotoFiles,
+                addedStaples,
             )
         }
         settings = loaded.settings
@@ -297,6 +303,7 @@ private fun DinnerBotApp(
         nutritionEntries = loaded.nutritionEntries
         ranOutEvents = loaded.ranOutEvents
         cookCheckoffs = loaded.cookCheckoffs
+        staplesAddedAtLoad = loaded.staplesAdded
         loading = false
     }
 
@@ -1131,6 +1138,30 @@ private fun DinnerBotApp(
                 }
             }
             /**
+             * A recost rebuilds a week's lines from costing alone, which
+             * would drop the lines Sunday reconciliation merged into the
+             * plan: those are confirmed purchases, not costing output.
+             * Fold any merged line the recost did not reproduce back in,
+             * with its cash, so repricing never silently un-buys a
+             * ran-out item.
+             */
+            fun keepMergedLines(
+                current: WeekPlanner.WeekPlan,
+                repriced: WeekPlanner.WeekPlan,
+            ): WeekPlanner.WeekPlan {
+                val kept = current.lines.filter { line ->
+                    line.reconciliationAdded &&
+                        repriced.lines.none { it.itemId == line.itemId }
+                }
+                if (kept.isEmpty()) return repriced
+                return repriced.copy(
+                    lines = repriced.lines + kept,
+                    cashNeededCents = repriced.cashNeededCents +
+                        kept.sumOf { it.packsToBuy * it.estimatedPackPriceCents },
+                )
+            }
+
+            /**
              * Pantry ownership feeds costing: when a staple is marked owned,
              * added, or marked not owned, the current week is repriced in
              * place (same dinners, new costing) and persisted, so its list
@@ -1174,34 +1205,51 @@ private fun DinnerBotApp(
                         pantryOwnedNames = owned,
                         gateOverride = gate,
                     )
-                    val changed = repriced1.lines != view.lines ||
-                        repriced1.cashNeededCents != view.cashNeededCents ||
-                        repriced1.notes != view.notes ||
-                        repriced2.lines != view2.lines ||
-                        repriced2.cashNeededCents != view2.cashNeededCents ||
-                        repriced2.notes != view2.notes
+                    val kept1 = keepMergedLines(view, repriced1)
+                    val kept2 = keepMergedLines(view2, repriced2)
+                    val changed = kept1.lines != view.lines ||
+                        kept1.cashNeededCents != view.cashNeededCents ||
+                        kept1.notes != view.notes ||
+                        kept2.lines != view2.lines ||
+                        kept2.cashNeededCents != view2.cashNeededCents ||
+                        kept2.notes != view2.notes
                     if (changed) {
                         persistFortnight(
-                            WeekPlanner.composeFortnight(repriced1, repriced2, priceItems),
+                            WeekPlanner.composeFortnight(kept1, kept2, priceItems),
                             keepIds = sp.id to sp2.id,
                             forSettings = currentSettings,
                         )
                     }
                     return
                 }
-                val repriced = WeekPlanner.recost(
-                    settings = currentSettings,
-                    current = view,
-                    recipes = adaptation.recipes,
-                    priceItems = priceItems,
-                    stockOnHand = PantryLogic.stockMap(bulkStocks),
-                    pantryOwnedNames = PantryLogic.ownedNames(forPantryItems),
+                val repriced = keepMergedLines(
+                    view,
+                    WeekPlanner.recost(
+                        settings = currentSettings,
+                        current = view,
+                        recipes = adaptation.recipes,
+                        priceItems = priceItems,
+                        stockOnHand = PantryLogic.stockMap(bulkStocks),
+                        pantryOwnedNames = PantryLogic.ownedNames(forPantryItems),
+                    ),
                 )
                 if (repriced.lines != view.lines ||
                     repriced.cashNeededCents != view.cashNeededCents ||
                     repriced.notes != view.notes
                 ) {
                     persistPlan(repriced, keepId = sp.id, forSettings = currentSettings)
+                }
+            }
+
+            // v0.4.3 upgrade (Codex review, PR #23): when this load added
+            // the newly priced staples to the book, reprice the stored
+            // week once so the active plan reflects them immediately —
+            // an unowned staple's buy line appears and the stale
+            // "not priced" note goes — instead of waiting for the next
+            // pantry toggle or regeneration.
+            LaunchedEffect(staplesAddedAtLoad, storedPlan?.id) {
+                if (staplesAddedAtLoad > 0 && storedPlan != null) {
+                    repriceStoredPlan(pantryItems)
                 }
             }
             Column(modifier = Modifier.fillMaxSize()) {
@@ -1733,6 +1781,8 @@ private data class LoadedState(
     val cookCheckoffs: List<CookCheckoff>,
     val photos: Map<String, RecipePhoto>,
     val photoFiles: Map<String, File>,
+    /** Price book items the seed refresh added during this load (v0.4.3 staples). */
+    val staplesAdded: Int,
 )
 
 /** The Sunday gate's inputs, re-read from the store at request time. */

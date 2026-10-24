@@ -86,16 +86,38 @@ class SeedExpansionTest {
                 val itemId = ingredient.priceItemId ?: continue
                 val item = byId[itemId]
                 assertTrue("recipe ${recipe.id} references unknown item $itemId", item != null)
-                // Same dimension, not necessarily the same unit: since
-                // v0.4.3 the staples are priced in the packs the store
-                // sells (a 26 oz canister of salt, a 3 lb bag of rice)
-                // while recipes measure them in teaspoons and cups.
-                // Costing converts within a dimension; a cross-dimension
-                // reference would silently corrupt the money.
-                assertEquals(
-                    "recipe ${recipe.id}: unit for $itemId must share the price book pack unit's dimension",
-                    item!!.packQuantity.unit.dimension, ingredient.quantity.unit.dimension,
-                )
+                if (!item!!.staple) {
+                    // The original rule for ordinary items: the recipe
+                    // measures in exactly the unit the pack is priced in.
+                    assertEquals(
+                        "recipe ${recipe.id}: unit for $itemId must match the price book pack unit",
+                        item.packQuantity.unit, ingredient.quantity.unit,
+                    )
+                } else {
+                    // Staples (v0.4.3) are the known exception: the store
+                    // sells them by weight or fluid volume (a 26 oz
+                    // canister of salt, a 3 lb bag of rice) while recipes
+                    // measure them in spoons and cups. Any week's need is
+                    // far below one pack, so the pack line and its cash
+                    // are exact; the sourced gram weights in the nutrition
+                    // data carry the precise conversion.
+                    assertTrue(
+                        "recipe ${recipe.id}: staple $itemId must be measured in a kitchen volume unit",
+                        ingredient.quantity.unit in setOf(
+                            com.battlesbudz.dinnerbot.core.model.MeasureUnit.TEASPOON,
+                            com.battlesbudz.dinnerbot.core.model.MeasureUnit.TABLESPOON,
+                            com.battlesbudz.dinnerbot.core.model.MeasureUnit.CUP,
+                        ),
+                    )
+                    assertTrue(
+                        "recipe ${recipe.id}: staple $itemId pack must be a store weight or fluid volume",
+                        item.packQuantity.unit in setOf(
+                            com.battlesbudz.dinnerbot.core.model.MeasureUnit.OUNCE,
+                            com.battlesbudz.dinnerbot.core.model.MeasureUnit.POUND,
+                            com.battlesbudz.dinnerbot.core.model.MeasureUnit.FLUID_OUNCE,
+                        ),
+                    )
+                }
             }
         }
     }
