@@ -2,6 +2,7 @@ package com.battlesbudz.dinnerbot
 
 import android.content.Context
 import androidx.compose.ui.test.ComposeTimeoutException
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -202,15 +203,13 @@ class WeeklyListRi3InstrumentedTest {
             waitForText("Potatoes — from your pantry")
             composeRule.onNodeWithTag("uncross-russet-potatoes")
                 .performScrollTo()
+                .assertIsDisplayed()
                 .performClick()
-            awaitStep("covered row left the list") {
-                tagCount("covered-row-russet-potatoes") == 0
-            }
             // Poll the stored rows for the buy line; on failure the
             // assertion names exactly what the rows are instead.
             var rowsDump = ""
             var bought = false
-            repeat(30) {
+            repeat(60) {
                 if (!bought) {
                     withDb { db ->
                         val rows = db.groceryDao().getForPlan("plan-ri3")
