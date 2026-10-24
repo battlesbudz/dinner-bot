@@ -84,7 +84,7 @@ class Migration1415Test {
                 val imported = db.importedRecipeDao().getAll()
                     .map { with(SeedMapper) { it.toModel() } }
                 assertEquals(1, imported.size)
-                assertEquals("Her Chicken Soup", imported.single().recipe.title)
+                assertEquals("Her Imported Stew", imported.single().recipe.title)
                 assertEquals(5, db.recipeDao().getAll().size)
                 assertEquals(2, db.pantryDao().getAll().size)
                 assertEquals(1, db.bulkStockDao().getAll().size)

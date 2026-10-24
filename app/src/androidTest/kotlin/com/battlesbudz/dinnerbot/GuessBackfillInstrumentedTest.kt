@@ -187,7 +187,9 @@ class GuessBackfillInstrumentedTest {
 
             composeRule.onNodeWithTag("tab-Prices").performClick()
             waitForText("Price book")
-            // The item is visibly a guess in the book.
+            // The item is visibly a guess in the book (scroll first:
+            // the lazy list only composes what is on screen).
+            composeRule.onNodeWithText("spring onions").performScrollTo()
             waitForText("Guessed price", substring = true)
             val guessText = "$${guessCents / 100}.${(guessCents % 100).toString().padStart(2, '0')}"
             // Tap THIS item's price: another book item could share the
