@@ -59,6 +59,7 @@ class SeedSurvivalInstrumentedTest {
                 DinnerBotDatabase.MIGRATION_9_10,
                 DinnerBotDatabase.MIGRATION_10_11,
                 DinnerBotDatabase.MIGRATION_11_12,
+                DinnerBotDatabase.MIGRATION_12_13,
             )
             .build()
 
@@ -127,7 +128,7 @@ class SeedSurvivalInstrumentedTest {
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
         val db = openMigrated()
         try {
-            assertEquals(12, db.openHelper.readableDatabase.version)
+            assertEquals(13, db.openHelper.readableDatabase.version)
             val priceJson = appContext.assets.open("pricebook.json").bufferedReader().use { it.readText() }
             val recipesJson = appContext.assets.open("recipes.json").bufferedReader().use { it.readText() }
             val loader = SeedLoader(db)

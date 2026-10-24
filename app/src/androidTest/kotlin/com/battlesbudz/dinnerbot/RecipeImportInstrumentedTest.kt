@@ -111,6 +111,34 @@ class RecipeImportInstrumentedTest {
     private fun tagCount(tag: String): Int =
         composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().size
 
+    /** Which status branch a review row took, for failure messages. */
+    private fun rowStatus(index: Int): String = when {
+        tagCount("import-row-$index-unmatched") > 0 -> "unmatched"
+        tagCount("import-row-$index-covered") > 0 -> "covered"
+        textPresent("In the price book") -> "matched (price book text present)"
+        else -> "no row $index status found"
+    }
+
+    private fun textPresent(text: String, substring: Boolean = false): Boolean =
+        composeRule.onAllNodesWithText(text, substring = substring)
+            .fetchSemanticsNodes().isNotEmpty()
+
+    /** Wait for a review row to read unmatched, reporting its actual branch on failure. */
+    private fun awaitRowUnmatched(index: Int) {
+        try {
+            composeRule.waitUntil(timeoutMillis = 15_000) {
+                tagCount("import-row-$index-unmatched") > 0
+            }
+        } catch (e: ComposeTimeoutException) {
+            throw AssertionError(
+                "row $index never read unmatched: status=${rowStatus(index)}, " +
+                    "suggestionTag=${tagCount("import-suggestion-$index")}, " +
+                    "qtySuggestionTag=${tagCount("import-qty-suggestion-$index")}, " +
+                    "rowTag=${tagCount("import-row-$index")}",
+            )
+        }
+    }
+
     private fun openDb(): DinnerBotDatabase =
         Room.databaseBuilder(context, DinnerBotDatabase::class.java, "dinner-bot.db")
             .allowMainThreadQueries()
@@ -137,7 +165,7 @@ class RecipeImportInstrumentedTest {
             composeRule.onNodeWithTag("import-text-go").performScrollTo().performClick()
 
             // The review: spring onions unmatched, shown as written.
-            waitForTag("import-row-0-unmatched")
+            awaitRowUnmatched(0)
             composeRule.onNodeWithTag("import-row-0-unmatched").assertIsDisplayed()
             waitForText("spring onions", substring = true)
 
@@ -173,7 +201,7 @@ class RecipeImportInstrumentedTest {
         ActivityScenario.launch<MainActivity>(intent).use {
             // No intake screen: the shared text goes straight to review.
             waitForTag("import-title")
-            waitForTag("import-row-0-unmatched")
+            awaitRowUnmatched(0)
             composeRule.onNodeWithTag("import-save").performScrollTo().performClick()
             waitForImportClosed()
             waitForText("Spring Onion Soup")
