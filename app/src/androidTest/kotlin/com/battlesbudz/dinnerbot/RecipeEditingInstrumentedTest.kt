@@ -1,8 +1,11 @@
 package com.battlesbudz.dinnerbot
 
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -107,21 +110,30 @@ class RecipeEditingInstrumentedTest {
         if (value == value.toLong().toDouble()) value.toLong().toString()
         else String.format("%.2f", value).trimEnd('0').trimEnd('.')
 
+    /** Wait for a step, naming it and dumping the semantics tree if it never lands. */
+    private fun awaitStep(step: String, condition: () -> Boolean) {
+        try {
+            composeRule.waitUntil(timeoutMillis = 15_000, condition)
+        } catch (e: ComposeTimeoutException) {
+            throw AssertionError("STEP FAILED: $step\n" + composeRule.onRoot().printToString())
+        }
+    }
+
     private fun waitForText(text: String, substring: Boolean = false) {
-        composeRule.waitUntil(timeoutMillis = 15_000) {
+        awaitStep("waitForText($text)") {
             composeRule.onAllNodesWithText(text, substring = substring)
                 .fetchSemanticsNodes().isNotEmpty()
         }
     }
 
     private fun waitForTag(tag: String) {
-        composeRule.waitUntil(timeoutMillis = 15_000) {
+        awaitStep("waitForTag($tag)") {
             composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
         }
     }
 
     private fun waitForNoTag(tag: String) {
-        composeRule.waitUntil(timeoutMillis = 15_000) {
+        awaitStep("waitForNoTag($tag)") {
             composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isEmpty()
         }
     }
@@ -162,7 +174,8 @@ class RecipeEditingInstrumentedTest {
 
             // The marker is up and the removed ingredient is off the dish.
             waitForTag("recipe-has-edits")
-            composeRule.onNodeWithTag("recipe-has-edits").assertIsDisplayed()
+            composeRule.onNodeWithTag("recipe-has-edits")
+                .performScrollTo().assertIsDisplayed()
             assertTrue(
                 "the removed ingredient leaves the detail screen",
                 !textPresent(firstItemName, substring = true),
@@ -195,7 +208,7 @@ class RecipeEditingInstrumentedTest {
             composeRule.onNodeWithTag("qty-save").performClick()
             // The editor's first row now shows the new amount.
             val editedLine = "5 $firstUnitLabel $firstItemName"
-            composeRule.waitUntil(timeoutMillis = 15_000) {
+            awaitStep("editor row shows the new amount") {
                 textPresent(editedLine, substring = true)
             }
             composeRule.onNodeWithTag("editor-save").performClick()
@@ -239,7 +252,7 @@ class RecipeEditingInstrumentedTest {
             composeRule.onNodeWithTag("edit-scope-tonight").performClick()
 
             // Tonight's dinner lost exactly that ingredient.
-            composeRule.waitUntil(timeoutMillis = 15_000) {
+            awaitStep("tonight loses the removed ingredient") {
                 ranOutRowNames().size == before.size - 1
             }
             assertEquals(before.drop(1), ranOutRowNames())
@@ -276,7 +289,8 @@ class RecipeEditingInstrumentedTest {
             waitForText("Dinner Bot recipes")
             openRecipeFromList(title)
             waitForTag("recipe-has-edits")
-            composeRule.onNodeWithTag("recipe-has-edits").assertIsDisplayed()
+            composeRule.onNodeWithTag("recipe-has-edits")
+                .performScrollTo().assertIsDisplayed()
         }
     }
 }
