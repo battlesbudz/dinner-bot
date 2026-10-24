@@ -158,6 +158,17 @@ class BarcodeSubstitutionLogicTest {
         assertFalse(BarcodeScanLogic.substituteLine(line(breast), drumsticks, 499).checkedOff)
     }
 
+    @Test fun swapPreservesTheTopUpFlag() {
+        // Codex, PR #24: a Week 2 line added by reconciliation keeps
+        // its flag on the replacement line, or the purchase moves from
+        // the top-up into the big trip and is scheduled a week early.
+        val drumsticks = item("user-chicken-drumsticks", "Chicken drumsticks", 499)
+        val topUp = line(breast).copy(reconciliationAdded = true)
+        val swapped = BarcodeScanLogic.substituteLine(topUp, drumsticks, 499)
+        assertTrue(swapped.reconciliationAdded)
+        assertFalse(BarcodeScanLogic.substituteLine(line(breast), drumsticks, 499).reconciliationAdded)
+    }
+
     @Test fun swapMergesIntoAnExistingLineForTheSubstitute() {
         // Codex, PR #24: another dinner this week already buys the
         // substitute. The swap merges into that line at write time:

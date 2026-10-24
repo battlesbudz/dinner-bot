@@ -232,6 +232,10 @@ object BarcodeScanLogic {
             estimatedPackPriceCents = shelfPriceCents,
             portionCostCents = (needInPackUnit * perUnitCents).roundToInt(),
             checkedOff = original.checkedOff,
+            // A Week 2 top-up line stays a top-up line: dropping the
+            // flag would move the purchase into the big trip's
+            // section and change when it is scheduled (Codex, PR #24).
+            reconciliationAdded = original.reconciliationAdded,
             substitutedForItemId = original.substitutedForItemId ?: original.itemId,
         )
     }
@@ -259,6 +263,10 @@ object BarcodeScanLogic {
         require(existing.store == swap.store) {
             "a swap merges only into a line shopping at the same store; " +
                 "a different store keeps the purchases separate"
+        }
+        require(existing.reconciliationAdded == swap.reconciliationAdded) {
+            "a swap merges only into a line on the same trip; a big-trip " +
+                "line and a Week 2 top-up line stay separate purchases"
         }
         val combinedNeedInPackUnit = Costing.amountInPackUnit(existing.needed, item) +
             Costing.amountInPackUnit(swap.needed, item)

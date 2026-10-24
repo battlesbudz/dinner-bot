@@ -2046,10 +2046,13 @@ private suspend fun applyScanSubstitution(
     val mergeTarget = database.groceryDao().getForPlan(row.planId)
         .filter { it.rowId != row.rowId }
         .firstOrNull {
-            // Same item AND same store: a line shopping elsewhere is a
-            // separate purchase, and merging into it would mislabel
-            // both the store section and the price (Codex, PR #24).
+            // Same item, same store, same trip (big trip vs Week 2
+            // top-up): a line differing on any of those is a separate
+            // purchase, and merging into it would mislabel the store
+            // section, the price, or the schedule (Codex, PR #24). A
+            // reconciliation-added line never absorbs a swap either.
             it.itemId == priced.id && it.store == row.line.store.name &&
+                it.reconciliationAdded == row.line.reconciliationAdded &&
                 it.substitutedForItemId == null && !it.reconciliationAdded
         }
     database.groceryDao().deleteRow(row.rowId)
