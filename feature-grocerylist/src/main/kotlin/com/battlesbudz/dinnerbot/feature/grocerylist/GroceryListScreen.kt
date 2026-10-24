@@ -575,12 +575,13 @@ private fun GroceryRowView(
             }
         }
         Column(horizontalAlignment = Alignment.End) {
-            if (line.priceGuessCents != null) {
+            val guessCents = line.priceGuessCents
+            if (guessCents != null) {
                 // A guessed line has no price to correct and no book
                 // item to scan against: the guess just shows, labeled
                 // by the note on the row.
                 Text(
-                    Money(line.priceGuessCents).format(),
+                    Money(guessCents).format(),
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.padding(8.dp),
                 )

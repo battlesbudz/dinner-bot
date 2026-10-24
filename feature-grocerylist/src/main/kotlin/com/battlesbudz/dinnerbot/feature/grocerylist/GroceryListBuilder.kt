@@ -71,10 +71,13 @@ object GroceryListBuilder {
      * line carrying a placeholder guess has no pack price; the guess IS
      * its cash, labeled as a guess wherever the line shows.
      */
-    fun lineCashCents(line: GroceryLine): Int = when {
-        line.coveredByPantryName != null -> 0
-        line.priceGuessCents != null -> line.priceGuessCents
-        else -> line.packsToBuy * line.estimatedPackPriceCents
+    fun lineCashCents(line: GroceryLine): Int {
+        line.priceGuessCents?.let { return it }
+        return if (line.coveredByPantryName != null) {
+            0
+        } else {
+            line.packsToBuy * line.estimatedPackPriceCents
+        }
     }
 
     /**
