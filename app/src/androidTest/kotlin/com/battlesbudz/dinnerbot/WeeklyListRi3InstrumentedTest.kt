@@ -175,10 +175,21 @@ class WeeklyListRi3InstrumentedTest {
                     with(SeedMapper) { eggsItem.toEntity() },
                 ),
             )
-            db.recipeDao().insertAll(listOf(with(SeedMapper) { potatoRecipe.toEntity() }))
+            // The dinner is one of Andrea's imported recipes: the
+            // recipes table itself is bundle-owned (a seed refresh
+            // retires anything else stored there), while imported
+            // recipes are never seed-touched.
+            val imported = ImportedRecipe(
+                recipe = potatoRecipe.copy(
+                    id = "imported-potato-night",
+                    origin = RecipeOrigin.IMPORTED,
+                ),
+                sourceLink = null, createdAtMillis = 5L,
+            )
+            db.importedRecipeDao().upsert(with(SeedMapper) { imported.toEntity() })
             db.pantryDao().upsert(PantryItemEntity("potatoes", "Potatoes", owned = true))
             db.seedStoredPlan(
-                "plan-ri3", "potato-night",
+                "plan-ri3", "imported-potato-night",
                 listOf(
                     GroceryItemEntity(
                         planId = "plan-ri3", itemId = "eggs", displayName = "Eggs",
