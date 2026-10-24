@@ -185,7 +185,11 @@ class GuessBackfillInstrumentedTest {
             }
             assertTrue("backfill never created the spring onions item", guessCents > 0)
 
-            composeRule.onNodeWithTag("tab-Prices").performClick()
+            // The price book lives in Pantry behind its pill toggle
+            // since the v0.6.0 redesign.
+            composeRule.onNodeWithTag("tab-Pantry").performClick()
+            waitForText("Pantry")
+            composeRule.onNodeWithTag("pantry-toggle-prices").performClick()
             waitForText("Price book")
             // The item is visibly a guess in the book. It sits at the
             // end of the lazy list, so swipe until it is composed.

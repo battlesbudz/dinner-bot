@@ -57,6 +57,10 @@ fun FortnightPlannerScreen(
     photoFiles: Map<String, File> = emptyMap(),
     /** Recipe ids whose cost is not accurately reflected yet (Phase RI-3); see PlannerScreen. */
     unpricedRecipeIds: Set<String> = emptySet(),
+    /** Estimated cost per serving by recipe id, for the night cards (v0.6.0 redesign). */
+    perServingCentsByRecipeId: Map<String, Int> = emptyMap(),
+    /** The weeks' nutrition summary card, composed by the caller (v0.6.0 redesign). */
+    weekNutrition: @Composable () -> Unit = {},
 ) {
     // (weekIndex, day) whose not-cooking reason is being picked, if any.
     var reasonFor by remember { mutableStateOf<Pair<Int, String>?>(null) }
@@ -130,6 +134,7 @@ fun FortnightPlannerScreen(
             onCookNight = onCookNight,
             photoFiles = photoFiles,
             unpricedRecipeIds = unpricedRecipeIds,
+            perServingCentsByRecipeId = perServingCentsByRecipeId,
         )
         WeekSection(
             title = "Week 2 · starts ${plan.week2.weekStart}",
@@ -144,7 +149,10 @@ fun FortnightPlannerScreen(
             onCookNight = onCookNight,
             photoFiles = photoFiles,
             unpricedRecipeIds = unpricedRecipeIds,
+            perServingCentsByRecipeId = perServingCentsByRecipeId,
         )
+
+        weekNutrition()
 
         if (outOfRotationCount > 0) {
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -185,6 +193,7 @@ private fun WeekSection(
     onCookNight: (Int, String) -> Unit,
     photoFiles: Map<String, File> = emptyMap(),
     unpricedRecipeIds: Set<String> = emptySet(),
+    perServingCentsByRecipeId: Map<String, Int> = emptyMap(),
 ) {
     Text(title, style = MaterialTheme.typography.titleLarge)
     Text(
@@ -209,6 +218,7 @@ private fun WeekSection(
             onRate = { rating -> onRate(night.recipeId, rating) },
             onCook = { onCookNight(weekIndex, night.day) },
             photoFile = photoFiles[night.recipeId],
+            perServingCents = perServingCentsByRecipeId[night.recipeId],
             costNote = if (night.recipeId in unpricedRecipeIds) {
                 "Some ingredients have no price yet, so this dinner's cost is " +
                     "a guess for now — it will be exact after the first shop."

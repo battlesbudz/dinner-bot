@@ -8,36 +8,51 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,6 +60,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -105,8 +121,8 @@ import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.BarcodeScanLogic
 import com.battlesbudz.dinnerbot.feature.grocerylist.ReconciliationMerge
 import com.battlesbudz.dinnerbot.feature.`import`.ImportStart
 import com.battlesbudz.dinnerbot.feature.`import`.RecipeImportFlow
-import com.battlesbudz.dinnerbot.feature.nutrition.NutritionScreen
 import com.battlesbudz.dinnerbot.feature.nutrition.NutritionWeekInput
+import com.battlesbudz.dinnerbot.feature.nutrition.WeekNutritionCard
 import com.battlesbudz.dinnerbot.feature.onboarding.HowItWorksScreen
 import com.battlesbudz.dinnerbot.feature.onboarding.OnboardingDefaults
 import com.battlesbudz.dinnerbot.feature.onboarding.SettingsScreen
@@ -122,8 +138,10 @@ import com.battlesbudz.dinnerbot.feature.planner.WeekPlanner
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceBookScreen
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceCorrection
 import com.battlesbudz.dinnerbot.feature.recipes.CookScreen
+import com.battlesbudz.dinnerbot.feature.recipes.RecipeCostCalculator
 import com.battlesbudz.dinnerbot.feature.recipes.RecipeDetailScreen
 import com.battlesbudz.dinnerbot.feature.recipes.RecipeListScreen
+import com.battlesbudz.dinnerbot.ui.DinnerBotTheme
 import com.battlesbudz.dinnerbot.feature.reminders.ReminderPlanner
 import com.battlesbudz.dinnerbot.feature.reminders.ReminderScheduler
 import com.battlesbudz.dinnerbot.feature.reminders.ReminderWeek
@@ -152,9 +170,26 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Edge to edge, explicitly (v0.6.0 redesign): targetSdk 35 draws
+        // behind the system bars whether the app asks or not, and the
+        // old build never accounted for them — Battles found the tabs
+        // and back buttons hiding under the phone's back / home /
+        // multitask bar. The app now opts in and every surface pads for
+        // the bars it draws under (Scaffold insets for the main shell,
+        // windowInsetsPadding on the walkthrough and loading states).
+        // Light bar styles: the redesign's surfaces are white, so the
+        // system icons draw dark.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(
+                android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT,
+            ),
+            navigationBarStyle = SystemBarStyle.light(
+                android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT,
+            ),
+        )
         sharedText = intent?.sharedTextExtra()
         setContent {
-            MaterialTheme {
+            DinnerBotTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     DinnerBotApp(
                         database = database,
@@ -199,14 +234,115 @@ private fun Intent.sharedTextExtra(): String? =
         null
     }
 
+/**
+ * The five destinations (v0.6.0 redesign, Battles's decision): Recipes,
+ * List, Plan in the middle (the most-used screen, his call), Pantry,
+ * Settings. The old Prices tab folds into Pantry behind its pill toggle
+ * and the old Nutrition tab folds into the recipe screens and the Plan
+ * week's card; no feature went away, only the extra tabs did.
+ */
 private enum class Tab(val label: String, val icon: ImageVector) {
     RECIPES("Recipes", Icons.Filled.MenuBook),
-    PLANNER("Plan", Icons.Filled.CalendarMonth),
     LIST("List", Icons.Filled.ShoppingCart),
-    NUTRITION("Nutrition", Icons.Filled.PieChart),
+    PLANNER("Plan", Icons.Filled.CalendarMonth),
     PANTRY("Pantry", Icons.Filled.Inventory2),
-    PRICES("Prices", Icons.Filled.AttachMoney),
     SETTINGS("Settings", Icons.Filled.Settings),
+}
+
+/**
+ * The brand top bar (v0.6.0 redesign): the robot-chef mark and the app
+ * name on every screen, and — when a sub-screen is open — a proper
+ * back arrow at the top, visible above everything, which runs the same
+ * step as the system back button. Scaffold pads it clear of the status
+ * bar.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DinnerBotTopBar(showBack: Boolean, onBack: () -> Unit) {
+    TopAppBar(
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    painter = painterResource(R.drawable.ic_dinnerbot_mark),
+                    contentDescription = null,
+                    modifier = Modifier.size(30.dp),
+                )
+                Text(
+                    "Dinner Bot",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
+        },
+        navigationIcon = {
+            if (showBack) {
+                IconButton(onClick = onBack, modifier = Modifier.testTag("top-back")) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                    )
+                }
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+    )
+}
+
+/**
+ * The five-tab bottom bar (v0.6.0 redesign). Labels always show (the
+ * mockups label every tab), the selected tab sits in the black pill
+ * indicator from the mockups, and NavigationBar itself applies the
+ * navigation-bar inset so the row never hides under the phone's own
+ * back / home / multitask bar.
+ */
+@Composable
+private fun DinnerBotNavBar(tab: Tab, onSelect: (Tab) -> Unit) {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+        Tab.entries.forEach { entry ->
+            NavigationBarItem(
+                selected = entry == tab,
+                onClick = { onSelect(entry) },
+                icon = { Icon(entry.icon, contentDescription = entry.label) },
+                label = { Text(entry.label, maxLines = 1) },
+                alwaysShowLabel = true,
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                    indicatorColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+                modifier = Modifier.testTag("tab-${entry.label}"),
+            )
+        }
+    }
+}
+
+/**
+ * The Pantry screen's pill toggle (v0.6.0 redesign): On hand / Price
+ * book, the two halves of the merged destination.
+ */
+@Composable
+private fun PantryModeToggle(showPrices: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterChip(
+            selected = !showPrices,
+            onClick = { onChange(false) },
+            label = { Text("On hand") },
+            modifier = Modifier.testTag("pantry-toggle-onhand"),
+        )
+        FilterChip(
+            selected = showPrices,
+            onClick = { onChange(true) },
+            label = { Text("Price book") },
+            modifier = Modifier.testTag("pantry-toggle-prices"),
+        )
+    }
 }
 
 @Composable
@@ -271,6 +407,11 @@ private fun DinnerBotApp(
     var reconFlow by remember { mutableStateOf<ReconFlow?>(null) }
     var presets by remember { mutableStateOf<List<DietPreset>>(emptyList()) }
     var tab by remember { mutableStateOf(Tab.RECIPES) }
+    // The Pantry tab's pill toggle (v0.6.0 redesign): the price book
+    // folded into Pantry. Hoisted here so the system back button can
+    // step from the price book back to the on-hand view, like any other
+    // sub-screen step.
+    var pantryShowPrices by remember { mutableStateOf(false) }
     var openRecipeId by remember { mutableStateOf<String?>(null) }
     var variation by remember { mutableStateOf(0) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
@@ -1337,10 +1478,15 @@ private fun DinnerBotApp(
     }
 
     when {
-        loading && settings == null -> Box(Modifier.fillMaxSize().padding(16.dp)) {
+        loading && settings == null -> Box(
+            Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).padding(16.dp),
+        ) {
             Text("Loading Dinner Bot...")
         }
-        settings?.onboardingComplete != true -> SetupWalkthrough(
+        settings?.onboardingComplete != true -> Box(
+            Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars),
+        ) {
+            SetupWalkthrough(
             initial = settings ?: OnboardingDefaults.initialSettings(),
             onFinish = { saved ->
                 scope.launch {
@@ -1354,7 +1500,8 @@ private fun DinnerBotApp(
                     refresh()
                 }
             },
-        )
+            )
+        }
         else -> {
             val currentSettings = settings!!
             // Display and cost the ADAPTED recipes: removable won't-eat
@@ -1827,8 +1974,70 @@ private fun DinnerBotApp(
                     },
                 )
             }
-            Column(modifier = Modifier.fillMaxSize()) {
-                Box(modifier = Modifier.weight(1f)) {
+            // ---- Back navigation (v0.6.0 redesign) ----
+            // Battles: the system back button used to leave the app from
+            // anywhere, because sub-screens were state, not destinations,
+            // and nothing handled back. Now every sub-screen is one back
+            // step, in the order a person would unwind them; only a tab's
+            // root screen lets back do Android's usual thing and leave.
+            // The top bar's back arrow runs the same steps.
+            //
+            // Sub-screen state survives tab switches on purpose (go look
+            // at the list, come back, the recipe is still open), so each
+            // flag counts as "open" only on the tab that shows it: back
+            // on another tab's root screen must behave like root back,
+            // never clear a hidden screen's state (Codex review, PR #33).
+            // The import flow and the Sunday check take over the whole
+            // screen whatever the tab, so those two always count.
+            val recipeDetailOpen = tab == Tab.RECIPES && openRecipeId != null
+            val cookOpen = tab == Tab.PLANNER && cookTarget != null
+            val howItWorksOpen = tab == Tab.SETTINGS && showHowItWorks
+            val priceBookOpen = tab == Tab.PANTRY && pantryShowPrices
+            val subScreenOpen = importStart != null || reconFlow != null ||
+                recipeDetailOpen || cookOpen || howItWorksOpen || priceBookOpen
+            fun goBackOneStep() {
+                when {
+                    importStart != null -> importStart = null
+                    reconFlow != null -> skipReconciliation(reconFlow!!)
+                    howItWorksOpen -> showHowItWorks = false
+                    cookOpen -> cookTarget = null
+                    recipeDetailOpen -> openRecipeId = null
+                    priceBookOpen -> pantryShowPrices = false
+                }
+            }
+            BackHandler(enabled = subScreenOpen) { goBackOneStep() }
+
+            // The week's nutrition inputs, shared by the Plan screens'
+            // nutrition card (the old Nutrition tab's weekly half).
+            val nutritionWeeks = listOfNotNull(
+                storedPlan?.let { NutritionWeekInput("This week's dinners", it.nights) },
+                storedPlan2?.let { NutritionWeekInput("Next week's dinners", it.nights) },
+            )
+            // Per-serving estimates for the Plan night cards, from the
+            // same calculator the recipe screens use, at the servings
+            // this household cooks.
+            val priceItemsByIdForCost = remember(priceItems) { priceItems.associateBy { it.id } }
+            val perServingByRecipeId = remember(displayRecipes, priceItemsByIdForCost, currentSettings) {
+                displayRecipes.associate { recipe ->
+                    recipe.id to RecipeCostCalculator.costPerServingCents(
+                        recipe, currentSettings.householdSize, priceItemsByIdForCost,
+                    )
+                }
+            }
+
+            // The app shell (v0.6.0 redesign): a Scaffold so the top bar
+            // and the bottom tab bar own their system-bar insets and the
+            // content is padded clear of both — nothing hides under the
+            // status bar or the phone's back / home / multitask bar.
+            Scaffold(
+                topBar = {
+                    DinnerBotTopBar(showBack = subScreenOpen, onBack = { goBackOneStep() })
+                },
+                bottomBar = {
+                    DinnerBotNavBar(tab = tab, onSelect = { entry -> tab = entry })
+                },
+            ) { innerPadding ->
+                Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                     val activeImport = importStart
                     val activeFlow = reconFlow
                     if (activeImport != null) {
@@ -2069,6 +2278,16 @@ private fun DinnerBotApp(
                                 },
                                 photoFiles = photoFiles,
                                 unpricedRecipeIds = unpricedDisplayIds,
+                                perServingCentsByRecipeId = perServingByRecipeId,
+                                weekNutrition = {
+                                    WeekNutritionCard(
+                                        recipesById = recipesById,
+                                        byItemId = nutritionByItemId,
+                                        byPantrySlug = nutritionByPantrySlug,
+                                        weeks = nutritionWeeks,
+                                        householdSize = currentSettings.householdSize,
+                                    )
+                                },
                             )
                             } else PlannerScreen(
                             plan = weekPlanView,
@@ -2122,6 +2341,16 @@ private fun DinnerBotApp(
                             },
                             photoFiles = photoFiles,
                             unpricedRecipeIds = unpricedDisplayIds,
+                            perServingCentsByRecipeId = perServingByRecipeId,
+                            weekNutrition = {
+                                WeekNutritionCard(
+                                    recipesById = recipesById,
+                                    byItemId = nutritionByItemId,
+                                    byPantrySlug = nutritionByPantrySlug,
+                                    weeks = nutritionWeeks,
+                                    householdSize = currentSettings.householdSize,
+                                )
+                            },
                         )
                         }
                         Tab.LIST -> {
@@ -2300,21 +2529,19 @@ private fun DinnerBotApp(
                             },
                             )
                         }
-                        Tab.NUTRITION -> NutritionScreen(
-                            recipes = displayRecipes,
-                            byItemId = nutritionByItemId,
-                            byPantrySlug = nutritionByPantrySlug,
-                            weeks = listOfNotNull(
-                                storedPlan?.let {
-                                    NutritionWeekInput("This week's dinners", it.nights)
-                                },
-                                storedPlan2?.let {
-                                    NutritionWeekInput("Next week's dinners", it.nights)
-                                },
-                            ),
-                            householdSize = currentSettings.householdSize,
-                        )
-                        Tab.PANTRY -> PantryScreen(
+                        // Pantry and the price book are one destination
+                        // now (v0.6.0 redesign): the pill toggle at the
+                        // top switches between what's on hand and the
+                        // book. Both screens keep their exact behavior;
+                        // the toggle is the only thing new here.
+                        Tab.PANTRY -> Column(modifier = Modifier.fillMaxSize()) {
+                            PantryModeToggle(
+                                showPrices = pantryShowPrices,
+                                onChange = { pantryShowPrices = it },
+                            )
+                            Box(modifier = Modifier.weight(1f)) {
+                                if (!pantryShowPrices) {
+                                    PantryScreen(
                             pantryItems = pantryItems,
                             bulkPriceItems = PantryLogic.bulkItems(priceItems),
                             stocks = bulkStocks,
@@ -2367,18 +2594,24 @@ private fun DinnerBotApp(
                                     refresh()
                                 }
                             },
-                        )
-                        Tab.PRICES -> PriceBookScreen(
-                            priceItems = priceItems,
-                            onItemEdited = { item ->
-                                scope.launch {
-                                    withContext(Dispatchers.IO) {
-                                        database.priceItemDao().upsert(with(SeedMapper) { item.toEntity() })
-                                    }
-                                    refresh()
+                                    )
+                                } else {
+                                    PriceBookScreen(
+                                        priceItems = priceItems,
+                                        onItemEdited = { item ->
+                                            scope.launch {
+                                                withContext(Dispatchers.IO) {
+                                                    database.priceItemDao().upsert(
+                                                        with(SeedMapper) { item.toEntity() },
+                                                    )
+                                                }
+                                                refresh()
+                                            }
+                                        },
+                                    )
                                 }
-                            },
-                        )
+                            }
+                        }
                         Tab.SETTINGS -> if (showHowItWorks) {
                             HowItWorksScreen(onDone = { showHowItWorks = false })
                         } else Column(modifier = Modifier.fillMaxSize()) {
@@ -2477,22 +2710,6 @@ private fun DinnerBotApp(
                                 )
                             }
                         }
-                    }
-                }
-                // Material 3 bottom navigation: seven destinations stay
-                // reachable with icons, and labels show only on the selected
-                // tab so they can never crush or wrap letter by letter the
-                // way the old hand-rolled row of full-width buttons did.
-                NavigationBar {
-                    Tab.entries.forEach { entry ->
-                        NavigationBarItem(
-                            selected = entry == tab,
-                            onClick = { tab = entry },
-                            icon = { Icon(entry.icon, contentDescription = entry.label) },
-                            label = { Text(entry.label, maxLines = 1) },
-                            alwaysShowLabel = false,
-                            modifier = Modifier.testTag("tab-${entry.label}"),
-                        )
                     }
                 }
             }

@@ -2,26 +2,23 @@ package com.battlesbudz.dinnerbot.feature.nutrition
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
-import com.battlesbudz.dinnerbot.core.model.NutritionCalculator
 import com.battlesbudz.dinnerbot.core.model.NutritionField
 import com.battlesbudz.dinnerbot.core.model.NutritionValues
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeNutrition
 
-/** The fields the tab and recipe screen lead with, in reading order. */
+/** The fields the week card and recipe screen lead with, in reading order. */
 val DISPLAY_FIELDS: List<NutritionField> = listOf(
     NutritionField.CALORIES,
     NutritionField.PROTEIN,
@@ -37,82 +34,53 @@ const val NUTRITION_ESTIMATE_LABEL =
         "guide, not a lab reading."
 
 /**
- * The Nutrition tab (Phase V2-6): the planned week's totals and every
- * recipe's per-serving figures side by side for comparison. Display only:
+ * The week's nutrition as a card on the Plan screen (v0.6.0 redesign):
+ * the Nutrition tab's weekly summary, folded into the plan it describes.
+ * Per-recipe figures live on each recipe's own screen. Display only:
  * nothing here feeds the planner, the budget, or any goal.
  */
 @Composable
-fun NutritionScreen(
-    recipes: List<Recipe>,
+fun WeekNutritionCard(
+    recipesById: Map<String, Recipe>,
     byItemId: Map<String, IngredientNutrition>,
     byPantrySlug: Map<String, IngredientNutrition>,
     weeks: List<NutritionWeekInput>,
     householdSize: Int,
     modifier: Modifier = Modifier,
 ) {
-    val recipesById = remember(recipes) { recipes.associateBy { it.id } }
-    LazyColumn(
-        modifier = modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            Text("Nutrition", style = MaterialTheme.typography.headlineMedium)
-            Text(NUTRITION_ESTIMATE_LABEL, style = MaterialTheme.typography.bodyMedium)
-        }
-        if (weeks.isEmpty()) {
-            item {
+    Card(modifier = modifier.fillMaxWidth().testTag("week-nutrition-card")) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("Week nutrition (estimate)", style = MaterialTheme.typography.titleLarge)
+            Text(NUTRITION_ESTIMATE_LABEL, style = MaterialTheme.typography.bodySmall)
+            if (weeks.isEmpty()) {
                 Text(
                     "Plan a week and its dinners' nutrition will add up here.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-        }
-        weeks.forEach { week ->
-            item(key = "week-${week.label}") {
+            weeks.forEach { week ->
                 val weekNutrition = remember(week, recipesById, householdSize, byItemId, byPantrySlug) {
                     WeekNutrition.forWeek(week.nights, recipesById, householdSize, byItemId, byPantrySlug)
                 }
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(week.label, style = MaterialTheme.typography.titleMedium)
-                        if (weekNutrition == null) {
-                            Text(
-                                "No dinners are cooking this week.",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        } else {
-                            Text(
-                                "Added up per night: ${headlineLine(weekNutrition.totals)}",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            Text(
-                                "Per serving, each night added up:",
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            NutritionDetailLines(weekNutrition, weekNutrition.perServing)
-                        }
-                    }
-                }
-            }
-        }
-        item {
-            Text("Every recipe, per serving", style = MaterialTheme.typography.titleMedium)
-        }
-        items(recipes, key = { it.id }) { recipe ->
-            val nutrition = remember(recipe, byItemId, byPantrySlug) {
-                NutritionCalculator.recipeNutrition(recipe, recipe.servings, byItemId, byPantrySlug)
-            }
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(recipe.title, style = MaterialTheme.typography.titleMedium)
-                    Text(headlineLine(nutrition.perServing), style = MaterialTheme.typography.bodyMedium)
-                    NutritionNotes(nutrition)
+                Text(week.label, style = MaterialTheme.typography.titleMedium)
+                if (weekNutrition == null) {
+                    Text(
+                        "No dinners are cooking this week.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                } else {
+                    Text(
+                        "Added up per night: ${headlineLine(weekNutrition.totals)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        "Per serving, each night added up:",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    NutritionDetailLines(weekNutrition, weekNutrition.perServing)
                 }
             }
         }
