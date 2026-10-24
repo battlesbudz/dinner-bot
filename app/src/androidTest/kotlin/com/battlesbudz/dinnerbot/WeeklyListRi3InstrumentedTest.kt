@@ -196,7 +196,7 @@ class WeeklyListRi3InstrumentedTest {
             )
         }
         ActivityScenario.launch(MainActivity::class.java).use {
-            composeRule.onNodeWithText("List").performClick()
+            composeRule.onNodeWithTag("tab-List").performClick()
             waitForTag("covered-row-russet-potatoes")
             waitForText("Potatoes — from your pantry")
             composeRule.onNodeWithTag("uncross-russet-potatoes")
@@ -240,6 +240,7 @@ class WeeklyListRi3InstrumentedTest {
             )
         }
         ActivityScenario.launch(MainActivity::class.java).use {
+            composeRule.onNodeWithTag("tab-Plan").performClick()
             waitForText("Plan my week")
             composeRule.onNodeWithText("Plan my week").performClick()
             waitForTag("unpriced-disclaimer")
@@ -255,8 +256,8 @@ class WeeklyListRi3InstrumentedTest {
         }
     }
 
-    /** Plan the imported egg bowl and cook it to completion; returns after the prompt is up. */
-    private fun cookImportedEggBowlToPrompt() {
+    /** Seed the imported egg bowl, planned for MON, ready to cook. */
+    private fun seedEggBowlFixtures() {
         withDb { db ->
             db.priceItemDao().insertAll(listOf(with(SeedMapper) { eggsItem.toEntity() }))
             val imported = ImportedRecipe(
@@ -287,6 +288,11 @@ class WeeklyListRi3InstrumentedTest {
                 ),
             )
         }
+    }
+
+    /** Open the planned egg bowl's cook view and check its only ingredient off. */
+    private fun cookEggBowlToPrompt() {
+        composeRule.onNodeWithTag("tab-Plan").performClick()
         waitForText("Start cooking")
         composeRule.onNodeWithText("Start cooking").performScrollTo().performClick()
         waitForTag("cook-used-item:eggs")
@@ -295,8 +301,9 @@ class WeeklyListRi3InstrumentedTest {
     }
 
     @Test fun firstCookOfAnImportedRecipePromptsOnceAndThumbsUpRatesIt() {
+        seedEggBowlFixtures()
         ActivityScenario.launch(MainActivity::class.java).use {
-            cookImportedEggBowlToPrompt()
+            cookEggBowlToPrompt()
             waitForText("Did you like Egg Bowl Night?")
             composeRule.onNodeWithTag("keep-prompt-up").performClick()
             awaitStep("UP rating recorded") {
@@ -315,8 +322,9 @@ class WeeklyListRi3InstrumentedTest {
     }
 
     @Test fun dismissingTheKeepPromptRecordsNothingAndNeverRepeats() {
+        seedEggBowlFixtures()
         ActivityScenario.launch(MainActivity::class.java).use {
-            cookImportedEggBowlToPrompt()
+            cookEggBowlToPrompt()
             androidx.test.uiautomator.UiDevice
                 .getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation())
                 .pressBack()
