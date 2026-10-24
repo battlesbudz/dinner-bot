@@ -144,6 +144,7 @@ class MainActivity : ComponentActivity() {
                 SeedLoader(database).seedIfEmpty(priceJson, recipesJson)
                 SeedLoader(database).refreshSeedRecipes(recipesJson)
                 SeedLoader(database).refreshSeedPriceNotes(priceJson)
+                SeedLoader(database).addMissingSeedPriceItems(priceJson)
                 SeedLoader(database).refreshSeedNutrition(nutritionJson)
             }
         }
@@ -220,6 +221,7 @@ private fun DinnerBotApp(
             SeedLoader(database).seedIfEmpty(loadAsset("pricebook.json"), loadAsset("recipes.json"))
             SeedLoader(database).refreshSeedRecipes(loadAsset("recipes.json"))
             SeedLoader(database).refreshSeedPriceNotes(loadAsset("pricebook.json"))
+            SeedLoader(database).addMissingSeedPriceItems(loadAsset("pricebook.json"))
             SeedLoader(database).refreshSeedNutrition(loadAsset("nutrition.json"))
             val loadedPresets = runCatching {
                 SeedDataParser.parseDietPresets(loadAsset("diet-presets.json"))

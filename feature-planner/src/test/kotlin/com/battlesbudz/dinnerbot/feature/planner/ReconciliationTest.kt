@@ -29,12 +29,13 @@ class ReconciliationTest {
 
     private fun item(
         id: String, name: String, store: Store, packAmount: Double, unit: MeasureUnit,
-        packPrice: Int, alternates: List<StorePrice> = emptyList(),
+        packPrice: Int, alternates: List<StorePrice> = emptyList(), staple: Boolean = false,
     ) = PriceItem(
         id = id, name = name, category = "Test", homeStore = store, packDescription = "pack",
         packQuantity = Quantity(packAmount, unit), packPriceCents = packPrice,
         pricePerUnitCents = packPrice / packAmount,
         checkedDate = "2026-10-22", source = "test", alternates = alternates,
+        staple = staple,
     )
 
     private val tenderloin = item(
@@ -398,6 +399,139 @@ class ReconciliationTest {
         assertEquals("russet-potatoes", russet.priceItemId)
         // The bulk item checked all gone resolves with its stock id.
         assertEquals("pork-tenderloin", resolvedByKey.getValue("item:pork-tenderloin").bulkItemId)
+    }
+
+    // ------------------------------------------------------------------
+    // Priced staples (v0.4.3): the staples are price book items flagged
+    // staple. Inference asks about a consumed one only while its pantry
+    // entry says owned, exactly like the unpriced names before it, and
+    // the possible carries the item id so a yes is a priced buy line.
+    // Records written before the change name the staple by pantry key;
+    // resolving one still lands its priced form.
+    // ------------------------------------------------------------------
+
+    private val saltItem = item(
+        "salt", "Salt", Store.ALDI, 26.0, MeasureUnit.OUNCE, 89, staple = true,
+    )
+    private val saltBook = book + saltItem
+    private val saltDinner = recipe(
+        "salt-dinner", "Salt Dinner",
+        priced("salt", 1.0, MeasureUnit.TEASPOON),
+    )
+    private val saltRecipes = recipesById + ("salt-dinner" to saltDinner)
+    private val saltPlan = Reconciliation.SourcePlan(
+        planId = "plan-salt",
+        weekStart = "2026-10-12",
+        nights = listOf(PlannedNight("MON", "salt-dinner")),
+    )
+    private val saltCheckoffs = listOf(
+        CookCheckoff("plan-salt", "MON", "item:salt", checked = true),
+    )
+    private val saltOwned = listOf(PantryItem("salt", "Salt", owned = true))
+    private val saltMissing = listOf(PantryItem("salt", "Salt", owned = false))
+
+    private fun inferSalt(pantryItems: List<PantryItem>) = Reconciliation.inferPossibleOuts(
+        sourcePlans = listOf(saltPlan),
+        recipesById = saltRecipes,
+        checkoffs = saltCheckoffs,
+        priceItems = saltBook,
+        pantryItems = pantryItems,
+        stockOnHand = emptyMap(),
+        pendingEvents = emptyList(),
+        recordedEvents = emptyList(),
+    )
+
+    @Test fun pricedStapleOwnedIsInferredWithItsItemId() {
+        val possibles = inferSalt(saltOwned)
+        val salt = possibles.single { it.itemKey == "item:salt" }
+        assertTrue(salt.stapleSide)
+        assertEquals("salt", salt.priceItemId)
+        assertEquals("Salt", salt.pantryStapleName)
+    }
+
+    @Test fun pricedStapleNoLongerOwnedIsKnownNotInferred() {
+        assertTrue(inferSalt(saltMissing).none { it.itemKey == "item:salt" })
+    }
+
+    @Test fun confirmedPricedStaplePossibleResolvesAsAPricedOut() {
+        val session = Reconciliation.buildSession(
+            Reconciliation.CheckKind.FULL,
+            listOf(saltPlan),
+            emptyList(),
+            inferSalt(saltOwned),
+            saltOwned,
+            saltBook,
+            stockOnHand = emptyMap(),
+        )
+        val outcome = Reconciliation.resolveSession(
+            session,
+            Reconciliation.SessionChoices(confirmedPossibleKeys = setOf("item:salt")),
+            saltBook,
+            today = "2026-10-19",
+        )
+        val out = outcome.resolvedOuts.single { it.itemKey == "item:salt" }
+        assertTrue(out.stapleSide)
+        assertEquals("salt", out.priceItemId)
+        // The saved record keeps the pantry name, so the write-back can
+        // still flip the Salt entry to not owned.
+        val event = outcome.eventsToSave.single { it.itemKey == "item:salt" }
+        assertEquals("Salt", event.pantryStapleName)
+        assertEquals(RanOutState.CONFIRMED, event.state)
+    }
+
+    @Test fun legacyPantryMarkForAStapleResolvesToItsPricedForm() {
+        // A mark written before v0.4.3: pantry key, no item id.
+        val legacyMark = RanOutEvent(
+            itemKey = "pantry:salt", displayName = "Salt", stapleSide = true,
+            pantryStapleName = "Salt", dateMarked = "2026-10-18",
+            source = RanOutSource.COOKING, state = RanOutState.PENDING,
+            cyclePlanId = "plan-salt",
+        )
+        val session = Reconciliation.buildSession(
+            Reconciliation.CheckKind.FULL,
+            listOf(saltPlan),
+            listOf(legacyMark),
+            emptyList(),
+            saltOwned,
+            saltBook,
+            stockOnHand = emptyMap(),
+        )
+        val outcome = Reconciliation.resolveSession(
+            session,
+            Reconciliation.SessionChoices(),
+            saltBook,
+            today = "2026-10-19",
+        )
+        val resolvedByKey = outcome.resolvedOuts.associateBy { it.itemKey }
+        // The mark itself, confirmed as recorded...
+        assertTrue(resolvedByKey.getValue("pantry:salt").stapleSide)
+        // ...and its purchasable form, priced, so the merge puts a real
+        // buy line on the new plan instead of dropping the staple.
+        val priced = resolvedByKey.getValue("item:salt")
+        assertTrue(priced.stapleSide)
+        assertEquals("salt", priced.priceItemId)
+    }
+
+    @Test fun legacyPantryMarkSuppressesThePricedStaplesInference() {
+        // The same legacy mark, still pending: inference must not also
+        // propose the staple under its new item key.
+        val legacyMark = RanOutEvent(
+            itemKey = "pantry:salt", displayName = "Salt", stapleSide = true,
+            pantryStapleName = "Salt", dateMarked = "2026-10-18",
+            source = RanOutSource.COOKING, state = RanOutState.PENDING,
+            cyclePlanId = "plan-salt",
+        )
+        val possibles = Reconciliation.inferPossibleOuts(
+            sourcePlans = listOf(saltPlan),
+            recipesById = saltRecipes,
+            checkoffs = saltCheckoffs,
+            priceItems = saltBook,
+            pantryItems = saltOwned,
+            stockOnHand = emptyMap(),
+            pendingEvents = listOf(legacyMark),
+            recordedEvents = emptyList(),
+        )
+        assertTrue(possibles.none { it.itemKey == "item:salt" })
     }
 
     // ------------------------------------------------------------------

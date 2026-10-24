@@ -22,6 +22,9 @@ data class PriceItemEntity(
     val alternatesJson: String = "[]",
     /** Freeze guidance for oversize packs (Phase V2-2). Seed-owned text, refreshed from the bundle. */
     val freezeNote: String? = null,
+    /** Pantry-staple flag (v0.4.3): priced like everything else, staple for coverage and restock rules. */
+    @ColumnInfo(defaultValue = "0")
+    val staple: Boolean = false,
 )
 
 @Entity(tableName = "recipes")

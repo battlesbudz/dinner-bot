@@ -105,10 +105,12 @@ class SeedDataFilesTest {
 
     /**
      * Phase V2-6: the bundled nutrition file covers the shipped ingredient
-     * set exactly. Every priced item and every pantry staple the recipes
-     * use has a sourced entry, and the file's known-incomplete list
-     * matches the seed (it is empty while coverage is complete, and the
-     * validator fails the moment the two drift apart).
+     * set exactly. Every priced item the recipes use has a sourced entry,
+     * and the file's known-incomplete list matches the seed (it is empty
+     * while coverage is complete, and the validator fails the moment the
+     * two drift apart). Since v0.4.3 the eleven staples are priced items,
+     * so all 42 entries key by price item id and none carries the old
+     * pantry flag: nutrition resolution covers all 42 items.
      */
     @Test fun nutritionSeedCoversTheShippedIngredientsExactly() {
         val priceBook = json.decodeFromString<PriceBookFile>(seedFile("pricebook.json").readText())
@@ -122,8 +124,13 @@ class SeedDataFilesTest {
         )
         assertTrue("nutrition seed errors: $errors", errors.isEmpty())
         assertEquals(42, nutrition.entries.size)
-        assertEquals(31, nutrition.entries.count { !it.pantryItem })
-        assertEquals(11, nutrition.entries.count { it.pantryItem })
+        assertEquals(42, nutrition.entries.count { !it.pantryItem })
+        assertEquals(0, nutrition.entries.count { it.pantryItem })
+        // Every price book item resolves a nutrition entry by its id.
+        val entryIds = nutrition.entries.map { it.itemId }.toSet()
+        for (item in priceBook.items) {
+            assertTrue("no nutrition entry for price item ${item.id}", item.id in entryIds)
+        }
         assertTrue(nutrition.incomplete.isEmpty())
     }
 }

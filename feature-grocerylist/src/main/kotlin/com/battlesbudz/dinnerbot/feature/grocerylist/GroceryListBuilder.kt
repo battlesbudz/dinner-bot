@@ -13,8 +13,9 @@ import com.battlesbudz.dinnerbot.core.model.Store
  * Builds the shopping list for a plan: aggregates the planned dinners'
  * ingredients scaled to the household size, lets tracked Sam's bulk stock
  * cover what it can ($0 cash), splits the rest into per-store lines priced
- * from the price book. Pantry staples never appear: they are not priced.
- * A priced item an owned pantry entry matches by name
+ * from the price book. The pantry staples are priced book items like
+ * everything else (v0.4.3), so an unowned staple appears as a normal
+ * priced line. A priced item an owned pantry entry matches by name
  * (see [Costing.pantryCoveredItemIds]) is already home and never appears
  * either; the decision lives in Costing, so this list and the plan total
  * are computed from the same covered set and cannot disagree.

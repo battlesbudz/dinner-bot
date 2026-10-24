@@ -38,6 +38,15 @@ data class PriceItem(
      * from the bundled price book, never user-edited.
      */
     val freezeNote: String? = null,
+    /**
+     * True for the pantry staples (rice, butter, oil, flour, salt, the
+     * spices, soy sauce): priced like every other item since v0.4.3
+     * (Battles: "everything should be in the pricing book"), but still
+     * staples for the rules that treat them differently — the pantry owned
+     * checklist covers them by name, and Sunday reconciliation always
+     * restocks them rather than only when a planned dinner used them.
+     */
+    val staple: Boolean = false,
 ) {
     /** Cents per 1.0 of [packQuantity]'s unit; derived from the pack price when not stored. */
     val perUnitCents: Double
@@ -53,7 +62,10 @@ data class PriceBookFile(val version: Int, val items: List<PriceItem>)
 
 /**
  * One structured recipe ingredient. Exactly one of [priceItemId] (a priced
- * price book item) or [pantryItem] (a named pantry staple, not priced) is set.
+ * price book item) or [pantryItem] (a named pantry staple, not priced) is
+ * set. Since v0.4.3 every shipped recipe references price items only: the
+ * staples are priced book items flagged [PriceItem.staple]. The pantryItem
+ * form remains for stored data written before that change.
  */
 @Serializable
 data class RecipeIngredient(

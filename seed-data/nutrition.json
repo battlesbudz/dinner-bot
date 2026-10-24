@@ -673,7 +673,7 @@
   },
   {
    "itemId": "black-pepper",
-   "pantryItem": true,
+   "pantryItem": false,
    "fdcId": 170931,
    "fdcDescription": "Spices, pepper, black",
    "fdcDataType": "SR Legacy",
@@ -698,7 +698,7 @@
   },
   {
    "itemId": "butter",
-   "pantryItem": true,
+   "pantryItem": false,
    "fdcId": 173410,
    "fdcDescription": "Butter, salted",
    "fdcDataType": "SR Legacy",
@@ -723,7 +723,7 @@
   },
   {
    "itemId": "chili-powder",
-   "pantryItem": true,
+   "pantryItem": false,
    "fdcId": 171319,
    "fdcDescription": "Spices, chili powder",
    "fdcDataType": "SR Legacy",
@@ -749,7 +749,7 @@
   },
   {
    "itemId": "flour",
-   "pantryItem": true,
+   "pantryItem": false,
    "fdcId": 789890,
    "fdcDescription": "Flour, wheat, all-purpose, enriched, bleached",
    "fdcDataType": "Foundation",
@@ -775,7 +775,7 @@
   },
   {
    "itemId": "garlic-powder",
-   "pantryItem": true,
+   "pantryItem": false,
    "fdcId": 171325,
    "fdcDescription": "Spices, garlic powder",
    "fdcDataType": "SR Legacy",
@@ -800,7 +800,7 @@
   },
   {
    "itemId": "ground-cumin",
-   "pantryItem": true,
+   "pantryItem": false,
    "fdcId": 170923,
    "fdcDescription": "Spices, cumin seed",
    "fdcDataType": "SR Legacy",
@@ -825,7 +825,7 @@
   },
   {
    "itemId": "long-grain-white-rice",
-   "pantryItem": true,
+   "pantryItem": false,
    "fdcId": 168877,
    "fdcDescription": "Rice, white, long-grain, regular, raw, enriched",
    "fdcDataType": "SR Legacy",
@@ -850,7 +850,7 @@
   },
   {
    "itemId": "paprika",
-   "pantryItem": true,
+   "pantryItem": false,
    "fdcId": 171329,
    "fdcDescription": "Spices, paprika",
    "fdcDataType": "SR Legacy",
@@ -875,7 +875,7 @@
   },
   {
    "itemId": "salt",
-   "pantryItem": true,
+   "pantryItem": false,
    "fdcId": 173468,
    "fdcDescription": "Salt, table",
    "fdcDataType": "SR Legacy",
@@ -900,7 +900,7 @@
   },
   {
    "itemId": "soy-sauce",
-   "pantryItem": true,
+   "pantryItem": false,
    "fdcId": 174277,
    "fdcDescription": "Soy sauce made from soy and wheat (shoyu)",
    "fdcDataType": "SR Legacy",
@@ -925,7 +925,7 @@
   },
   {
    "itemId": "vegetable-oil",
-   "pantryItem": true,
+   "pantryItem": false,
    "fdcId": 171411,
    "fdcDescription": "Oil, soybean, salad or cooking",
    "fdcDataType": "SR Legacy",

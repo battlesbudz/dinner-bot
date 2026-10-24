@@ -132,9 +132,11 @@ object Reconciliation {
      *   plan itself drew to zero, one of the cases Battles named.
      * - Priced items an owned pantry entry covers by name are asserted on
      *   hand by the pantry itself; list 3 is where that gets corrected.
-     * - Pantry staples: only staples the pantry currently records as
-     *   owned can "also" have run out; one already marked missing is
-     *   known, not inferred.
+     * - Pantry staples (the unpriced names, and since v0.4.3 the priced
+     *   items flagged staple): only staples the pantry currently records
+     *   as owned can "also" have run out; one already marked missing is
+     *   known, not inferred. A priced staple's possible carries its item
+     *   id, so a yes becomes a priced buy line.
      * Items already on the ran-out list (pending marks), and items an
      * earlier reconciliation already asked about for these same plans
      * (recorded inference events), are never proposed twice.
@@ -162,6 +164,16 @@ object Reconciliation {
         val alreadyAskedKeys = recordedEvents
             .filter { it.source == RanOutSource.INFERRED && it.cyclePlanId in sourceIds }
             .map { it.itemKey }.toSet()
+        // Records written before v0.4.3 name a staple by its pantry name,
+        // not the item key the priced staple carries now; a pending mark
+        // or an earlier question recorded under the name still suppresses
+        // the staple's priced form below.
+        val pendingPantryNames = pendingEvents
+            .filter { it.state == RanOutState.PENDING }
+            .mapNotNull { it.pantryStapleName?.lowercase() }.toSet()
+        val alreadyAskedPantryNames = recordedEvents
+            .filter { it.source == RanOutSource.INFERRED && it.cyclePlanId in sourceIds }
+            .mapNotNull { it.pantryStapleName?.lowercase() }.toSet()
 
         val cookedKeys = checkoffs.filter { it.checked }
             .map { it.planId to it.day }.toSet()
@@ -193,6 +205,10 @@ object Reconciliation {
         for ((key, used) in consumed) {
             if (key in pendingKeys || key in alreadyAskedKeys) continue
             val item = used.item
+            if (item != null && item.staple) {
+                val stapleName = item.name.lowercase()
+                if (stapleName in pendingPantryNames || stapleName in alreadyAskedPantryNames) continue
+            }
             when {
                 // Pantry staple: ask only while the pantry says owned.
                 item == null && used.pantryName != null -> {
@@ -216,6 +232,24 @@ object Reconciliation {
                         priceItemId = item.id,
                         bulkItemId = item.id,
                         reason = "Used by ${used.usedBy}; the bulk stock is gone.",
+                    )
+                }
+                // Priced staple (v0.4.3): ask only while the pantry entry
+                // covering it says owned, like the unpriced staples above;
+                // an entry already marked not owned is known, not inferred.
+                // The possible carries the item id, so a yes becomes a
+                // priced buy line, and the pantry name, so the write-back
+                // still flips the entry.
+                item != null && item.staple -> {
+                    val covering = Costing.pantryNamesCoveringItem(item, ownedNames)
+                    if (covering.isEmpty()) continue
+                    possibles += PossibleOut(
+                        itemKey = key,
+                        displayName = item.name,
+                        stapleSide = true,
+                        priceItemId = item.id,
+                        pantryStapleName = covering.first(),
+                        reason = "Used by ${used.usedBy}; not bought since.",
                     )
                 }
                 // Priced item: an owned pantry entry covering it asserts it home.
@@ -306,9 +340,14 @@ object Reconciliation {
         pendingEvents: List<RanOutEvent>,
     ): List<PossibleOut> {
         val freshKeys = fresh.map { it.itemKey }.toSet()
+        // A carried possible recorded before v0.4.3 names its staple by
+        // pantry name; a fresh inference for the same staple under its
+        // item key supersedes it.
+        val freshPantryNames = fresh.mapNotNull { it.pantryStapleName?.lowercase() }.toSet()
         val carried = pendingEvents
             .filter { it.state == RanOutState.PENDING && it.source == RanOutSource.INFERRED }
             .filter { it.itemKey !in freshKeys }
+            .filter { it.pantryStapleName?.lowercase() !in freshPantryNames }
             .map { event ->
                 PossibleOut(
                     itemKey = event.itemKey,
@@ -351,6 +390,28 @@ object Reconciliation {
             if (out.itemKey !in resolved) resolved[out.itemKey] = out
         }
 
+        // The purchasable form of a staple an out names only by its pantry
+        // name: the priced items the name covers join the set, so the out
+        // becomes a priced buy line. List 3 has always resolved this way;
+        // since v0.4.3 it is also how a mark or possible recorded before
+        // the staples were priced (pantry key, no item id) lands on the
+        // list at its real price.
+        fun addPurchasableForm(pantryStapleName: String?) {
+            val name = pantryStapleName ?: return
+            for (coveredId in Costing.pantryCoveredItemIds(setOf(name), priceItems)) {
+                val covered = itemsById[coveredId] ?: continue
+                addResolved(
+                    ReconciledOut(
+                        itemKey = RanOutKeys.ITEM_PREFIX + covered.id,
+                        displayName = covered.name,
+                        stapleSide = true,
+                        priceItemId = covered.id,
+                        bulkItemId = covered.takeIf { it.homeStore == Store.SAMS_CLUB }?.id,
+                    ),
+                )
+            }
+        }
+
         // List 1: her marks, confirmed as a set.
         for (event in session.markedOuts) {
             events += event.copy(state = RanOutState.CONFIRMED)
@@ -364,6 +425,7 @@ object Reconciliation {
                     pantryStapleName = event.pantryStapleName,
                 ),
             )
+            if (event.priceItemId == null) addPurchasableForm(event.pantryStapleName)
         }
 
         // List 2: confirmed join the set; dismissed are recorded, not resolved.
@@ -392,6 +454,7 @@ object Reconciliation {
                             pantryStapleName = possible.pantryStapleName,
                         ),
                     )
+                    if (possible.priceItemId == null) addPurchasableForm(possible.pantryStapleName)
                 }
                 in choices.dismissedPossibleKeys -> {
                     events += RanOutEvent(
@@ -434,18 +497,7 @@ object Reconciliation {
             )
             // The purchasable form of a missing staple joins the set:
             // priced items this staple's name covers.
-            for (coveredId in Costing.pantryCoveredItemIds(setOf(staple.name), priceItems)) {
-                val covered = itemsById[coveredId] ?: continue
-                addResolved(
-                    ReconciledOut(
-                        itemKey = RanOutKeys.ITEM_PREFIX + covered.id,
-                        displayName = covered.name,
-                        stapleSide = true,
-                        priceItemId = covered.id,
-                        bulkItemId = covered.takeIf { it.homeStore == Store.SAMS_CLUB }?.id,
-                    ),
-                )
-            }
+            addPurchasableForm(staple.name)
         }
         for (item in session.bulkChecklist) {
             if (item.id !in choices.missingBulkItemIds) continue

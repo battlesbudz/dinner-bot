@@ -101,8 +101,9 @@ object Costing {
 
     /**
      * Aggregate the priced ingredients of [recipes], each scaled to
-     * [forServings], into per-item needs. Pantry ingredients are returned
-     * separately by name (they are never priced).
+     * [forServings], into per-item needs. Pantry ingredients (the
+     * pre-v0.4.3 unpriced form; no shipped recipe uses it anymore) are
+     * returned separately by name.
      */
     fun aggregateNeeds(
         recipes: List<Recipe>,

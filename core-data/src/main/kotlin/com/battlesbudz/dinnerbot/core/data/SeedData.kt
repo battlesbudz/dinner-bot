@@ -58,6 +58,7 @@ object SeedMapper {
         userCorrected = userCorrected,
         alternatesJson = json.encodeToString(storePriceList, alternates),
         freezeNote = freezeNote,
+        staple = staple,
     )
 
     fun PriceItemEntity.toModel(): PriceItem = PriceItem(
@@ -75,6 +76,7 @@ object SeedMapper {
         alternates = runCatching { json.decodeFromString(storePriceList, alternatesJson) }
             .getOrDefault(emptyList()),
         freezeNote = freezeNote,
+        staple = staple,
     )
 
     fun IngredientNutrition.toEntity(): IngredientNutritionEntity = IngredientNutritionEntity(
@@ -293,6 +295,25 @@ class SeedLoader(private val db: DinnerBotDatabase) {
             }
         }
         return changed
+    }
+
+    /**
+     * Add bundled price book items the stored book does not have yet
+     * (v0.4.3: the eleven pantry staples became priced items). Only ids
+     * absent from the stored table are inserted, so Andrea's corrected
+     * prices and every other stored row are untouched; existing rows are
+     * never rewritten from the bundle. Runs on every start like the other
+     * refreshes, and it also heals a database restored from an older
+     * backup that predates the new items. Returns how many items were
+     * added.
+     */
+    suspend fun addMissingSeedPriceItems(priceBookJson: String): Int {
+        val bundled = SeedDataParser.parsePriceBook(priceBookJson)
+        val storedIds = db.priceItemDao().getAll().map { it.id }.toSet()
+        val missing = bundled.filter { it.id !in storedIds }
+        if (missing.isEmpty()) return 0
+        db.priceItemDao().insertAll(missing.map { with(SeedMapper) { it.toEntity() } })
+        return missing.size
     }
 
     /**

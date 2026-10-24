@@ -38,7 +38,12 @@ import com.battlesbudz.dinnerbot.core.model.Store
  */
 object WeekPlanner {
 
-    /** Prefix of the note [addPantryNotes] writes; [recost] drops stale ones by it. */
+    /**
+     * Prefix of the pantry-gap note the planner wrote before v0.4.3, when
+     * the staples were unpriced. The staples are priced price book items
+     * now, so nothing writes the note anymore; [recost] still drops stale
+     * ones stored on plans generated before the change.
+     */
     private const val PANTRY_GAP_NOTE_PREFIX = "Pantry staples these dinners use that are not marked owned:"
 
     data class WeekPlan(
@@ -193,7 +198,6 @@ object WeekPlanner {
             }
         }
 
-        addPantryNotes(settings, chosen, pantryOwnedNames, notes)
 
         // A generated week NEVER repeats a dinner. When fewer different
         // dinners are available than there are cook nights, plan the nights
@@ -591,7 +595,6 @@ object WeekPlanner {
             val cap = settings.weeklyBudgetCents
             if (cap <= 0 || costed.cashNeededCents <= cap) {
                 val notes = current.notes.toMutableList()
-                addPantryNotes(settings, trial, pantryOwnedNames, notes)
                 return current.copy(
                     nights = current.nights.mapIndexed { i, night ->
                         if (i == nightIndex) night.copy(recipeId = candidate.id) else night
@@ -668,7 +671,6 @@ object WeekPlanner {
             val chosen = nights.filterNot { it.notCooking }.mapNotNull { recipesById[it.recipeId] }
             val costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
             val notes = current.notes.toMutableList()
-            addPantryNotes(settings, chosen, pantryOwnedNames, notes)
             return current.copy(
                 nights = nights,
                 lines = costed.lines,
@@ -725,8 +727,9 @@ object WeekPlanner {
      * and comes back when it is marked not owned. Nights marked not cooking
      * stay out of the costing, exactly as the other flows price them.
      * Check-offs carry over by item: repricing the same dinners must not
-     * uncheck what Andrea already shopped. The pantry-gap note is rebuilt
-     * from the new ownership so a stale one never lingers.
+     * uncheck what Andrea already shopped. A pantry-gap note stored by a
+     * plan generated before v0.4.3 is dropped: the staples are priced now,
+     * so the note's claim is no longer true.
      */
     fun recost(
         settings: HouseholdSettings,
@@ -743,7 +746,6 @@ object WeekPlanner {
         val costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
         val checkedItemIds = current.lines.filter { it.checkedOff }.map { it.itemId }.toSet()
         val notes = current.notes.filterNot { it.startsWith(PANTRY_GAP_NOTE_PREFIX) }.toMutableList()
-        addPantryNotes(settings, chosen, pantryOwnedNames, notes)
         return current.copy(
             lines = costed.lines.map { line ->
                 if (line.itemId in checkedItemIds) line.copy(checkedOff = true) else line
@@ -766,7 +768,6 @@ object WeekPlanner {
         pantryOwnedNames: Set<String>,
     ): WeekPlan {
         val notes = current.notes.toMutableList()
-        addPantryNotes(settings, trial, pantryOwnedNames, notes)
         return current.copy(
             nights = current.nights.mapIndexed { i, night ->
                 if (i == nightIndex) {
@@ -873,23 +874,5 @@ object WeekPlanner {
         if (list.isEmpty()) return list
         val shift = ((variation % list.size) + list.size) % list.size
         return list.drop(shift) + list.take(shift)
-    }
-
-    private fun addPantryNotes(
-        settings: HouseholdSettings,
-        chosen: List<Recipe>,
-        pantryOwnedNames: Set<String>,
-        notes: MutableList<String>,
-    ) {
-        val owned = pantryOwnedNames.map { it.lowercase() }.toSet()
-        val missing = chosen.flatMap { it.ingredients }
-            .mapNotNull { it.pantryItem }
-            .filter { it.lowercase() !in owned }
-            .distinct()
-        if (missing.isNotEmpty()) {
-            notes += "$PANTRY_GAP_NOTE_PREFIX " +
-                missing.joinToString(", ") + ". They are not priced in the price book, so they are not " +
-                "on the shopping list; check the pantry before you shop."
-        }
     }
 }

@@ -62,7 +62,8 @@ class SeedExpansionTest {
 
     @Test fun libraryGrewTo36RecipesAnd31PriceItems() {
         assertEquals(36, recipesFile.recipes.size)
-        assertEquals(31, priceBook.items.size)
+        // v0.4.3: the eleven pantry staples became priced items, 31 + 11.
+        assertEquals(42, priceBook.items.size)
         val recipeIds = recipesFile.recipes.map { it.id }.toSet()
         for (id in newRecipeIds) assertTrue("missing new recipe $id", id in recipeIds)
         val itemIds = priceBook.items.map { it.id }.toSet()
@@ -85,9 +86,45 @@ class SeedExpansionTest {
                 val itemId = ingredient.priceItemId ?: continue
                 val item = byId[itemId]
                 assertTrue("recipe ${recipe.id} references unknown item $itemId", item != null)
+                // Same dimension, not necessarily the same unit: since
+                // v0.4.3 the staples are priced in the packs the store
+                // sells (a 26 oz canister of salt, a 3 lb bag of rice)
+                // while recipes measure them in teaspoons and cups.
+                // Costing converts within a dimension; a cross-dimension
+                // reference would silently corrupt the money.
                 assertEquals(
-                    "recipe ${recipe.id}: unit for $itemId must match the price book pack unit",
-                    item!!.packQuantity.unit, ingredient.quantity.unit,
+                    "recipe ${recipe.id}: unit for $itemId must share the price book pack unit's dimension",
+                    item!!.packQuantity.unit.dimension, ingredient.quantity.unit.dimension,
+                )
+            }
+        }
+    }
+
+    /**
+     * v0.4.3 (Battles: "everything should be in the pricing book"): the
+     * eleven pantry staples are priced items flagged staple, with real
+     * captured prices, and no shipped recipe references a free-floating
+     * pantry name anymore.
+     */
+    @Test fun theElevenStaplesArePricedBookItems() {
+        val stapleIds = setOf(
+            "long-grain-white-rice", "butter", "vegetable-oil", "flour", "salt",
+            "black-pepper", "paprika", "chili-powder", "garlic-powder",
+            "ground-cumin", "soy-sauce",
+        )
+        val byId = priceBook.items.associateBy { it.id }
+        assertEquals(stapleIds, priceBook.items.filter { it.staple }.map { it.id }.toSet())
+        for (id in stapleIds) {
+            val item = byId.getValue(id)
+            assertTrue("$id must carry a real captured price", item.packPriceCents > 0)
+            assertTrue("$id must record its capture source", item.source.isNotBlank())
+            assertTrue("$id must record when it was checked", item.checkedDate.isNotBlank())
+        }
+        for (recipe in recipesFile.recipes) {
+            for (ingredient in recipe.ingredients) {
+                assertTrue(
+                    "recipe ${recipe.id} still references unpriced pantry name ${ingredient.pantryItem}",
+                    ingredient.pantryItem == null,
                 )
             }
         }

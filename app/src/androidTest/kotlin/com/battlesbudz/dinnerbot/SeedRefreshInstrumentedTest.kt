@@ -77,4 +77,66 @@ class SeedRefreshInstrumentedTest {
             db.close()
         }
     }
+
+    /**
+     * The v0.4.3 upgrade: a book stored by v0.4.2 (31 items, no staples)
+     * gains the eleven priced staples on the next start, flagged staple,
+     * while a corrected price and an owned pantry mark are untouched.
+     */
+    @Test fun addMissingSeedPriceItemsUpgradesA31ItemBook() = runBlocking {
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val db = Room.inMemoryDatabaseBuilder(
+            ApplicationProvider.getApplicationContext(),
+            DinnerBotDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val priceJson = appContext.assets.open("pricebook.json").bufferedReader().use { it.readText() }
+            val recipesJson = appContext.assets.open("recipes.json").bufferedReader().use { it.readText() }
+
+            // Rebuild the v0.4.2 book from the bundled file: same items
+            // minus the eleven staples.
+            val stapleIds = setOf(
+                "long-grain-white-rice", "butter", "vegetable-oil", "flour", "salt",
+                "black-pepper", "paprika", "chili-powder", "garlic-powder",
+                "ground-cumin", "soy-sauce",
+            )
+            val root = org.json.JSONObject(priceJson)
+            val items = root.getJSONArray("items")
+            val kept = org.json.JSONArray()
+            for (i in 0 until items.length()) {
+                val obj = items.getJSONObject(i)
+                if (obj.getString("id") !in stapleIds) kept.put(obj)
+            }
+            root.put("items", kept)
+
+            val loader = SeedLoader(db)
+            loader.seedIfEmpty(root.toString(), recipesJson)
+            assertEquals(31, db.priceItemDao().getAll().size)
+
+            // User data that must survive: a corrected price and an
+            // owned staple mark in the pantry.
+            db.priceItemDao().updatePrice("yellow-onions", 999, 333.0)
+            db.pantryDao().insertAll(
+                listOf(com.battlesbudz.dinnerbot.core.data.PantryItemEntity("salt", "Salt", owned = true)),
+            )
+
+            val added = loader.addMissingSeedPriceItems(priceJson)
+            assertEquals(11, added)
+            assertEquals(42, db.priceItemDao().getAll().size)
+
+            val salt = db.priceItemDao().getById("salt")!!
+            assertTrue("the inserted staple carries its flag", salt.staple)
+            assertEquals(89, salt.packPriceCents)
+            assertEquals("Salt", salt.name)
+            assertEquals(999, db.priceItemDao().getById("yellow-onions")!!.packPriceCents)
+            val pantry = db.pantryDao().getAll().single()
+            assertEquals("Salt", pantry.name)
+            assertTrue(pantry.owned)
+
+            // Second run is a no-op.
+            assertEquals(0, loader.addMissingSeedPriceItems(priceJson))
+        } finally {
+            db.close()
+        }
+    }
 }

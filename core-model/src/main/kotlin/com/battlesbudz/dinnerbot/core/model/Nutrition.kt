@@ -90,9 +90,11 @@ data class NutritionValues(
 
 /**
  * One shipped ingredient's sourced nutrition entry (Phase V2-0 capture,
- * seed-data/nutrition.json). Exactly one entry per shipped ingredient:
- * priced items keyed by price item id, pantry staples keyed by the slug
- * of the staple name with [pantryItem] true.
+ * seed-data/nutrition.json). Exactly one entry per shipped ingredient,
+ * keyed by price item id. [pantryItem] is the pre-v0.4.3 form: while the
+ * staples were unpriced pantry names, their entries were keyed by the
+ * slug of the staple name with the flag true; the staples are priced
+ * items now and their entries carry the flag false like every other.
  */
 @Serializable
 data class IngredientNutrition(

@@ -100,9 +100,11 @@ data class ReconciledOut(
 /**
  * The item keys the cook view, check-offs, and ran-out records share, and
  * the staple-side rule: an item is a staple for the dedup rules when it is
- * a pantry staple (unpriced), a Sam's Club bulk item (the household's
- * standing stock), or a priced item an owned pantry entry covers by name
- * (the line the app already draws between staples and recipe-only items).
+ * flagged [PriceItem.staple] in the price book (the pantry staples, priced
+ * since v0.4.3), a legacy unpriced pantry staple, a Sam's Club bulk item
+ * (the household's standing stock), or a priced item an owned pantry entry
+ * covers by name (the line the app already draws between staples and
+ * recipe-only items).
  */
 object RanOutKeys {
     const val ITEM_PREFIX = "item:"
@@ -121,7 +123,8 @@ object RanOutKeys {
         if (key.startsWith(PANTRY_PREFIX)) key.removePrefix(PANTRY_PREFIX) else null
 
     fun stapleSideFor(item: PriceItem, pantryOwnedNames: Collection<String>): Boolean =
-        item.homeStore == Store.SAMS_CLUB ||
+        item.staple ||
+            item.homeStore == Store.SAMS_CLUB ||
             Costing.pantryNamesCoveringItem(item, pantryOwnedNames).isNotEmpty()
 
     /** A priced ingredient's staple side and ids, resolved against the book. */

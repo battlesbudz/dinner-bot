@@ -6,8 +6,10 @@ import kotlin.math.roundToInt
 
 /**
  * Estimated cost of a recipe from the price book. Priced ingredients cost
- * quantity times the item's per-unit price; pantry staples cost $0 because
- * they are already home. This is an estimate for display, not budget math.
+ * quantity times the item's per-unit price; an ingredient with no priced
+ * item costs $0. (Before v0.4.3 the pantry staples took that $0 path; they
+ * are priced items now and cost their real portion price.) This is an
+ * estimate for display, not budget math.
  */
 object RecipeCostCalculator {
 
