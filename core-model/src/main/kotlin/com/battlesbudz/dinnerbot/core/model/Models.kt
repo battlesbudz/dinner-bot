@@ -99,6 +99,14 @@ data class Recipe(
     val dietTags: List<String> = emptyList(),
     val ingredients: List<RecipeIngredient>,
     val steps: List<String>,
+    /**
+     * Where this recipe came from (Recipe Import epic). Every recipe the
+     * seed bundle carries is [RecipeOrigin.LIBRARY]; RI-2's imported and
+     * hand-made recipes carry their own origin. Defaults to LIBRARY so
+     * every stored and bundled recipe written before origins existed
+     * reads as a library recipe.
+     */
+    val origin: RecipeOrigin = RecipeOrigin.LIBRARY,
 ) {
     /** Scale every ingredient from the base [servings] to [forServings]. */
     fun scaledIngredients(forServings: Int): List<RecipeIngredient> {
@@ -127,6 +135,16 @@ data class PlannedNight(
     val notCooking: Boolean = false,
     /** Why the night is off: "leftovers", "eating out", or "other". */
     val notCookingReason: String? = null,
+    /**
+     * Tonight-only ingredient edits for this night (Phase RI-1, ruling
+     * D1): the night's full ingredient list as Andrea edited it for
+     * tonight only. Rides inside the plan's nights JSON, so no plan
+     * written before this field existed changes shape; a night without
+     * edits reads null and cooks the saved recipe. The edits leave with
+     * the dinner: swapping the night's recipe or planning a replacement
+     * dinner clears them.
+     */
+    val tonightEdits: TonightOverrides? = null,
 )
 
 @Serializable

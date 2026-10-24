@@ -169,6 +169,22 @@ data class RecipePhotoEntity(
     val updatedAtMillis: Long,
 )
 
+/**
+ * Andrea's saved household version of one library recipe's ingredient
+ * list (Phase RI-1): the full list as she last saved it, JSON-encoded.
+ * One row per edited recipe; absence of a row means the seed version
+ * stands, and restore-original deletes the row. Household data in every
+ * sense: the seed refresh never writes here, and the rows ride in
+ * backups (format v6).
+ */
+@Entity(tableName = "recipe_overrides")
+data class RecipeOverrideEntity(
+    @PrimaryKey val recipeId: String,
+    /** JSON-encoded List<RecipeIngredient>: the household ingredient list. */
+    val ingredientsJson: String,
+    val updatedAtMillis: Long,
+)
+
 /** One thumbs rating per recipe (Phase V2-1); absence of a row means unrated. */
 @Entity(tableName = "recipe_ratings")
 data class RecipeRatingEntity(

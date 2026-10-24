@@ -6,6 +6,7 @@ import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
 import com.battlesbudz.dinnerbot.core.model.PantryItem
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.RanOutEvent
+import com.battlesbudz.dinnerbot.core.model.RecipeIngredient
 import com.battlesbudz.dinnerbot.core.model.RecipeRating
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -40,6 +41,19 @@ data class BackupScanSubstitution(
 )
 
 /**
+ * One household recipe edit inside a backup file (Phase RI-1): the full
+ * ingredient list Andrea saved over a library recipe. The recipe itself
+ * is seed content and is not carried; the override names it by id and
+ * applies on the phone that imports the file, whose seed library
+ * carries the recipe.
+ */
+@Serializable
+data class BackupRecipeOverride(
+    val recipeId: String,
+    val ingredients: List<RecipeIngredient>,
+)
+
+/**
  * One JSON file carrying the user's own data: settings, the full price book
  * (including Andrea's corrections), the pantry checklist, Sam's bulk stock,
  * recipe thumbs ratings, learned barcode links, and the Sunday
@@ -62,6 +76,12 @@ data class BackupScanSubstitution(
  * Andrea added from scans wholesale (they are ordinary book items), so
  * their links and swaps keep resolving after a restore. Older files
  * import with substitutions empty.
+ *
+ * Format version 6 (v0.5.0) adds recipeOverrides, Andrea's saved
+ * household ingredient lists for library recipes (Phase RI-1), so a
+ * phone swap never silently loses the corrections she made forever.
+ * Older files import with overrides empty. Tonight-only edits do not
+ * ride, consistently with plans not riding.
  */
 @Serializable
 data class BackupData(
@@ -75,9 +95,10 @@ data class BackupData(
     val ranOutEvents: List<RanOutEvent> = emptyList(),
     val cookCheckoffs: List<CookCheckoff> = emptyList(),
     val scanSubstitutions: List<BackupScanSubstitution> = emptyList(),
+    val recipeOverrides: List<BackupRecipeOverride> = emptyList(),
 ) {
     companion object {
-        const val CURRENT_VERSION: Int = 5
+        const val CURRENT_VERSION: Int = 6
     }
 }
 
@@ -142,6 +163,29 @@ object BackupEngine {
             }
             require(swap.substitutePriceCents > 0) {
                 "That backup remembers a scan swap with a broken price."
+            }
+        }
+        val overrideIds = data.recipeOverrides.map { it.recipeId }
+        require(overrideIds.size == overrideIds.toSet().size) {
+            "That backup has duplicate recipe edits."
+        }
+        for (override in data.recipeOverrides) {
+            require(override.recipeId.isNotBlank()) {
+                "That backup has a recipe edit with no recipe."
+            }
+            require(override.ingredients.isNotEmpty()) {
+                "That backup has a recipe edit with no ingredients."
+            }
+            for (ingredient in override.ingredients) {
+                val itemId = ingredient.priceItemId
+                if (itemId != null) {
+                    require(itemId in itemIds) {
+                        "That backup has a recipe edit using an item that is not in its price book."
+                    }
+                }
+                require(ingredient.quantity.amount > 0.0) {
+                    "That backup has a recipe edit with a broken amount."
+                }
             }
         }
         return data

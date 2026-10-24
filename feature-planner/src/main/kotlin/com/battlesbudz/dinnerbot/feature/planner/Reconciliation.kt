@@ -2,6 +2,7 @@ package com.battlesbudz.dinnerbot.feature.planner
 
 import com.battlesbudz.dinnerbot.core.model.CookCheckoff
 import com.battlesbudz.dinnerbot.core.model.Costing
+import com.battlesbudz.dinnerbot.core.model.EffectiveRecipes
 import com.battlesbudz.dinnerbot.core.model.PantryItem
 import com.battlesbudz.dinnerbot.core.model.PlannedNight
 import com.battlesbudz.dinnerbot.core.model.PossibleOut
@@ -184,7 +185,11 @@ object Reconciliation {
             for (night in plan.nights) {
                 if (night.notCooking) continue
                 if ((plan.planId to night.day) !in cookedKeys) continue
-                val recipe = recipesById[night.recipeId] ?: continue
+                // What was cooked is what the night actually cooked: the
+                // saved recipe with the night's tonight-only edits
+                // applied (Phase RI-1), so an ingredient edited out for
+                // that night is never inferred as used up.
+                val recipe = EffectiveRecipes.resolveNight(night, recipesById) ?: continue
                 val dayLabel = DAY_LABELS[night.day] ?: night.day
                 for (ingredient in recipe.ingredients) {
                     val (key, stapleSide, item) = RanOutKeys.describe(ingredient, itemsById, ownedNames)

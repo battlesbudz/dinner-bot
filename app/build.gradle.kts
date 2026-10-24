@@ -12,8 +12,8 @@ android {
         applicationId = "com.battlesbudz.dinnerbot"
         minSdk = 26
         targetSdk = 35
-        versionCode = 15
-        versionName = "0.4.4"
+        versionCode = 16
+        versionName = "0.5.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

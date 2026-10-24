@@ -156,6 +156,25 @@ interface RecipeDao {
 }
 
 @Dao
+interface RecipeOverrideDao {
+    @Query("SELECT * FROM recipe_overrides")
+    suspend fun getAll(): List<RecipeOverrideEntity>
+
+    @Query("SELECT * FROM recipe_overrides WHERE recipeId = :recipeId")
+    suspend fun getByRecipeId(recipeId: String): RecipeOverrideEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(override: RecipeOverrideEntity)
+
+    /** Restore-original deletes only the override row it names; the recipe's rating and photo are untouched. */
+    @Query("DELETE FROM recipe_overrides WHERE recipeId = :recipeId")
+    suspend fun delete(recipeId: String)
+
+    @Query("DELETE FROM recipe_overrides")
+    suspend fun deleteAll()
+}
+
+@Dao
 interface RecipeRatingDao {
     @Query("SELECT * FROM recipe_ratings")
     suspend fun getAll(): List<RecipeRatingEntity>

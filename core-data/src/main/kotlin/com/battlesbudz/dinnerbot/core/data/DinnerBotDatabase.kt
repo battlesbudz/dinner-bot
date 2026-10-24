@@ -83,6 +83,16 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * carries over untouched, which the instrumented migration test
  * proves from a populated v10 database.
  *
+ * Version 12 (Phase RI-1, v0.5.0) adds the recipe_overrides table
+ * through [MIGRATION_11_12]: Andrea's saved household ingredient list
+ * for one library recipe per row, created empty on upgrade — no recipe
+ * has household edits until she makes one. Tonight-only edits need NO
+ * table: they ride inside the plans' existing nightsJson as a new
+ * PlannedNight field with a null default, so a v11 plan's JSON decodes
+ * with every night cooking the saved recipe. Every v11 table and row
+ * carries over untouched, which the instrumented migration test proves
+ * from a populated v11 database.
+ *
  * fallbackToDestructiveMigration remains only as a pre-1.0 safety net for
  * development installs; with a real migration registered for every version
  * step it never triggers on a real upgrade path.
@@ -103,8 +113,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RanOutEventEntity::class,
         CookCheckoffEntity::class,
         ScanSubstitutionEntity::class,
+        RecipeOverrideEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = false,
 )
 abstract class DinnerBotDatabase : RoomDatabase() {
@@ -122,6 +133,7 @@ abstract class DinnerBotDatabase : RoomDatabase() {
     abstract fun ranOutDao(): RanOutDao
     abstract fun cookCheckoffDao(): CookCheckoffDao
     abstract fun scanSubstitutionDao(): ScanSubstitutionDao
+    abstract fun recipeOverrideDao(): RecipeOverrideDao
 
     companion object {
         /** v2 to v3: create the recipe_ratings table. Nothing else changes. */
@@ -249,12 +261,27 @@ abstract class DinnerBotDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v11 to v12: create the recipe_overrides table (Phase RI-1).
+         * Nothing else changes: tonight-only edits ride the plans'
+         * existing nights JSON, so no plan row is rewritten either.
+         */
+        val MIGRATION_11_12: Migration = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `recipe_overrides` (" +
+                        "`recipeId` TEXT NOT NULL, `ingredientsJson` TEXT NOT NULL, " +
+                        "`updatedAtMillis` INTEGER NOT NULL, PRIMARY KEY(`recipeId`))",
+                )
+            }
+        }
+
         fun create(context: Context): DinnerBotDatabase =
             Room.databaseBuilder(context.applicationContext, DinnerBotDatabase::class.java, "dinner-bot.db")
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
                     MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
-                    MIGRATION_10_11,
+                    MIGRATION_10_11, MIGRATION_11_12,
                 )
                 .fallbackToDestructiveMigration()
                 .build()

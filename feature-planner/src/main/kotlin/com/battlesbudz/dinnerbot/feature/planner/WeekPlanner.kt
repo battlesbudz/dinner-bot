@@ -1,6 +1,7 @@
 package com.battlesbudz.dinnerbot.feature.planner
 
 import com.battlesbudz.dinnerbot.core.model.Costing
+import com.battlesbudz.dinnerbot.core.model.EffectiveRecipes
 import com.battlesbudz.dinnerbot.core.model.GroceryLine
 import com.battlesbudz.dinnerbot.core.model.displacedOriginsOf
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
@@ -637,8 +638,15 @@ object WeekPlanner {
         savingsByItemCents = emptyMap(),
     )
 
+    /**
+     * The dinners a week actually cooks, per night: each night resolves
+     * through [EffectiveRecipes], so a night's tonight-only edits
+     * (Phase RI-1) are the version costed, projected, and inferred from
+     * — the per-night resolution order's last step, applied in the one
+     * place every week-level read funnels through.
+     */
     private fun dinnersOf(week: WeekPlan, recipesById: Map<String, Recipe>): List<Recipe> =
-        week.nights.filterNot { it.notCooking }.mapNotNull { recipesById[it.recipeId] }
+        EffectiveRecipes.resolveDinners(week.nights, recipesById)
 
     /**
      * Swap one night's dinner for the best unused candidate, preferring swaps
@@ -677,7 +685,9 @@ object WeekPlanner {
             .filter { it.id !in inPlan }
         if (candidates.isEmpty()) return current
 
-        val baseChosen = cookingIndexes.mapNotNull { recipesById[current.nights[it].recipeId] }
+        val baseChosen = cookingIndexes.mapNotNull {
+            EffectiveRecipes.resolveNight(current.nights[it], recipesById)
+        }
         if (trialSlot < 0 || trialSlot >= baseChosen.size) return current
         for (candidate in candidates) {
             val trial = baseChosen.toMutableList()
@@ -688,7 +698,13 @@ object WeekPlanner {
                 val notes = current.notes.toMutableList()
                 return current.copy(
                     nights = current.nights.mapIndexed { i, night ->
-                        if (i == nightIndex) night.copy(recipeId = candidate.id) else night
+                        // The night's tonight-only edits were edits to the
+                        // dinner leaving; they leave with it (Phase RI-1).
+                        if (i == nightIndex) {
+                            night.copy(recipeId = candidate.id, tonightEdits = null)
+                        } else {
+                            night
+                        }
                     },
                     lines = costed.lines,
                     cashNeededCents = costed.cashNeededCents,
@@ -706,7 +722,11 @@ object WeekPlanner {
         val costed = cost(settings, trial, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
         return current.copy(
             nights = current.nights.mapIndexed { i, night ->
-                if (i == nightIndex) night.copy(recipeId = fallback.id) else night
+                if (i == nightIndex) {
+                    night.copy(recipeId = fallback.id, tonightEdits = null)
+                } else {
+                    night
+                }
             },
             lines = costed.lines,
             cashNeededCents = costed.cashNeededCents,
@@ -759,7 +779,7 @@ object WeekPlanner {
             val nights = current.nights.mapIndexed { i, night ->
                 if (i == nightIndex) night.copy(notCooking = true, notCookingReason = reason) else night
             }
-            val chosen = nights.filterNot { it.notCooking }.mapNotNull { recipesById[it.recipeId] }
+            val chosen = EffectiveRecipes.resolveDinners(nights, recipesById)
             val costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
             val notes = current.notes.toMutableList()
             return current.copy(
@@ -787,8 +807,7 @@ object WeekPlanner {
                     "stays marked not cooking.").distinct(),
             )
         }
-        val baseChosen = current.nights.filterNot { it.notCooking }
-            .mapNotNull { recipesById[it.recipeId] }
+        val baseChosen = EffectiveRecipes.resolveDinners(current.nights, recipesById)
         val cap = settings.weeklyBudgetCents
         for (candidate in candidates) {
             val trial = baseChosen + candidate
@@ -833,7 +852,7 @@ object WeekPlanner {
     ): WeekPlan {
         val itemsById = priceItems.associateBy { it.id }
         val recipesById = recipes.associateBy { it.id }
-        val chosen = current.nights.filterNot { it.notCooking }.mapNotNull { recipesById[it.recipeId] }
+        val chosen = EffectiveRecipes.resolveDinners(current.nights, recipesById)
         val costed = cost(settings, chosen, itemsById, stockOnHand, pantryOwnedNames, gateOverride)
         val checkedItemIds = current.lines.filter { it.checkedOff }.map { it.itemId }.toSet()
         val notes = current.notes.filterNot { it.startsWith(PANTRY_GAP_NOTE_PREFIX) }.toMutableList()
@@ -862,7 +881,13 @@ object WeekPlanner {
         return current.copy(
             nights = current.nights.mapIndexed { i, night ->
                 if (i == nightIndex) {
-                    night.copy(recipeId = dinner.id, notCooking = false, notCookingReason = null)
+                    // A dinner is being (re)assigned to this night; any
+                    // tonight-only edits belonged to the dinner that was
+                    // planned before and clear with it (Phase RI-1).
+                    night.copy(
+                        recipeId = dinner.id, notCooking = false,
+                        notCookingReason = null, tonightEdits = null,
+                    )
                 } else {
                     night
                 }
