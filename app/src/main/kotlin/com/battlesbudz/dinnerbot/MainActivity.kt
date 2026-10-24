@@ -68,6 +68,7 @@ import com.battlesbudz.dinnerbot.core.model.DietPreset
 import com.battlesbudz.dinnerbot.core.model.DietPresets
 import com.battlesbudz.dinnerbot.core.model.EffectiveRecipes
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
+import com.battlesbudz.dinnerbot.core.model.ImportedRecipe
 import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
 import com.battlesbudz.dinnerbot.core.model.PantryItem
 import com.battlesbudz.dinnerbot.core.model.PossibleOut
@@ -78,6 +79,7 @@ import com.battlesbudz.dinnerbot.core.model.RanOutState
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeAdaptation
 import com.battlesbudz.dinnerbot.core.model.RecipeIngredient
+import com.battlesbudz.dinnerbot.core.model.RecipeOrigin
 import com.battlesbudz.dinnerbot.core.model.RecipeOverride
 import com.battlesbudz.dinnerbot.core.model.RecipePhoto
 import com.battlesbudz.dinnerbot.core.model.RecipePhotos
@@ -87,6 +89,7 @@ import com.battlesbudz.dinnerbot.core.model.ScanSubstitution
 import com.battlesbudz.dinnerbot.core.model.TonightOverrides
 import com.battlesbudz.dinnerbot.feature.backup.BackupBarcodeLink
 import com.battlesbudz.dinnerbot.feature.backup.BackupData
+import com.battlesbudz.dinnerbot.feature.backup.BackupImportedRecipe
 import com.battlesbudz.dinnerbot.feature.backup.BackupRecipeOverride
 import com.battlesbudz.dinnerbot.feature.backup.BackupRecipeRating
 import com.battlesbudz.dinnerbot.feature.backup.BackupEngine
@@ -96,6 +99,8 @@ import com.battlesbudz.dinnerbot.feature.grocerylist.GroceryRow
 import com.battlesbudz.dinnerbot.feature.grocerylist.GroceryListScreen
 import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.BarcodeScanLogic
 import com.battlesbudz.dinnerbot.feature.grocerylist.ReconciliationMerge
+import com.battlesbudz.dinnerbot.feature.`import`.ImportStart
+import com.battlesbudz.dinnerbot.feature.`import`.RecipeImportFlow
 import com.battlesbudz.dinnerbot.feature.nutrition.NutritionScreen
 import com.battlesbudz.dinnerbot.feature.nutrition.NutritionWeekInput
 import com.battlesbudz.dinnerbot.feature.onboarding.HowItWorksScreen
@@ -132,14 +137,29 @@ class MainActivity : ComponentActivity() {
 
     private val database by lazy { DinnerBotDatabase.create(this) }
 
+    /**
+     * Text shared to Dinner Bot from another app (Phase RI-2): a recipe
+     * page link or recipe text, handed to the import flow in Compose.
+     * Read once from the launching intent (and from onNewIntent while
+     * the app is running, the activity being singleTop) and consumed
+     * by the UI the moment the import opens on it.
+     */
+    private var sharedText by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        sharedText = intent?.sharedTextExtra()
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    DinnerBotApp(database = database, loadAsset = { name ->
-                        assets.open(name).bufferedReader().use { it.readText() }
-                    })
+                    DinnerBotApp(
+                        database = database,
+                        loadAsset = { name ->
+                            assets.open(name).bufferedReader().use { it.readText() }
+                        },
+                        sharedText = sharedText,
+                        onSharedTextConsumed = { sharedText = null },
+                    )
                 }
             }
         }
@@ -159,7 +179,21 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        sharedText = intent.sharedTextExtra()
+    }
 }
+
+/** The text another app shared to Dinner Bot, or null when this intent is not a share. */
+private fun Intent.sharedTextExtra(): String? =
+    if (action == Intent.ACTION_SEND && type == "text/plain") {
+        getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
+    } else {
+        null
+    }
 
 private enum class Tab(val label: String, val icon: ImageVector) {
     RECIPES("Recipes", Icons.Filled.MenuBook),
@@ -175,6 +209,8 @@ private enum class Tab(val label: String, val icon: ImageVector) {
 private fun DinnerBotApp(
     database: DinnerBotDatabase,
     loadAsset: (String) -> String,
+    sharedText: String? = null,
+    onSharedTextConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -196,6 +232,14 @@ private fun DinnerBotApp(
     // load path); this map is kept beside it so screens can show which
     // recipes carry her edits and offer restore-original.
     var recipeOverrides by remember { mutableStateOf<Map<String, RecipeOverride>>(emptyMap()) }
+    // Andrea's own recipes (Phase RI-2): imported and hand-made, kept
+    // beside the effective set (which already contains them, merged on
+    // the load path) so screens can show a recipe's source link and
+    // the import flow can check for a duplicate source.
+    var importedRecipes by remember { mutableStateOf<List<ImportedRecipe>>(emptyList()) }
+    // A recipe import in progress (Phase RI-2); the flow takes the
+    // screen while it runs, like the Sunday gate does.
+    var importStart by remember { mutableStateOf<ImportStart?>(null) }
     // Household recipe photos (Epic issue #10): the records, and the
     // photo files that actually exist on this phone, by recipe id.
     var recipePhotos by remember { mutableStateOf<Map<String, RecipePhoto>>(emptyMap()) }
@@ -256,12 +300,19 @@ private fun DinnerBotApp(
             // Every surface (planner, recipe screens, costing, grocery
             // list, nutrition) consumes this one effective set, so the
             // seed version of a corrected dish can never leak through a
-            // second path.
+            // second path. Phase RI-2 extends the same merge with
+            // Andrea's own imported and hand-made recipes, which live
+            // in their own table and are never seed-touched.
             val storedRecipes = database.recipeDao().getAll().map { with(SeedMapper) { it.toModel() } }
             val loadedOverrides = database.recipeOverrideDao().getAll()
                 .map { with(SeedMapper) { it.toModel() } }
                 .associateBy { it.recipeId }
-            val r = EffectiveRecipes.applyOverrides(storedRecipes, loadedOverrides)
+            val loadedImported = database.importedRecipeDao().getAll()
+                .map { with(SeedMapper) { it.toModel() } }
+            val r = EffectiveRecipes.mergeUserRecipes(
+                EffectiveRecipes.applyOverrides(storedRecipes, loadedOverrides),
+                loadedImported.map { it.recipe },
+            )
             val p = database.priceItemDao().getAll().map { with(SeedMapper) { it.toModel() } }
             val pantry = database.pantryDao().getAll().map { with(SeedMapper) { it.toModel() } }
             val stocks = database.bulkStockDao().getAll().map { with(SeedMapper) { it.toModel() } }
@@ -312,7 +363,7 @@ private fun DinnerBotApp(
                 s, r, p, pantry, stocks, plan, rows, plan2, rows2,
                 loadedRatings, loadedPresets, loadedLinks, loadedNutrition,
                 loadedRanOut, loadedCheckoffs, loadedPhotoById, loadedPhotoFiles,
-                addedStaples, loadedSubstitutions, loadedOverrides,
+                addedStaples, loadedSubstitutions, loadedOverrides, loadedImported,
             )
         }
         settings = loaded.settings
@@ -334,11 +385,20 @@ private fun DinnerBotApp(
         cookCheckoffs = loaded.cookCheckoffs
         scanSubstitutions = loaded.scanSubstitutions
         recipeOverrides = loaded.recipeOverrides
+        importedRecipes = loaded.importedRecipes
         staplesAddedAtLoad = loaded.staplesAdded
         loading = false
     }
 
     fun refresh() { reloadKey += 1 }
+
+    // A share arriving while the app is open opens the import on it
+    // (Phase RI-2). Consumed at once so a reload never reopens it.
+    LaunchedEffect(sharedText) {
+        val text = sharedText ?: return@LaunchedEffect
+        importStart = ImportStart.Shared(text)
+        onSharedTextConsumed()
+    }
 
     /**
      * Re-read the Sunday gate's inputs from the store and adopt them.
@@ -916,6 +976,63 @@ private fun DinnerBotApp(
         }
     }
 
+    /**
+     * A from-now-on ingredient edit (Phase RI-2 routing): where the
+     * saved version lives depends on the recipe's origin. A library
+     * recipe's edit is its override row (Phase RI-1); an imported or
+     * hand-made recipe is Andrea's own data, so the edit rewrites her
+     * recipe's own ingredient list in its table. Either way the saved
+     * recipe is what every surface cooks from then on.
+     */
+    fun saveFromNowOn(recipeId: String, ingredients: List<RecipeIngredient>) {
+        val recipe = recipes.firstOrNull { it.id == recipeId } ?: return
+        if (recipe.origin == RecipeOrigin.LIBRARY) {
+            saveRecipeOverride(recipeId, ingredients)
+            return
+        }
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                val stored = database.importedRecipeDao().getById(recipeId)
+                    ?.let { with(SeedMapper) { it.toModel() } }
+                if (stored != null) {
+                    database.importedRecipeDao().upsert(
+                        with(SeedMapper) {
+                            stored.copy(
+                                recipe = stored.recipe.copy(ingredients = ingredients),
+                            ).toEntity()
+                        },
+                    )
+                }
+            }
+            refresh()
+        }
+    }
+
+    /**
+     * Save a reviewed import (Phase RI-2): a new user recipe, or an
+     * update in place of the earlier import from the same source (her
+     * ratings and photos key off the recipe id, so they carry over an
+     * update untouched). The import writes only this table: no price
+     * book item, pantry row, or barcode link is ever created here.
+     */
+    fun saveImportedRecipe(recipe: Recipe, sourceLink: String?, updateExistingId: String?) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                val existing = updateExistingId?.let { database.importedRecipeDao().getById(it) }
+                val record = ImportedRecipe(
+                    recipe = recipe,
+                    sourceLink = sourceLink,
+                    createdAtMillis = existing?.createdAtMillis ?: System.currentTimeMillis(),
+                )
+                database.importedRecipeDao().upsert(with(SeedMapper) { record.toEntity() })
+            }
+            importStart = null
+            tab = Tab.RECIPES
+            openRecipeId = recipe.id
+            refresh()
+        }
+    }
+
     /** Set, change, or clear (null) one recipe's thumbs rating, then reload. */
     fun rateRecipe(recipeId: String, rating: RecipeRating?) {
         scope.launch {
@@ -1096,6 +1213,11 @@ private fun DinnerBotApp(
                 },
                 recipeOverrides = recipeOverrides.values.map { override ->
                     BackupRecipeOverride(override.recipeId, override.ingredients)
+                },
+                importedRecipes = importedRecipes.map { imported ->
+                    BackupImportedRecipe(
+                        imported.recipe, imported.sourceLink, imported.createdAtMillis,
+                    )
                 },
             ),
         )
@@ -1463,8 +1585,22 @@ private fun DinnerBotApp(
             }
             Column(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.weight(1f)) {
+                    val activeImport = importStart
                     val activeFlow = reconFlow
-                    if (activeFlow != null) {
+                    if (activeImport != null) {
+                        // A recipe import in progress (Phase RI-2) takes
+                        // the screen until it saves or is cancelled.
+                        RecipeImportFlow(
+                            start = activeImport,
+                            priceItems = priceItems,
+                            pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
+                            existingImports = importedRecipes,
+                            onSave = { recipe, sourceLink, updateExistingId ->
+                                saveImportedRecipe(recipe, sourceLink, updateExistingId)
+                            },
+                            onCancel = { importStart = null },
+                        )
+                    } else if (activeFlow != null) {
                         // The Sunday gate (Phase V2-7) takes the screen:
                         // reconciliation runs before any planning, and the
                         // tabs wait until it completes or is skipped.
@@ -1488,11 +1624,13 @@ private fun DinnerBotApp(
                                         open.id, recipeOverrides,
                                     ),
                                     onSaveIngredients = { edited ->
-                                        saveRecipeOverride(open.id, edited)
+                                        saveFromNowOn(open.id, edited)
                                     },
                                     onRestoreOriginal = { restoreRecipeOriginal(open.id) },
                                     nutritionByItemId = nutritionByItemId,
                                     nutritionByPantrySlug = nutritionByPantrySlug,
+                                    sourceLink = importedRecipes
+                                        .firstOrNull { it.recipe.id == open.id }?.sourceLink,
                                     photo = recipePhotos[open.id],
                                     photoFile = photoFiles[open.id],
                                     onPhotoPicked = { attachRecipePhoto(open.id, it) },
@@ -1506,6 +1644,8 @@ private fun DinnerBotApp(
                                     onRecipeClick = { openRecipeId = it.id },
                                     ratings = ratings,
                                     photoFiles = photoFiles,
+                                    onImportClick = { importStart = ImportStart.Blank },
+                                    onAddOwnClick = { importStart = ImportStart.Manual },
                                 )
                             }
                         }
@@ -1576,7 +1716,7 @@ private fun DinnerBotApp(
                                         applyTonightEdits(target.planId, target.day, edited)
                                     },
                                     onSaveFromNowOn = { edited ->
-                                        saveRecipeOverride(targetNight.recipeId, edited)
+                                        saveFromNowOn(targetNight.recipeId, edited)
                                     },
                                 )
                             } else if (fortnightView != null && storedPlan != null && storedPlan2 != null) {
@@ -2096,6 +2236,8 @@ private data class LoadedState(
     val scanSubstitutions: List<ScanSubstitution>,
     /** Household recipe edits by recipe id (Phase RI-1); the recipes above already carry them merged. */
     val recipeOverrides: Map<String, RecipeOverride>,
+    /** Andrea's own imported and hand-made recipes (Phase RI-2), also merged into the recipes above. */
+    val importedRecipes: List<ImportedRecipe>,
 )
 
 /** The Sunday gate's inputs, re-read from the store at request time. */
@@ -2392,6 +2534,20 @@ private suspend fun applyBackup(database: DinnerBotDatabase, data: BackupData) {
             with(SeedMapper) {
                 RecipeOverride(
                     saved.recipeId, saved.ingredients, System.currentTimeMillis(),
+                ).toEntity()
+            },
+        )
+    }
+    // Andrea's own recipes replace wholesale (Phase RI-2): a pre-v7
+    // backup has none, which clears them — the same semantics as every
+    // other household section, since importing replaces this phone's
+    // data.
+    database.importedRecipeDao().deleteAll()
+    data.importedRecipes.forEach { saved ->
+        database.importedRecipeDao().upsert(
+            with(SeedMapper) {
+                ImportedRecipe(
+                    saved.recipe, saved.sourceLink, saved.createdAtMillis,
                 ).toEntity()
             },
         )

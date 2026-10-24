@@ -185,6 +185,34 @@ data class RecipeOverrideEntity(
     val updatedAtMillis: Long,
 )
 
+/**
+ * One recipe Andrea brought into the app herself (Phase RI-2): imported
+ * from a page or a paste, or created by hand. The recipe fields mirror
+ * [RecipeEntity]'s shape, but this is household data, not seed content:
+ * the seed refresh never reads or writes this table, and the rows ride
+ * in backups (format v7). [origin] stores the RecipeOrigin enum name
+ * (IMPORTED or MANUAL); [sourceUrl] is where an imported recipe came
+ * from, null for hand-made recipes.
+ */
+@Entity(tableName = "imported_recipes")
+data class ImportedRecipeEntity(
+    @PrimaryKey val id: String,
+    val title: String,
+    val servings: Int,
+    val activeMinutes: Int,
+    val cuisine: String,
+    val mainProtein: String,
+    /** JSON-encoded List<String>. */
+    val dietTagsJson: String,
+    /** JSON-encoded List<RecipeIngredient>. */
+    val ingredientsJson: String,
+    /** JSON-encoded List<String>. */
+    val stepsJson: String,
+    val sourceUrl: String? = null,
+    val origin: String,
+    val createdAtMillis: Long,
+)
+
 /** One thumbs rating per recipe (Phase V2-1); absence of a row means unrated. */
 @Entity(tableName = "recipe_ratings")
 data class RecipeRatingEntity(

@@ -43,10 +43,22 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Phase RI-2: recipes arrive the way recipes move around.
+                 Another app (a browser above all) can share plain text
+                 — a recipe page link or the recipe text itself — to
+                 Dinner Bot, which opens its import review on it. The
+                 text is read once, on this phone, at Andrea's action;
+                 nothing is uploaded anywhere. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
     </application>

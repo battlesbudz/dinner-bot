@@ -175,6 +175,24 @@ interface RecipeOverrideDao {
 }
 
 @Dao
+interface ImportedRecipeDao {
+    @Query("SELECT * FROM imported_recipes ORDER BY title")
+    suspend fun getAll(): List<ImportedRecipeEntity>
+
+    @Query("SELECT * FROM imported_recipes WHERE id = :id")
+    suspend fun getById(id: String): ImportedRecipeEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(recipe: ImportedRecipeEntity)
+
+    @Query("DELETE FROM imported_recipes WHERE id = :id")
+    suspend fun delete(id: String)
+
+    @Query("DELETE FROM imported_recipes")
+    suspend fun deleteAll()
+}
+
+@Dao
 interface RecipeRatingDao {
     @Query("SELECT * FROM recipe_ratings")
     suspend fun getAll(): List<RecipeRatingEntity>

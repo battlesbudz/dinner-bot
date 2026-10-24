@@ -93,6 +93,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * carries over untouched, which the instrumented migration test proves
  * from a populated v11 database.
  *
+ * Version 13 (Phase RI-2, v0.5.1) adds the imported_recipes table
+ * through [MIGRATION_12_13]: Andrea's own imported and hand-made
+ * recipes, one full recipe per row, created empty on upgrade — the app
+ * gains no recipes until she brings one in. The table is household
+ * data: the seed refresh never touches it. Every v12 table and row
+ * carries over untouched, which the instrumented migration test
+ * proves from a populated v12 database.
+ *
  * fallbackToDestructiveMigration remains only as a pre-1.0 safety net for
  * development installs; with a real migration registered for every version
  * step it never triggers on a real upgrade path.
@@ -114,8 +122,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         CookCheckoffEntity::class,
         ScanSubstitutionEntity::class,
         RecipeOverrideEntity::class,
+        ImportedRecipeEntity::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = false,
 )
 abstract class DinnerBotDatabase : RoomDatabase() {
@@ -134,6 +143,7 @@ abstract class DinnerBotDatabase : RoomDatabase() {
     abstract fun cookCheckoffDao(): CookCheckoffDao
     abstract fun scanSubstitutionDao(): ScanSubstitutionDao
     abstract fun recipeOverrideDao(): RecipeOverrideDao
+    abstract fun importedRecipeDao(): ImportedRecipeDao
 
     companion object {
         /** v2 to v3: create the recipe_ratings table. Nothing else changes. */
@@ -276,12 +286,32 @@ abstract class DinnerBotDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v12 to v13: create the imported_recipes table (Phase RI-2).
+         * Nothing else changes: the table starts empty, and no stored
+         * row anywhere is rewritten.
+         */
+        val MIGRATION_12_13: Migration = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `imported_recipes` (" +
+                        "`id` TEXT NOT NULL, `title` TEXT NOT NULL, " +
+                        "`servings` INTEGER NOT NULL, `activeMinutes` INTEGER NOT NULL, " +
+                        "`cuisine` TEXT NOT NULL, `mainProtein` TEXT NOT NULL, " +
+                        "`dietTagsJson` TEXT NOT NULL, `ingredientsJson` TEXT NOT NULL, " +
+                        "`stepsJson` TEXT NOT NULL, `sourceUrl` TEXT, " +
+                        "`origin` TEXT NOT NULL, `createdAtMillis` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
+                )
+            }
+        }
+
         fun create(context: Context): DinnerBotDatabase =
             Room.databaseBuilder(context.applicationContext, DinnerBotDatabase::class.java, "dinner-bot.db")
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
                     MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
-                    MIGRATION_10_11, MIGRATION_11_12,
+                    MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
                 )
                 .fallbackToDestructiveMigration()
                 .build()

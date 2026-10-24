@@ -7,6 +7,8 @@ import com.battlesbudz.dinnerbot.core.model.PantryItem
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.RanOutEvent
 import com.battlesbudz.dinnerbot.core.model.RecipeIngredient
+import com.battlesbudz.dinnerbot.core.model.Recipe
+import com.battlesbudz.dinnerbot.core.model.RecipeOrigin
 import com.battlesbudz.dinnerbot.core.model.RecipeRating
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -54,6 +56,20 @@ data class BackupRecipeOverride(
 )
 
 /**
+ * One recipe Andrea brought into the app herself, inside a backup file
+ * (Phase RI-2): the full recipe as she saved it, its source link, and
+ * when it was added. Unlike a library recipe this one is household
+ * data through and through (there is no seed copy anywhere), so the
+ * file carries it whole, origin included.
+ */
+@Serializable
+data class BackupImportedRecipe(
+    val recipe: Recipe,
+    val sourceLink: String? = null,
+    val createdAtMillis: Long,
+)
+
+/**
  * One JSON file carrying the user's own data: settings, the full price book
  * (including Andrea's corrections), the pantry checklist, Sam's bulk stock,
  * recipe thumbs ratings, learned barcode links, and the Sunday
@@ -82,6 +98,12 @@ data class BackupRecipeOverride(
  * phone swap never silently loses the corrections she made forever.
  * Older files import with overrides empty. Tonight-only edits do not
  * ride, consistently with plans not riding.
+ *
+ * Format version 7 (v0.5.1) adds importedRecipes, the recipes Andrea
+ * brought into the app herself (Phase RI-2): imported from a page or a
+ * paste, or created by hand. They are household data with no seed copy
+ * anywhere, so the file carries each one whole. Older files import
+ * with imported recipes empty.
  */
 @Serializable
 data class BackupData(
@@ -96,9 +118,10 @@ data class BackupData(
     val cookCheckoffs: List<CookCheckoff> = emptyList(),
     val scanSubstitutions: List<BackupScanSubstitution> = emptyList(),
     val recipeOverrides: List<BackupRecipeOverride> = emptyList(),
+    val importedRecipes: List<BackupImportedRecipe> = emptyList(),
 ) {
     companion object {
-        const val CURRENT_VERSION: Int = 6
+        const val CURRENT_VERSION: Int = 7
     }
 }
 
@@ -185,6 +208,36 @@ object BackupEngine {
                 }
                 require(ingredient.quantity.amount > 0.0) {
                     "That backup has a recipe edit with a broken amount."
+                }
+            }
+        }
+        val importedIds = data.importedRecipes.map { it.recipe.id }
+        require(importedIds.size == importedIds.toSet().size) {
+            "That backup has duplicate imported recipes."
+        }
+        for (imported in data.importedRecipes) {
+            val recipe = imported.recipe
+            require(recipe.origin == RecipeOrigin.IMPORTED || recipe.origin == RecipeOrigin.MANUAL) {
+                "That backup has an imported recipe that is not one of yours."
+            }
+            require(recipe.id.isNotBlank() && recipe.title.isNotBlank()) {
+                "That backup has an imported recipe with no name."
+            }
+            require(recipe.servings > 0) {
+                "That backup has an imported recipe with a broken serving count."
+            }
+            require(recipe.ingredients.isNotEmpty()) {
+                "That backup has an imported recipe with no ingredients."
+            }
+            for (ingredient in recipe.ingredients) {
+                val itemId = ingredient.priceItemId
+                if (itemId != null) {
+                    require(itemId in itemIds) {
+                        "That backup has an imported recipe using an item that is not in its price book."
+                    }
+                }
+                require(ingredient.quantity.amount > 0.0) {
+                    "That backup has an imported recipe with a broken amount."
                 }
             }
         }
