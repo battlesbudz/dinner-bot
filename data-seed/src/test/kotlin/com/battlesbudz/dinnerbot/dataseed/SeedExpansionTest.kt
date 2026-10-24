@@ -62,7 +62,8 @@ class SeedExpansionTest {
 
     @Test fun libraryGrewTo36RecipesAnd31PriceItems() {
         assertEquals(36, recipesFile.recipes.size)
-        assertEquals(31, priceBook.items.size)
+        // v0.4.3: the eleven pantry staples became priced items, 31 + 11.
+        assertEquals(42, priceBook.items.size)
         val recipeIds = recipesFile.recipes.map { it.id }.toSet()
         for (id in newRecipeIds) assertTrue("missing new recipe $id", id in recipeIds)
         val itemIds = priceBook.items.map { it.id }.toSet()
@@ -85,9 +86,67 @@ class SeedExpansionTest {
                 val itemId = ingredient.priceItemId ?: continue
                 val item = byId[itemId]
                 assertTrue("recipe ${recipe.id} references unknown item $itemId", item != null)
-                assertEquals(
-                    "recipe ${recipe.id}: unit for $itemId must match the price book pack unit",
-                    item!!.packQuantity.unit, ingredient.quantity.unit,
+                if (!item!!.staple) {
+                    // The original rule for ordinary items: the recipe
+                    // measures in exactly the unit the pack is priced in.
+                    assertEquals(
+                        "recipe ${recipe.id}: unit for $itemId must match the price book pack unit",
+                        item.packQuantity.unit, ingredient.quantity.unit,
+                    )
+                } else {
+                    // Staples (v0.4.3) are the known exception: the store
+                    // sells them by weight or fluid volume (a 26 oz
+                    // canister of salt, a 3 lb bag of rice) while recipes
+                    // measure them in spoons and cups. Any week's need is
+                    // far below one pack, so the pack line and its cash
+                    // are exact; the sourced gram weights in the nutrition
+                    // data carry the precise conversion.
+                    assertTrue(
+                        "recipe ${recipe.id}: staple $itemId must be measured in a kitchen volume unit",
+                        ingredient.quantity.unit in setOf(
+                            com.battlesbudz.dinnerbot.core.model.MeasureUnit.TEASPOON,
+                            com.battlesbudz.dinnerbot.core.model.MeasureUnit.TABLESPOON,
+                            com.battlesbudz.dinnerbot.core.model.MeasureUnit.CUP,
+                        ),
+                    )
+                    assertTrue(
+                        "recipe ${recipe.id}: staple $itemId pack must be a store weight or fluid volume",
+                        item.packQuantity.unit in setOf(
+                            com.battlesbudz.dinnerbot.core.model.MeasureUnit.OUNCE,
+                            com.battlesbudz.dinnerbot.core.model.MeasureUnit.POUND,
+                            com.battlesbudz.dinnerbot.core.model.MeasureUnit.FLUID_OUNCE,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * v0.4.3 (Battles: "everything should be in the pricing book"): the
+     * eleven pantry staples are priced items flagged staple, with real
+     * captured prices, and no shipped recipe references a free-floating
+     * pantry name anymore.
+     */
+    @Test fun theElevenStaplesArePricedBookItems() {
+        val stapleIds = setOf(
+            "long-grain-white-rice", "butter", "vegetable-oil", "flour", "salt",
+            "black-pepper", "paprika", "chili-powder", "garlic-powder",
+            "ground-cumin", "soy-sauce",
+        )
+        val byId = priceBook.items.associateBy { it.id }
+        assertEquals(stapleIds, priceBook.items.filter { it.staple }.map { it.id }.toSet())
+        for (id in stapleIds) {
+            val item = byId.getValue(id)
+            assertTrue("$id must carry a real captured price", item.packPriceCents > 0)
+            assertTrue("$id must record its capture source", item.source.isNotBlank())
+            assertTrue("$id must record when it was checked", item.checkedDate.isNotBlank())
+        }
+        for (recipe in recipesFile.recipes) {
+            for (ingredient in recipe.ingredients) {
+                assertTrue(
+                    "recipe ${recipe.id} still references unpriced pantry name ${ingredient.pantryItem}",
+                    ingredient.pantryItem == null,
                 )
             }
         }

@@ -84,6 +84,30 @@ class ReconciliationMergeTest {
         assertEquals(2, result.lines.size)
     }
 
+    @Test fun ranOutPricedStapleIsAlwaysListedAtItsPackPrice() {
+        // v0.4.3: a staple from the price book (salt, flagged staple in
+        // the seed; this fixture's flag is irrelevant to the merge, which
+        // reads the resolved out's staple side). No planned dinner uses
+        // it and the plan carries no line for it: it is still listed,
+        // priced, because a staple out is always restocked.
+        val salt = item("salt", "Salt", Store.ALDI, 26.0, MeasureUnit.OUNCE, 89)
+        val result = ReconciliationMerge.merge(
+            lines = listOf(line(spaghetti, Quantity.ounces(16.0), packs = 1, price = 209)),
+            resolvedOuts = listOf(stapleOut(salt)),
+            priceItems = book + salt,
+            plannedItemIds = emptySet(),
+            plannedNeedsBase = emptyMap(),
+            samsGateMet = true,
+            samsMonthlySavingsCents = 0,
+        )
+        val added = result.lines.single { it.itemId == "salt" }
+        assertEquals(1, added.packsToBuy)
+        assertEquals(89, added.estimatedPackPriceCents)
+        assertTrue(added.reconciliationAdded)
+        assertEquals(89, result.cashDeltaCents)
+        assertEquals(listOf("Salt"), result.addedNames)
+    }
+
     @Test fun ranOutIngredientIsListedOnlyWhenAPlannedRecipeUsesIt() {
         // Not used by any planned dinner: stays off the list.
         val unused = merge(

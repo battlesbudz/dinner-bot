@@ -100,9 +100,26 @@ object Costing {
     }
 
     /**
+     * A quantity expressed in [item]'s pack unit, for per-unit price math.
+     * Same-dimension quantities convert exactly. Cross-dimension ones
+     * (since v0.4.3, the staples: recipes measure them in spoons and cups,
+     * the store sells them by weight) divide the base amounts, the same
+     * convention [ItemNeed.neededInPackUnit] uses, instead of throwing:
+     * a week's staple need is far below one pack, so the figure is only
+     * ever a portion estimate, never a pack count.
+     */
+    fun amountInPackUnit(quantity: Quantity, item: PriceItem): Double =
+        if (quantity.unit.dimension == item.packQuantity.unit.dimension) {
+            quantity.convertTo(item.packQuantity.unit).amount
+        } else {
+            quantity.toBase() / item.packQuantity.unit.toBaseFactor
+        }
+
+    /**
      * Aggregate the priced ingredients of [recipes], each scaled to
-     * [forServings], into per-item needs. Pantry ingredients are returned
-     * separately by name (they are never priced).
+     * [forServings], into per-item needs. Pantry ingredients (the
+     * pre-v0.4.3 unpriced form; no shipped recipe uses it anymore) are
+     * returned separately by name.
      */
     fun aggregateNeeds(
         recipes: List<Recipe>,

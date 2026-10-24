@@ -1,13 +1,16 @@
 package com.battlesbudz.dinnerbot.feature.recipes
 
+import com.battlesbudz.dinnerbot.core.model.Costing
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import kotlin.math.roundToInt
 
 /**
  * Estimated cost of a recipe from the price book. Priced ingredients cost
- * quantity times the item's per-unit price; pantry staples cost $0 because
- * they are already home. This is an estimate for display, not budget math.
+ * quantity times the item's per-unit price; an ingredient with no priced
+ * item costs $0. (Before v0.4.3 the pantry staples took that $0 path; they
+ * are priced items now and cost their real portion price.) This is an
+ * estimate for display, not budget math.
  */
 object RecipeCostCalculator {
 
@@ -18,7 +21,10 @@ object RecipeCostCalculator {
             if (item == null || perUnit == null) {
                 0
             } else {
-                val inPackUnit = ingredient.quantity.convertTo(item.packQuantity.unit).amount
+                // Costing.amountInPackUnit, not a raw convertTo: the
+                // staples are measured in spoons and cups but sold by
+                // weight, and convertTo throws across dimensions.
+                val inPackUnit = Costing.amountInPackUnit(ingredient.quantity, item)
                 (inPackUnit * perUnit).roundToInt()
             }
         }

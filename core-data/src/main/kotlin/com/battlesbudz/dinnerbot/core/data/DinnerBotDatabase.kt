@@ -65,6 +65,16 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * and row carries over untouched, which the instrumented migration
  * test proves from a populated v8 database.
  *
+ * Version 10 (v0.4.3) adds the price_items.staple column through
+ * [MIGRATION_9_10]: the eleven pantry staples became priced price book
+ * items (Battles: "everything should be in the pricing book"), and the
+ * flag carries their staple identity for pantry coverage and Sunday
+ * restock now that recipes reference them as priced items. The column
+ * defaults to 0; the seed refresh inserts the new staple rows (flagged)
+ * and no stored row is rewritten. Every v9 table and row carries over
+ * untouched, which the instrumented migration test proves from a
+ * populated v9 database.
+ *
  * fallbackToDestructiveMigration remains only as a pre-1.0 safety net for
  * development installs; with a real migration registered for every version
  * step it never triggers on a real upgrade path.
@@ -85,7 +95,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RanOutEventEntity::class,
         CookCheckoffEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = false,
 )
 abstract class DinnerBotDatabase : RoomDatabase() {
@@ -195,11 +205,25 @@ abstract class DinnerBotDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v9 to v10: add the price_items staple flag (v0.4.3, the staples
+         * move into the price book). Stored rows default to not-staple;
+         * the seed refresh inserts the eleven new staple rows already
+         * flagged. Nothing else changes.
+         */
+        val MIGRATION_9_10: Migration = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `price_items` ADD COLUMN `staple` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
         fun create(context: Context): DinnerBotDatabase =
             Room.databaseBuilder(context.applicationContext, DinnerBotDatabase::class.java, "dinner-bot.db")
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
-                    MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+                    MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
                 )
                 .fallbackToDestructiveMigration()
                 .build()

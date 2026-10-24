@@ -38,7 +38,10 @@ class SeedPoolPlannerTest {
         json.decodeFromString<RecipesFile>(seedFile("recipes.json").readText())
     }
     private val pantryNames by lazy {
-        recipesFile.recipes.flatMap { it.ingredients }.mapNotNull { it.pantryItem }.toSet()
+        // The household owns its staples: the names of the priced items
+        // flagged staple (before v0.4.3 these came from the recipes'
+        // free-floating pantry names).
+        priceBook.items.filter { it.staple }.map { it.name }.toSet()
     }
 
     private fun planWeek(settings: HouseholdSettings, variation: Int) =
@@ -88,7 +91,8 @@ class SeedPoolPlannerTest {
 
     @Test fun poolIsTheFull36() {
         assertEquals(36, recipesFile.recipes.size)
-        assertEquals(31, priceBook.items.size)
+        // 31 original items plus the eleven staples priced in v0.4.3.
+        assertEquals(42, priceBook.items.size)
     }
 
     @Test fun fortnightFromTheRealPoolFillsBothWeeksWithoutCrossWeekRepeats() {

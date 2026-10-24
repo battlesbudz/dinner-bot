@@ -41,4 +41,35 @@ class RecipeCostCalculatorTest {
         val total = RecipeCostCalculator.ingredientCostCents(recipe, 4, emptyMap())
         assertEquals(0, total)
     }
+
+    @Test fun stapleMeasuredByVolumeAgainstAWeightPackCostsInsteadOfCrashing() {
+        // v0.4.3 (Codex P1, PR #23): rice is measured in cups and sold by
+        // the pound. The calculator must not throw across the dimension
+        // gap; it prices the portion on Costing's base-amount convention:
+        // 2 cups = 16 base units, the pack unit's base factor is 16, so
+        // the portion is 1.0 pack units at 98.3 cents.
+        val rice = PriceItem(
+            id = "long-grain-white-rice", name = "Long grain white rice",
+            category = "Dry and canned", homeStore = Store.ALDI,
+            packDescription = "3 lb bag",
+            packQuantity = Quantity.pounds(3.0), packPriceCents = 295,
+            pricePerUnitCents = 98.3, checkedDate = "2026-10-23", source = "test",
+            staple = true,
+        )
+        val riceRecipe = Recipe(
+            id = "rice-r", title = "Rice", servings = 4, activeMinutes = 10,
+            cuisine = "Test", mainProtein = "Egg",
+            ingredients = listOf(
+                RecipeIngredient(
+                    priceItemId = "long-grain-white-rice",
+                    quantity = Quantity(2.0, com.battlesbudz.dinnerbot.core.model.MeasureUnit.CUP),
+                ),
+            ),
+            steps = listOf("Cook."),
+        )
+        val total = RecipeCostCalculator.ingredientCostCents(
+            riceRecipe, 4, mapOf("long-grain-white-rice" to rice),
+        )
+        assertEquals(98, total)
+    }
 }

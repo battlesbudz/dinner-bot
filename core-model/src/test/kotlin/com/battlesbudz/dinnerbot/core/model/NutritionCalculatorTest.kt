@@ -112,6 +112,41 @@ class NutritionCalculatorTest {
         assertEquals(1782.76, nutrition.totals.caloriesKcal!!, 0.6)
     }
 
+    @Test fun pricedStapleResolvesThroughTheItemMap() {
+        // v0.4.3: the staples are priced items, so a recipe referencing
+        // salt by price item id resolves its entry through byItemId (the
+        // entry's pantry flag is false now), with the sourced gram weight
+        // doing the teaspoon conversion exactly as the pantry path did.
+        val pricedSalt = entry(
+            "salt",
+            values = NutritionValues(
+                caloriesKcal = 0.0, proteinG = 0.0, fatG = 0.0, carbohydrateG = 0.0,
+                fiberG = 0.0, sugarsG = 0.0, sodiumMg = 38758.0, saturatedFatG = 0.0,
+                cholesterolMg = 0.0,
+            ),
+            gramWeights = mapOf("TEASPOON" to 6.0),
+        )
+        val stapleRecipe = Recipe(
+            id = "salted-dinner",
+            title = "Salted Dinner",
+            servings = 4,
+            activeMinutes = 10,
+            cuisine = "Test",
+            mainProtein = "Egg",
+            ingredients = listOf(
+                RecipeIngredient(priceItemId = "salt", quantity = Quantity(1.0, MeasureUnit.TEASPOON)),
+            ),
+            steps = listOf("Cook."),
+        )
+        val nutrition = NutritionCalculator.recipeNutrition(
+            stapleRecipe, 4, mapOf("salt" to pricedSalt), emptyMap(),
+        )
+        // 1 tsp = 6.0 g; sodium 38758 mg per 100 g -> 2325.48 mg total.
+        assertEquals(2325.48, nutrition.totals.sodiumMg!!, 0.6)
+        assertEquals(581.37, nutrition.perServing.sodiumMg!!, 0.6)
+        assertTrue(nutrition.incompleteFields.isEmpty())
+    }
+
     @Test fun nullFieldsMarkOnlyThoseFieldsIncomplete() {
         val nutrition = NutritionCalculator.recipeNutrition(recipe, 4, byItemId, byPantrySlug)
         // Turkey publishes no fiber or cholesterol; eggs, oil, and salt
