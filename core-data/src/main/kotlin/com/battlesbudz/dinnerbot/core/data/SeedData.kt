@@ -6,6 +6,7 @@ import com.battlesbudz.dinnerbot.core.model.BulkStock
 import com.battlesbudz.dinnerbot.core.model.DietPreset
 import com.battlesbudz.dinnerbot.core.model.DietPresetsFile
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
+import com.battlesbudz.dinnerbot.core.model.ImportedRecipe
 import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
 import com.battlesbudz.dinnerbot.core.model.MeasureUnit
 import com.battlesbudz.dinnerbot.core.model.NutritionFile
@@ -16,6 +17,7 @@ import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Quantity
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeIngredient
+import com.battlesbudz.dinnerbot.core.model.RecipeOrigin
 import com.battlesbudz.dinnerbot.core.model.RecipeOverride
 import com.battlesbudz.dinnerbot.core.model.RecipePhoto
 import com.battlesbudz.dinnerbot.core.model.RecipesFile
@@ -181,6 +183,43 @@ object SeedMapper {
         recipeId = recipeId,
         ingredients = json.decodeFromString(ingredientList, ingredientsJson),
         updatedAtMillis = updatedAtMillis,
+    )
+
+    fun ImportedRecipe.toEntity(): ImportedRecipeEntity = ImportedRecipeEntity(
+        id = recipe.id,
+        title = recipe.title,
+        servings = recipe.servings,
+        activeMinutes = recipe.activeMinutes,
+        cuisine = recipe.cuisine,
+        mainProtein = recipe.mainProtein,
+        dietTagsJson = json.encodeToString(stringList, recipe.dietTags),
+        ingredientsJson = json.encodeToString(ingredientList, recipe.ingredients),
+        stepsJson = json.encodeToString(stringList, recipe.steps),
+        sourceUrl = sourceLink,
+        origin = recipe.origin.name,
+        createdAtMillis = createdAtMillis,
+    )
+
+    fun ImportedRecipeEntity.toModel(): ImportedRecipe = ImportedRecipe(
+        recipe = Recipe(
+            id = id,
+            title = title,
+            servings = servings,
+            activeMinutes = activeMinutes,
+            cuisine = cuisine,
+            mainProtein = mainProtein,
+            dietTags = json.decodeFromString(stringList, dietTagsJson),
+            ingredients = json.decodeFromString(ingredientList, ingredientsJson),
+            steps = json.decodeFromString(stringList, stepsJson),
+            // A row whose origin text is somehow not IMPORTED or MANUAL
+            // still reads as a user recipe, never as a library recipe:
+            // the table is household data by construction.
+            origin = runCatching { RecipeOrigin.valueOf(origin) }
+                .getOrDefault(RecipeOrigin.IMPORTED)
+                .takeIf { it != RecipeOrigin.LIBRARY } ?: RecipeOrigin.IMPORTED,
+        ),
+        sourceLink = sourceUrl,
+        createdAtMillis = createdAtMillis,
     )
 
     fun RecipePhoto.toEntity(): RecipePhotoEntity = RecipePhotoEntity(

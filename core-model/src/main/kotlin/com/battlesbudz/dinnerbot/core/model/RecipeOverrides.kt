@@ -137,6 +137,22 @@ object EffectiveRecipes {
         overrides: Map<String, RecipeOverride>,
     ): List<Recipe> = recipes.map { applyOverride(it, overrides[it.id]) }
 
+    /**
+     * The full effective set (Phase RI-2): the library recipes (already
+     * override-merged by [applyOverrides]) plus Andrea's own imported
+     * and hand-made recipes. User recipes live in their own table and
+     * their ids are prefixed, so a collision cannot occur; the filter
+     * is a guard, and a library id always stands over a duplicate.
+     */
+    fun mergeUserRecipes(
+        library: List<Recipe>,
+        userRecipes: List<Recipe>,
+    ): List<Recipe> {
+        if (userRecipes.isEmpty()) return library
+        val libraryIds = library.map { it.id }.toSet()
+        return library + userRecipes.filter { it.id !in libraryIds }
+    }
+
     /** True when the household has a saved edit for [recipeId] (the recipe screen's "your edits" marker reads this). */
     fun hasOverride(recipeId: String, overrides: Map<String, RecipeOverride>): Boolean =
         recipeId in overrides

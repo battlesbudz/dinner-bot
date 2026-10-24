@@ -56,6 +56,10 @@ fun RecipeListScreen(
     ratings: Map<String, RecipeRating> = emptyMap(),
     /** Household photo files by recipe id, for recipes that have one (Epic issue #10). */
     photoFiles: Map<String, File> = emptyMap(),
+    /** Open the recipe import flow (Phase RI-2): share, paste a link, paste text. */
+    onImportClick: () -> Unit = {},
+    /** Open a blank recipe to fill in by hand (Phase RI-2). */
+    onAddOwnClick: () -> Unit = {},
 ) {
     val itemsById = remember(priceItems) { priceItems.associateBy { it.id } }
     LazyColumn(
@@ -68,6 +72,19 @@ fun RecipeListScreen(
                 "Tap a dinner for ingredients and steps. Costs are estimates from the household price book.",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            Row(
+                modifier = Modifier.padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = onImportClick,
+                    modifier = Modifier.testTag("import-recipe"),
+                ) { Text("Import a recipe") }
+                OutlinedButton(
+                    onClick = onAddOwnClick,
+                    modifier = Modifier.testTag("add-own-recipe"),
+                ) { Text("Add your own recipe") }
+            }
         }
         items(recipes, key = { it.id }) { recipe ->
             val perServing = RecipeCostCalculator.costPerServingCents(recipe, recipe.servings, itemsById)
@@ -144,6 +161,11 @@ fun RecipeDetailScreen(
     onSaveIngredients: (List<RecipeIngredient>) -> Unit = {},
     /** Restore-original: the household edit is cleared and the seed version stands again. */
     onRestoreOriginal: () -> Unit = {},
+    /**
+     * Where an imported recipe came from (Phase RI-2), shown under its
+     * title. Null for library and hand-made recipes.
+     */
+    sourceLink: String? = null,
 ) {
     val itemsById = remember(priceItems) { priceItems.associateBy { it.id } }
     var servings by remember(recipe.id) { mutableStateOf(recipe.servings) }
@@ -164,6 +186,13 @@ fun RecipeDetailScreen(
             "${recipe.mainProtein} · ${recipe.cuisine} · ${recipe.activeMinutes} min active",
             style = MaterialTheme.typography.bodyMedium,
         )
+        sourceLink?.let { link ->
+            Text(
+                "From: $link",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("recipe-source"),
+            )
+        }
         if (recipe.dietTags.isNotEmpty()) {
             Text(recipe.dietTags.joinToString(", "), style = MaterialTheme.typography.bodySmall)
         }

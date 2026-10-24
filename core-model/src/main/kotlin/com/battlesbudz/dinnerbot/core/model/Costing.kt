@@ -58,36 +58,34 @@ object Costing {
         item: PriceItem,
         pantryOwnedNames: Collection<String>,
     ): List<String> {
-        val itemWords = normalizedWords(item.name)
+        val itemWords = NameWords.of(item.name)
         if (itemWords.isEmpty()) return emptyList()
         return pantryOwnedNames.filter { name ->
-            val words = normalizedWords(name)
-            words.isNotEmpty() && endsWithWords(itemWords, words)
+            val words = NameWords.of(name)
+            words.isNotEmpty() && NameWords.endsWithWords(itemWords, words)
         }
     }
 
-    /** True when [words] ends with [suffix] as whole words; a full-length suffix is an exact match. */
-    private fun endsWithWords(words: List<String>, suffix: List<String>): Boolean {
-        if (suffix.size > words.size) return false
-        return words.subList(words.size - suffix.size, words.size) == suffix
-    }
-
-    /** Lowercased words of a name, each folded from a simple plural to its singular. */
-    private fun normalizedWords(name: String): List<String> =
-        name.lowercase()
-            .split(Regex("[^a-z0-9]+"))
-            .filter { it.isNotEmpty() }
-            .map { singularOf(it) }
-
     /**
-     * Fold a simple plural to its singular: "potatoes" -> "potato",
-     * "onions" -> "onion". Conservative on purpose: only a trailing "oes"
-     * or a single trailing "s" (never "ss", so "glass" is untouched).
+     * The same whole-word-ending coverage rule applied to a bare
+     * ingredient name rather than a price book item (Phase RI-2): an
+     * imported recipe's as-written ingredient ("Russet potatoes" typed
+     * from a page) is covered when an owned pantry entry's words are a
+     * whole-word ending of its words ("Potatoes"). The import review
+     * reads coverage through this and [pantryCoveredItemIds] only, so
+     * the review and the weekly list can never disagree about what is
+     * already home: one costing truth (plan section 5.4).
      */
-    private fun singularOf(word: String): String = when {
-        word.length > 3 && word.endsWith("oes") -> word.dropLast(2)
-        word.length > 1 && word.endsWith("s") && !word.endsWith("ss") -> word.dropLast(1)
-        else -> word
+    fun pantryNameCoversName(
+        pantryOwnedNames: Collection<String>,
+        name: String,
+    ): Boolean {
+        val words = NameWords.of(name)
+        if (words.isEmpty()) return false
+        return pantryOwnedNames.any { owned ->
+            val ownedWords = NameWords.of(owned)
+            ownedWords.isNotEmpty() && NameWords.endsWithWords(words, ownedWords)
+        }
     }
 
     /** One aggregated need for one price item, expressed in base units. */
