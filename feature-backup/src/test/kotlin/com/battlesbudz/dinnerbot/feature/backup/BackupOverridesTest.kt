@@ -57,7 +57,7 @@ class BackupOverridesTest {
     @Test fun overridesRoundTripThroughExportImport() {
         val original = data(listOf(herSpaghetti))
         val restored = BackupEngine.import(BackupEngine.export(original))
-        assertEquals(7, restored.version)
+        assertEquals(8, restored.version)
         assertEquals(BackupData.CURRENT_VERSION, restored.version)
         assertEquals(original.recipeOverrides, restored.recipeOverrides)
     }

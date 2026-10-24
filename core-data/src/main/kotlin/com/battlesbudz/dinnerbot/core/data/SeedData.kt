@@ -63,6 +63,7 @@ object SeedMapper {
         alternatesJson = json.encodeToString(storePriceList, alternates),
         freezeNote = freezeNote,
         staple = staple,
+        guessPriced = guessPriced,
     )
 
     fun PriceItemEntity.toModel(): PriceItem = PriceItem(
@@ -81,6 +82,7 @@ object SeedMapper {
             .getOrDefault(emptyList()),
         freezeNote = freezeNote,
         staple = staple,
+        guessPriced = guessPriced,
     )
 
     fun IngredientNutrition.toEntity(): IngredientNutritionEntity = IngredientNutritionEntity(

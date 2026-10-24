@@ -68,6 +68,7 @@ import com.battlesbudz.dinnerbot.core.model.Costing
 import com.battlesbudz.dinnerbot.core.model.DietPreset
 import com.battlesbudz.dinnerbot.core.model.DietPresets
 import com.battlesbudz.dinnerbot.core.model.EffectiveRecipes
+import com.battlesbudz.dinnerbot.core.model.GuessPricer
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
 import com.battlesbudz.dinnerbot.core.model.ImportedRecipe
 import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
@@ -321,11 +322,31 @@ private fun DinnerBotApp(
                 .associateBy { it.recipeId }
             val loadedImported = database.importedRecipeDao().getAll()
                 .map { with(SeedMapper) { it.toModel() } }
+            val bookOnDisk = database.priceItemDao().getAll().map { with(SeedMapper) { it.toModel() } }
+            // The price-book backfill (Battles's correction, 2026-10-24):
+            // imports saved before the correction hold ingredients with
+            // no book item. They gain their items here — exact-name
+            // links where the book already has the ingredient, new
+            // guess-priced items otherwise — so an old import behaves
+            // exactly like a new one. Idempotent: once every ingredient
+            // resolves, the pass creates and rewrites nothing.
+            val linkResult = GuessPricer.linkRecipes(
+                loadedImported, bookOnDisk, LocalDate.now().toString(),
+            )
+            if (linkResult.itemsToAdd.isNotEmpty() || linkResult.recipes != loadedImported) {
+                linkResult.itemsToAdd.forEach {
+                    database.priceItemDao().upsert(with(SeedMapper) { it.toEntity() })
+                }
+                linkResult.recipes.forEach {
+                    database.importedRecipeDao().upsert(with(SeedMapper) { it.toEntity() })
+                }
+            }
+            val linkedImported = linkResult.recipes
             val r = EffectiveRecipes.mergeUserRecipes(
                 EffectiveRecipes.applyOverrides(storedRecipes, loadedOverrides),
-                loadedImported.map { it.recipe },
+                linkedImported.map { it.recipe },
             )
-            val p = database.priceItemDao().getAll().map { with(SeedMapper) { it.toModel() } }
+            val p = bookOnDisk + linkResult.itemsToAdd
             val pantry = database.pantryDao().getAll().map { with(SeedMapper) { it.toModel() } }
             val stocks = database.bulkStockDao().getAll().map { with(SeedMapper) { it.toModel() } }
             val recentPlans = database.planDao().getRecent(2)
@@ -377,7 +398,7 @@ private fun DinnerBotApp(
                 s, r, p, pantry, stocks, plan, rows, plan2, rows2,
                 loadedRatings, loadedPresets, loadedLinks, loadedNutrition,
                 loadedRanOut, loadedCheckoffs, loadedPhotoById, loadedPhotoFiles,
-                addedStaples, loadedSubstitutions, loadedOverrides, loadedImported,
+                addedStaples, loadedSubstitutions, loadedOverrides, linkedImported,
                 loadedKeepPromptAsked,
             )
         }
@@ -1030,12 +1051,21 @@ private fun DinnerBotApp(
                 val stored = database.importedRecipeDao().getById(recipeId)
                     ?.let { with(SeedMapper) { it.toModel() } }
                 if (stored != null) {
+                    // A from-now-on edit can name an ingredient the book
+                    // has never seen; it joins the book guess-priced,
+                    // exactly as at import (Battles's correction,
+                    // 2026-10-24) — everything is in the pricing book.
+                    val book = database.priceItemDao().getAll()
+                        .map { with(SeedMapper) { it.toModel() } }
+                    val (linked, created) = GuessPricer.linkRecipe(
+                        stored.recipe.copy(ingredients = ingredients),
+                        book, LocalDate.now().toString(),
+                    )
+                    created.forEach {
+                        database.priceItemDao().upsert(with(SeedMapper) { it.toEntity() })
+                    }
                     database.importedRecipeDao().upsert(
-                        with(SeedMapper) {
-                            stored.copy(
-                                recipe = stored.recipe.copy(ingredients = ingredients),
-                            ).toEntity()
-                        },
+                        with(SeedMapper) { stored.copy(recipe = linked).toEntity() },
                     )
                 }
             }
@@ -1047,15 +1077,27 @@ private fun DinnerBotApp(
      * Save a reviewed import (Phase RI-2): a new user recipe, or an
      * update in place of the earlier import from the same source (her
      * ratings and photos key off the recipe id, so they carry over an
-     * update untouched). The import writes only this table: no price
-     * book item, pantry row, or barcode link is ever created here.
+     * update untouched).
+     *
+     * Battles's correction (2026-10-24) supersedes the RI-2 rule that
+     * the import created nothing: every ingredient still unmatched is
+     * linked into the price book first — an exact-name item when one
+     * exists, a new guess-priced item otherwise — because everything
+     * is in the pricing book. No pantry row or barcode link is created.
      */
     fun saveImportedRecipe(recipe: Recipe, sourceLink: String?, updateExistingId: String?) {
         scope.launch {
             withContext(Dispatchers.IO) {
                 val existing = updateExistingId?.let { database.importedRecipeDao().getById(it) }
+                val book = database.priceItemDao().getAll().map { with(SeedMapper) { it.toModel() } }
+                val (linked, created) = GuessPricer.linkRecipe(
+                    recipe, book, LocalDate.now().toString(),
+                )
+                created.forEach {
+                    database.priceItemDao().upsert(with(SeedMapper) { it.toEntity() })
+                }
                 val record = ImportedRecipe(
-                    recipe = recipe,
+                    recipe = linked,
                     sourceLink = sourceLink,
                     createdAtMillis = existing?.createdAtMillis ?: System.currentTimeMillis(),
                 )

@@ -8,10 +8,11 @@ import org.junit.Test
 
 /**
  * The weekly list shows everything (Phase RI-3): pantry-covered items
- * stay on the list as $0 covered lines naming the covering entry,
- * uncrossed items cost as buy lines, and unpriced as-written
- * ingredients carry labeled placeholder guesses that count in the
- * week's cash. Money-only callers see exactly what they saw before.
+ * stay on the list as $0 covered lines naming the covering entry, and
+ * uncrossed items cost as buy lines. Guess-priced items (Battles's
+ * correction, 2026-10-24) are ordinary book items for costing — their
+ * stored price counts in the week's cash like any other. Money-only
+ * callers see exactly what they saw before.
  */
 class CostingRi3Test {
 
@@ -92,31 +93,41 @@ class CostingRi3Test {
         assertEquals(349 + 185, costed.cashNeededCents)
     }
 
-    @Test fun unpricedIngredientGetsALabeledGuessLineCountedInCash() {
+    @Test fun guessPricedItemBuysAtItsStoredPriceLikeAnyItem() {
+        // Battles's correction (2026-10-24): the guess lives on the
+        // book item, so costing sees an ordinary priced line — the
+        // guessed price counts in the week's cash through the item.
+        val whiteOnion = item(
+            "user-white-onion", "White onion", 1.0, MeasureUnit.POUND, 139, 139.0,
+        ).copy(guessPriced = true)
+        val grownBook = book + ("user-white-onion" to whiteOnion)
         val imported = recipe(
             "imported", RecipeOrigin.IMPORTED,
             priced("eggs", 6.0, MeasureUnit.COUNT),
-            asWritten("White onion", 1.0, MeasureUnit.POUND),
+            priced("user-white-onion", 1.0, MeasureUnit.POUND),
         )
-        val costed = Costing.costRecipes(listOf(imported), 4, book, emptyMap(), forList = true)
-        val guess = costed.lines.single { it.itemId == "aswritten:white-onion" }
-        // Median of the two onions in the book: (129 + 149 + 1) / 2.
-        assertEquals(139, guess.priceGuessCents)
-        assertEquals(0, guess.estimatedPackPriceCents)
-        assertEquals(1, guess.packsToBuy)
+        val costed = Costing.costRecipes(listOf(imported), 4, grownBook, emptyMap(), forList = true)
+        val line = costed.lines.single { it.itemId == "user-white-onion" }
+        assertEquals(139, line.estimatedPackPriceCents)
+        assertNull(line.priceGuessCents)
         assertEquals(185 + 139, costed.cashNeededCents)
-        assertEquals(139, costed.guessTotalCents)
     }
 
-    @Test fun unpricedIngredientStaysInvisibleToMoneyOnlyCallers() {
+    @Test fun unresolvedAsWrittenIngredientListsAndCostsNothing() {
+        // After the correction an import never stays unresolved (it
+        // links at import or in the upgrade backfill); a leftover
+        // as-written name prices nothing and lists nothing, in list
+        // and money-only costings alike.
         val imported = recipe(
             "imported", RecipeOrigin.IMPORTED,
             asWritten("White onion", 1.0, MeasureUnit.POUND),
         )
-        val costed = Costing.costRecipes(listOf(imported), 4, book, emptyMap())
-        assertTrue(costed.lines.isEmpty())
-        assertEquals(0, costed.cashNeededCents)
-        assertEquals(0, costed.guessTotalCents)
+        val forList = Costing.costRecipes(listOf(imported), 4, book, emptyMap(), forList = true)
+        assertTrue(forList.lines.isEmpty())
+        assertEquals(0, forList.cashNeededCents)
+        val moneyOnly = Costing.costRecipes(listOf(imported), 4, book, emptyMap())
+        assertTrue(moneyOnly.lines.isEmpty())
+        assertEquals(0, moneyOnly.cashNeededCents)
     }
 
     @Test fun asWrittenIngredientCoveredByPantryNameIsACoveredLine() {
@@ -139,7 +150,7 @@ class CostingRi3Test {
         assertEquals(0, costed.cashNeededCents)
     }
 
-    @Test fun guessIsReplacedTheMomentTheBookPricesTheName() {
+    @Test fun asWrittenIngredientAggregatesOnceTheBookNamesIt() {
         val imported = recipe(
             "imported", RecipeOrigin.IMPORTED,
             asWritten("White onion", 1.0, MeasureUnit.POUND),
@@ -149,22 +160,21 @@ class CostingRi3Test {
         val costed = Costing.costRecipes(listOf(imported), 4, grown, emptyMap(), forList = true)
         val line = costed.lines.single()
         assertEquals("white-onion", line.itemId)
-        assertNull(line.priceGuessCents)
         assertEquals(139, line.estimatedPackPriceCents)
         assertEquals(139, costed.cashNeededCents)
-        assertEquals(0, costed.guessTotalCents)
         assertFalse(costed.lines.any { it.itemId.startsWith("aswritten:") })
     }
 
-    @Test fun twoDinnersSharingAnUnpricedNameShareOneGuessLine() {
-        val a = recipe("a", RecipeOrigin.IMPORTED, asWritten("Saffron", 0.5, MeasureUnit.OUNCE))
-        val b = recipe("b", RecipeOrigin.IMPORTED, asWritten("Saffron", 0.5, MeasureUnit.OUNCE))
-        val costed = Costing.costRecipes(listOf(a, b), 4, book, emptyMap(), forList = true)
-        val lines = costed.lines.filter { it.itemId == "aswritten:saffron" }
+    @Test fun twoDinnersSharingAGuessPricedItemShareOneBuyLine() {
+        val saffron = item(
+            "user-saffron", "Saffron", 1.0, MeasureUnit.OUNCE, 167, 167.0,
+        ).copy(guessPriced = true)
+        val grownBook = book + ("user-saffron" to saffron)
+        val a = recipe("a", RecipeOrigin.IMPORTED, priced("user-saffron", 0.5, MeasureUnit.OUNCE))
+        val b = recipe("b", RecipeOrigin.IMPORTED, priced("user-saffron", 0.5, MeasureUnit.OUNCE))
+        val costed = Costing.costRecipes(listOf(a, b), 4, grownBook, emptyMap(), forList = true)
+        val lines = costed.lines.filter { it.itemId == "user-saffron" }
         assertEquals(1, lines.size)
-        // Whole-book median of 349, 185, 129, 149 -> (149 + 185 + 1) / 2 = 167.
-        assertEquals(167, lines.single().priceGuessCents)
-        assertEquals(167, costed.guessTotalCents)
         assertEquals(167, costed.cashNeededCents)
     }
 }

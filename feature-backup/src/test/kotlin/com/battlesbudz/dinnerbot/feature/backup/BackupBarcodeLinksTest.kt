@@ -47,7 +47,7 @@ class BackupBarcodeLinksTest {
             ),
         )
         val restored = BackupEngine.import(BackupEngine.export(original))
-        assertEquals(7, restored.version)
+        assertEquals(8, restored.version)
         assertEquals(original.barcodeLinks, restored.barcodeLinks)
         assertEquals(original.priceItems, restored.priceItems)
         assertEquals(original.settings, restored.settings)

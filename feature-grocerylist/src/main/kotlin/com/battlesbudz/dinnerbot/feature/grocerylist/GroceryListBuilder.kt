@@ -68,17 +68,15 @@ object GroceryListBuilder {
     /**
      * Estimated cash for one line: packs times the per-pack estimate.
      * A pantry-covered line (Phase RI-3) is $0 — it is already home. A
-     * line carrying a placeholder guess has no pack price; the guess IS
-     * its cash, labeled as a guess wherever the line shows.
+     * guess-priced item's price is its book price, so it needs no
+     * special case (Battles's correction, 2026-10-24).
      */
-    fun lineCashCents(line: GroceryLine): Int {
-        line.priceGuessCents?.let { return it }
-        return if (line.coveredByPantryName != null) {
+    fun lineCashCents(line: GroceryLine): Int =
+        if (line.coveredByPantryName != null) {
             0
         } else {
             line.packsToBuy * line.estimatedPackPriceCents
         }
-    }
 
     /**
      * The two shopping sections of a two-week plan (Phase V2-3): the one

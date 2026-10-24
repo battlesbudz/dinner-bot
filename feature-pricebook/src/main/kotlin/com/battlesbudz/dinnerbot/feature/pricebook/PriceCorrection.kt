@@ -34,6 +34,9 @@ object PriceCorrection {
             pricePerUnitCents = newPackPriceCents.toDouble() / item.packQuantity.amount,
             source = source,
             userCorrected = true,
+            // A real price replaces an import guess for good
+            // (Battles's correction, 2026-10-24).
+            guessPriced = false,
         )
     }
 

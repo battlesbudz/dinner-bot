@@ -125,4 +125,34 @@ class RecipePricingTest {
         RecipePricing.guessFor("Saffron", book)
         assertEquals(before, book)
     }
+
+    // Battles's correction (2026-10-24): priced-ness rides the item's
+    // guess mark. A guess-priced item resolves, but it does not price
+    // its recipe; the first real price (mark cleared) does.
+
+    @Test fun aGuessPricedItemDoesNotMakeItsRecipePriced() {
+        val guessOnion = item("user-white-onion", "White onion", 139).copy(guessPriced = true)
+        val grownBook = (book + guessOnion).associateBy { it.id }
+        val byId = priced("user-white-onion")
+        assertFalse(RecipePricing.isIngredientPriced(byId, grownBook))
+        val dinner = recipe(
+            "guess-dinner", RecipeOrigin.IMPORTED, byId, priced("eggs"),
+        )
+        assertFalse(RecipePricing.isRecipePriced(dinner, grownBook))
+        assertTrue(RecipePricing.isUnpricedUserRecipe(dinner, grownBook))
+        // The as-written form resolves to the same guess item by name.
+        assertFalse(RecipePricing.isIngredientPriced(asWritten("White onion"), grownBook))
+    }
+
+    @Test fun correctingTheGuessMakesTheRecipePriced() {
+        val corrected = item("user-white-onion", "White onion", 145).copy(guessPriced = false)
+        val grownBook = (book + corrected).associateBy { it.id }
+        val dinner = recipe(
+            "guess-dinner", RecipeOrigin.IMPORTED,
+            priced("user-white-onion"), priced("eggs"),
+        )
+        assertTrue(RecipePricing.isRecipePriced(dinner, grownBook))
+        assertFalse(RecipePricing.isUnpricedUserRecipe(dinner, grownBook))
+    }
+
 }

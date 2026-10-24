@@ -34,8 +34,9 @@ import org.junit.runner.RunWith
  * Phase RI-2 flow proofs:
  * - A: paste text → review shows the spring-onion line unmatched (the
  *   strict matcher never merges it into yellow onions) → save → the
- *   recipe is in the library, cooks as written, and the price book is
- *   untouched (42 items: the import creates no book items).
+ *   recipe is in the library, and the spring onions are IN the price
+ *   book as their own guess-priced item (Battles's correction,
+ *   2026-10-24: everything is in the pricing book).
  * - B: a share intent from another app opens the review directly on
  *   the shared text.
  * - C: a link that cannot be read leaves Andrea on the intake screen
@@ -186,10 +187,19 @@ class RecipeImportInstrumentedTest {
             assertEquals(1, imported.size)
             val model = with(SeedMapper) { imported.single().toModel() }
             assertEquals("Spring Onion Soup", model.recipe.title)
-            assertEquals("spring onions", model.recipe.ingredients[0].pantryItem)
+            // The flour matched an existing item; the spring onions
+            // matched nothing, so the import put them in the book as a
+            // guess-priced item of their own and linked the recipe.
             assertEquals("flour", model.recipe.ingredients[1].priceItemId)
-            // The import created no price book items and no overrides.
-            assertEquals(42, runBlocking { db.priceItemDao().getAll() }.size)
+            val createdId = model.recipe.ingredients[0].priceItemId
+            assertEquals("user-spring-onions", createdId)
+            assertEquals(null, model.recipe.ingredients[0].pantryItem)
+            val items = runBlocking { db.priceItemDao().getAll() }
+            assertEquals(43, items.size)
+            val created = items.single { it.id == "user-spring-onions" }
+            assertEquals("spring onions", created.name)
+            assertTrue(created.guessPriced)
+            assertTrue(created.packPriceCents > 0)
             assertTrue(runBlocking { db.recipeOverrideDao().getAll() }.isEmpty())
         } finally {
             db.close()

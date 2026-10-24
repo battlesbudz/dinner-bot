@@ -25,6 +25,13 @@ data class PriceItemEntity(
     /** Pantry-staple flag (v0.4.3): priced like everything else, staple for coverage and restock rules. */
     @ColumnInfo(defaultValue = "0")
     val staple: Boolean = false,
+    /**
+     * Guess-priced mark (Battles's correction, 2026-10-24): the item
+     * entered the book from a recipe import at a guessed price; the
+     * first real price write clears it. Database v15.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val guessPriced: Boolean = false,
 )
 
 @Entity(tableName = "recipes")

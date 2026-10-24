@@ -69,7 +69,7 @@ class BackupImportedRecipesTest {
     @Test fun importedRecipesRoundTripThroughExportImport() {
         val original = data(listOf(herImport))
         val restored = BackupEngine.import(BackupEngine.export(original))
-        assertEquals(7, restored.version)
+        assertEquals(8, restored.version)
         assertEquals(BackupData.CURRENT_VERSION, restored.version)
         assertEquals(original.importedRecipes, restored.importedRecipes)
     }
@@ -115,5 +115,21 @@ class BackupImportedRecipesTest {
         assertThrows(IllegalArgumentException::class.java) {
             BackupEngine.import(BackupEngine.export(data(listOf(broken))))
         }
+    }
+
+    @Test fun guessMarksRideTheBackup() {
+        // Battles's correction (2026-10-24): an import-created item's
+        // guess mark is household state — a phone swap must not turn a
+        // guessed price into a silently trusted one.
+        val guessed = book.first().copy(guessPriced = true)
+        val withGuess = BackupData(
+            settings = HouseholdSettings(householdSize = 4, onboardingComplete = true),
+            priceItems = listOf(guessed),
+            pantryItems = emptyList(),
+            bulkStock = emptyList(),
+        )
+        val restored = BackupEngine.import(BackupEngine.export(withGuess))
+        assertEquals(8, restored.version)
+        assertEquals(true, restored.priceItems.single().guessPriced)
     }
 }

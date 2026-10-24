@@ -19,6 +19,20 @@ class PriceCorrectionTest {
         pricePerUnitCents = 73.0, checkedDate = "2026-10-21", source = "seed",
     )
 
+    @Test fun aRealPriceWriteClearsTheGuessMark() {
+        // Battles's correction (2026-10-24): the first scan or typed
+        // correction on a guess-priced item writes the real price and
+        // the guess is gone for good. A home-store move is not a price
+        // and leaves the mark standing.
+        val guessed = onions.copy(guessPriced = true)
+        val corrected = PriceCorrection.applyPackPrice(guessed, 249)
+        assertEquals(249, corrected.packPriceCents)
+        assertTrue(!corrected.guessPriced)
+        assertTrue(corrected.userCorrected)
+        val moved = PriceCorrection.applyHomeStore(guessed, Store.WALMART)
+        assertTrue(moved.guessPriced)
+    }
+
     @Test fun parsesTypedPrices() {
         assertEquals(249, PriceCorrection.parseToCents("2.49"))
         assertEquals(300, PriceCorrection.parseToCents("\$3"))

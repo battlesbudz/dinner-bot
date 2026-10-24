@@ -104,6 +104,12 @@ data class BackupImportedRecipe(
  * paste, or created by hand. They are household data with no seed copy
  * anywhere, so the file carries each one whole. Older files import
  * with imported recipes empty.
+ *
+ * Format version 8 (Phase RI-3, Battles's correction 2026-10-24) marks
+ * guess-priced price book items: an item a recipe import created
+ * carries its guessed price and its guess mark, and the mark has to
+ * survive a phone swap like the price does. The mark rides on the
+ * price item itself; older files import with every mark clear.
  */
 @Serializable
 data class BackupData(
@@ -121,7 +127,7 @@ data class BackupData(
     val importedRecipes: List<BackupImportedRecipe> = emptyList(),
 ) {
     companion object {
-        const val CURRENT_VERSION: Int = 7
+        const val CURRENT_VERSION: Int = 8
     }
 }
 

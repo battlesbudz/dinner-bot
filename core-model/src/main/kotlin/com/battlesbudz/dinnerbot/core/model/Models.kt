@@ -47,6 +47,17 @@ data class PriceItem(
      * restocks them rather than only when a planned dinner used them.
      */
     val staple: Boolean = false,
+    /**
+     * True when this item's price is a placeholder guess, not a shelf
+     * price anyone has seen (Battles's correction, 2026-10-24): an
+     * ingredient that matched nothing at recipe import becomes a real
+     * price book item at its guessed price — everything is in the
+     * pricing book — and the first scan or price correction writes the
+     * real price and clears this mark. Shown as a guess wherever the
+     * price shows, and a recipe using a guess-priced item counts as
+     * not yet priced (Phase RI-3) until the item is shopped.
+     */
+    val guessPriced: Boolean = false,
 ) {
     /** Cents per 1.0 of [packQuantity]'s unit; derived from the pack price when not stored. */
     val perUnitCents: Double
@@ -204,12 +215,11 @@ data class GroceryLine(
      */
     val uncrossed: Boolean = false,
     /**
-     * The placeholder price guess for a line whose ingredient has no real
-     * price yet (Phase RI-3, Battles's third-round ruling): computed from
-     * equivalent price book items, counted in the week's cash, labeled as
-     * a guess wherever it shows, and never written to the price book.
-     * When set, this IS the line's cash (the line has no pack price);
-     * [estimatedPackPriceCents] stays 0. Null on every priced line.
+     * Retired with Battles's 2026-10-24 correction: v0.5.2's computed,
+     * never-persisted line guess. Guesses now live on the price book
+     * item itself ([PriceItem.guessPriced]) and lines price from the
+     * item like any other. The field stays only so plans stored by
+     * v0.5.2 keep their stored shape; nothing populates it anymore.
      */
     val priceGuessCents: Int? = null,
 )
