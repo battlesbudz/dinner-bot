@@ -1,8 +1,8 @@
 package com.battlesbudz.dinnerbot
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -100,7 +100,9 @@ class BarcodeSubstitutionInstrumentedTest {
             )
         }
         // The name arrives prefilled from the lookup hint.
-        composeRule.onNodeWithTag("new-item-name").assert(hasText("Granulated sugar"))
+        val prefilled = composeRule.onNodeWithTag("new-item-name")
+            .fetchSemanticsNode().config[SemanticsProperties.EditableText].text
+        assertEquals("Granulated sugar", prefilled)
         composeRule.onNodeWithTag("new-item-pack-description")
             .performScrollTo().performTextInput("Bag, 4 lb")
         composeRule.onNodeWithTag("new-item-pack-amount")
