@@ -103,9 +103,12 @@ object RecipeJsonLd {
     private fun instructionTexts(element: JsonElement?): List<String> = when (element) {
         null -> emptyList()
         is JsonPrimitive -> element.contentOrNull
-            ?.let { stripHtml(it) }
+            // Lines are split BEFORE any HTML stripping: stripping
+            // collapses whitespace, newlines included, and a
+            // newline-separated instruction string would merge into
+            // one step.
             ?.lines()
-            ?.map { it.trim() }
+            ?.map { stripHtml(it) }
             ?.filter { it.isNotEmpty() }
             ?: emptyList()
         is JsonArray -> element.flatMap { instructionTexts(it) }
