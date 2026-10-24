@@ -1,17 +1,22 @@
 package com.battlesbudz.dinnerbot
 
-import android.content.Context
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
+import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -39,6 +44,8 @@ import org.junit.runner.RunWith
  *   completely alone (no edits marker).
  * - C: the same cook-view edit saved "From now on" marks the saved
  *   recipe as edited.
+ * - D: the quantity dialog in the editor changes an ingredient's amount
+ *   and the change lands on the saved recipe.
  */
 @RunWith(AndroidJUnit4::class)
 class RecipeEditingInstrumentedTest {
@@ -48,11 +55,13 @@ class RecipeEditingInstrumentedTest {
 
     private lateinit var context: Context
 
-    // The first recipe in the title-ordered library, and its first
-    // ingredient's line as the detail screen renders it.
+    // The first recipe in the title-ordered library, the display name of
+    // its first ingredient, and that ingredient's line as the detail
+    // screen renders it at the recipe's own servings.
     private lateinit var firstTitle: String
+    private lateinit var firstItemName: String
+    private lateinit var firstUnitLabel: String
     private lateinit var firstLineOriginal: String
-    private lateinit var firstLineEdited: String
 
     @Before fun setUp() = runBlocking {
         context = ApplicationProvider.getApplicationContext()
@@ -64,9 +73,10 @@ class RecipeEditingInstrumentedTest {
         val first = recipes.first()
         firstTitle = first.title
         val ingredient = first.ingredients.first()
-        val itemName = itemsById[ingredient.priceItemId]?.name ?: ingredient.pantryItem ?: ""
-        firstLineOriginal = "${trim(ingredient.quantity.amount)} ${ingredient.quantity.unit.label} $itemName"
-        firstLineEdited = "${trim(ingredient.quantity.amount + 2)} ${ingredient.quantity.unit.label} $itemName"
+        firstItemName = itemsById[ingredient.priceItemId]?.name ?: ingredient.pantryItem ?: ""
+        firstUnitLabel = ingredient.quantity.unit.label
+        firstLineOriginal =
+            "${trim(ingredient.quantity.amount)} $firstUnitLabel $firstItemName"
 
         val db = Room.databaseBuilder(context, DinnerBotDatabase::class.java, "dinner-bot.db")
             .allowMainThreadQueries()
@@ -111,6 +121,16 @@ class RecipeEditingInstrumentedTest {
         }
     }
 
+    private fun waitForNoTag(tag: String) {
+        composeRule.waitUntil(timeoutMillis = 15_000) {
+            composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isEmpty()
+        }
+    }
+
+    private fun textPresent(text: String, substring: Boolean = false): Boolean =
+        composeRule.onAllNodesWithText(text, substring = substring)
+            .fetchSemanticsNodes().isNotEmpty()
+
     /** The cook view's ran-out rows ("<name> — ran out"), in order. */
     private fun ranOutRowNames(): List<String> =
         composeRule.onAllNodesWithText(" — ran out", substring = true)
@@ -121,49 +141,69 @@ class RecipeEditingInstrumentedTest {
                     .removeSuffix(" — ran out")
             }
 
+    /** Open a recipe from the library list, scrolling the list to its card first. */
+    private fun openRecipeFromList(title: String) {
+        composeRule.onNode(hasScrollAction()).performScrollToNode(hasText(title))
+        composeRule.onNodeWithText(title).performClick()
+        waitForTag("edit-ingredients")
+    }
+
     private fun openFirstRecipe() {
         waitForText("Dinner Bot recipes")
-        composeRule.onNodeWithText(firstTitle).performClick()
-        waitForTag("edit-ingredients")
+        openRecipeFromList(firstTitle)
     }
 
     @Test fun libraryEditMarksPersistsAndRestores() {
         ActivityScenario.launch(MainActivity::class.java).use {
             openFirstRecipe()
             composeRule.onNodeWithTag("edit-ingredients").performClick()
-            waitForTag("ingredient-qty-0")
-            composeRule.onNodeWithTag("ingredient-qty-0").performClick()
-            waitForTag("qty-amount")
-            val newAmount = firstLineEdited.substringBefore(' ')
-            composeRule.onNodeWithTag("qty-amount").performTextReplacement(newAmount)
-            composeRule.onNodeWithTag("qty-save").performClick()
+            waitForTag("ingredient-remove-0")
+            composeRule.onNodeWithTag("ingredient-remove-0").performClick()
             composeRule.onNodeWithTag("editor-save").performClick()
 
-            // The marker and the edited line are on the detail screen.
+            // The marker is up and the removed ingredient is off the dish.
             waitForTag("recipe-has-edits")
             composeRule.onNodeWithTag("recipe-has-edits").assertIsDisplayed()
             assertTrue(
-                composeRule.onAllNodesWithText(firstLineEdited, substring = true)
-                    .fetchSemanticsNodes().isNotEmpty(),
+                "the removed ingredient leaves the detail screen",
+                !textPresent(firstItemName, substring = true),
             )
         }
         // A fresh launch (the edit lives in the database) shows it still.
         ActivityScenario.launch(MainActivity::class.java).use {
             openFirstRecipe()
             waitForTag("recipe-has-edits")
-            assertTrue(
-                composeRule.onAllNodesWithText(firstLineEdited, substring = true)
-                    .fetchSemanticsNodes().isNotEmpty(),
-            )
+            assertTrue(!textPresent(firstItemName, substring = true))
             // Restore-original: the seed version stands again whole.
             composeRule.onNodeWithTag("restore-original").performScrollTo().performClick()
-            composeRule.waitUntil(timeoutMillis = 15_000) {
-                composeRule.onAllNodesWithTag("recipe-has-edits")
-                    .fetchSemanticsNodes().isEmpty()
-            }
+            waitForNoTag("recipe-has-edits")
             assertTrue(
-                composeRule.onAllNodesWithText(firstLineOriginal, substring = true)
-                    .fetchSemanticsNodes().isNotEmpty(),
+                "the seed ingredient line is back after restore",
+                textPresent(firstLineOriginal, substring = true),
+            )
+        }
+    }
+
+    @Test fun editorQuantityChangeLandsOnTheSavedRecipe() {
+        ActivityScenario.launch(MainActivity::class.java).use {
+            openFirstRecipe()
+            composeRule.onNodeWithTag("edit-ingredients").performClick()
+            waitForTag("ingredient-qty-0")
+            composeRule.onNodeWithTag("ingredient-qty-0").performClick()
+            waitForTag("qty-amount")
+            composeRule.onNodeWithTag("qty-amount").performTextReplacement("5")
+            composeRule.onNodeWithTag("qty-amount").assertTextEquals("5")
+            composeRule.onNodeWithTag("qty-save").performClick()
+            // The editor's first row now shows the new amount.
+            val editedLine = "5 $firstUnitLabel $firstItemName"
+            composeRule.waitUntil(timeoutMillis = 15_000) {
+                textPresent(editedLine, substring = true)
+            }
+            composeRule.onNodeWithTag("editor-save").performClick()
+            waitForTag("recipe-has-edits")
+            assertTrue(
+                "the detail screen cooks the new amount",
+                textPresent(editedLine, substring = true),
             )
         }
     }
@@ -210,8 +250,7 @@ class RecipeEditingInstrumentedTest {
             composeRule.onNodeWithText("Back to the week").performClick()
             composeRule.onNodeWithTag("tab-Recipes").performClick()
             waitForText("Dinner Bot recipes")
-            composeRule.onNodeWithText(title).performScrollTo().performClick()
-            waitForTag("edit-ingredients")
+            openRecipeFromList(title)
             assertTrue(
                 "a tonight-only edit never marks the saved recipe",
                 composeRule.onAllNodesWithTag("recipe-has-edits")
@@ -236,7 +275,7 @@ class RecipeEditingInstrumentedTest {
             composeRule.onNodeWithText("Back to the week").performClick()
             composeRule.onNodeWithTag("tab-Recipes").performClick()
             waitForText("Dinner Bot recipes")
-            composeRule.onNodeWithText(title).performScrollTo().performClick()
+            openRecipeFromList(title)
             waitForTag("recipe-has-edits")
             composeRule.onNodeWithTag("recipe-has-edits").assertIsDisplayed()
         }

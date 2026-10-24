@@ -75,7 +75,7 @@ class BackupSubstitutionsTest {
             ),
         )
         val restored = BackupEngine.import(BackupEngine.export(original))
-        assertEquals(5, restored.version)
+        assertEquals(6, restored.version)
         assertEquals(original.scanSubstitutions, restored.scanSubstitutions)
         // The user-added items are in the book wholesale, prices and all,
         // and the links that point at them still resolve.
