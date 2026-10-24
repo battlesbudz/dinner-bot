@@ -285,10 +285,14 @@ fun GroceryListScreen(
                         onRelink = if (pickedItem == null) ({ relinking = true }) else null,
                     )
                 } else if (fromRow != null) {
+                    // A scan from an already-swapped line looks its
+                    // memory up by the ROOT planned item: that is the
+                    // pairing the records are written against.
+                    val rootItemId = fromRow.line.substitutedForItemId ?: fromRow.line.itemId
                     val remembered = BarcodeScanLogic.rememberedSubstitution(
                         scanSubstitutions,
-                        fromRow.line.itemId,
-                        substitutionRecipeContext[fromRow.line.itemId],
+                        rootItemId,
+                        substitutionRecipeContext[rootItemId],
                     )
                     SubstituteChoiceDialog(
                         scannedItem = displayItem,

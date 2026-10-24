@@ -188,12 +188,21 @@ object BarcodeScanLogic {
      * record can be written. The planned recipe is not consulted and
      * not changed; the original item keeps its own book price.
      *
-     * The pack price is the CASH figure (one pack goes in the cart).
-     * The attributed food cost follows the planner's own definition
-     * (see Costing): the cost of the amount the dinners actually use,
-     * the planned line's need expressed in the substitute's pack unit
-     * at the typed price's per-unit rate. A 4 lb pack swapped in for a
-     * 2 lb need attributes 2 lb of food cost, not the whole pack.
+     * The pack price is the CASH figure (one pack goes in the cart,
+     * [GroceryLine.packsToBuy] 1). The line's [GroceryLine.needed] is
+     * the DINNER quantity, exactly as on a planner line: the planned
+     * line's need expressed in the substitute's pack unit. That is what
+     * makes the list read "Need 2 lb" for a 2 lb need met by a 4 lb
+     * pack, and what lets Costing.buyLeftover see the 2 lb that will
+     * remain. The attributed food cost follows the planner's own
+     * definition (see Costing): that same need at the typed price's
+     * per-unit rate, never the whole pack when the pack is bigger.
+     *
+     * A swap made from an already-swapped line (the first substitute
+     * scanned, another chosen instead) keeps the ROOT displaced item
+     * as its marker, not the intermediate substitute: the fold must
+     * suppress the item the planner would regenerate, which is the
+     * original, never an intermediate the planner never heard of.
      */
     fun substituteLine(original: GroceryLine, substitute: PriceItem, shelfPriceCents: Int): GroceryLine {
         require(shelfPriceCents > 0) { "price must be positive" }
@@ -204,11 +213,11 @@ object BarcodeScanLogic {
             itemId = substitute.id,
             displayName = substitute.name,
             store = original.store,
-            needed = substitute.packQuantity,
+            needed = Quantity(needInPackUnit, substitute.packQuantity.unit),
             packsToBuy = 1,
             estimatedPackPriceCents = shelfPriceCents,
             portionCostCents = (needInPackUnit * perUnitCents).roundToInt(),
-            substitutedForItemId = original.itemId,
+            substitutedForItemId = original.substitutedForItemId ?: original.itemId,
         )
     }
 
@@ -231,22 +240,25 @@ object BarcodeScanLogic {
      * When the fresh costing buys the substitute on its own (another
      * dinner in the week needs it too), the swap MERGES into that fresh
      * line instead of duplicating it: the fresh line stands at its
-     * fresh price and takes the swap's marker, so the displacement
+     * fresh price, takes the swap's marker so the displacement
      * survives the NEXT reprice as well (a marker dropped here would
-     * quietly resurrect the planned line one reprice later). A second
-     * swap for the same substitute in the same week has no unmarked
-     * fresh line left to merge into and carries as its own line: two
-     * swaps were two packs in the cart.
+     * quietly resurrect the planned line one reprice later), and takes
+     * the swap's food portion on top of its own, because the merged
+     * line now feeds both dinners. No second pack is charged: one
+     * line, one purchase, two dinners' portions. A second swap for the
+     * same substitute in the same week has no unmarked fresh line left
+     * to merge into and carries as its own line: two swaps were two
+     * packs in the cart.
      *
-     * The deltas price exactly the movements against the fresh totals:
-     * carried swap lines in, displaced planned lines out; a merged line
-     * was already in the fresh totals and moves no money.
+     * The deltas are computed from the line sums themselves (final
+     * lines minus fresh lines), so they price exactly the movements:
+     * carried swap lines in, displaced planned lines out, and a merged
+     * line's added portion in, with its cash unchanged.
      */
     fun foldSubstitutedLines(current: List<GroceryLine>, fresh: List<GroceryLine>): SubstitutedFold {
         val swaps = current.filter { it.substitutedForItemId != null }
         if (swaps.isEmpty()) return SubstitutedFold(fresh, 0, 0)
         val displacedIds = swaps.map { it.substitutedForItemId!! }.toSet()
-        val displaced = fresh.filter { it.itemId in displacedIds }
         val kept = fresh.filter { it.itemId !in displacedIds }.toMutableList()
         val carried = mutableListOf<GroceryLine>()
         for (swap in swaps) {
@@ -254,19 +266,23 @@ object BarcodeScanLogic {
                 it.itemId == swap.itemId && it.substitutedForItemId == null
             }
             if (mergeIndex >= 0) {
-                kept[mergeIndex] = kept[mergeIndex].copy(
+                val target = kept[mergeIndex]
+                kept[mergeIndex] = target.copy(
                     substitutedForItemId = swap.substitutedForItemId,
+                    portionCostCents = (target.portionCostCents ?: 0) +
+                        (swap.portionCostCents ?: 0),
                 )
             } else {
                 carried += swap
             }
         }
+        val folded = kept + carried
         fun cash(lines: List<GroceryLine>): Int = lines.sumOf { it.packsToBuy * it.estimatedPackPriceCents }
         fun food(lines: List<GroceryLine>): Int = lines.sumOf { it.portionCostCents ?: 0 }
         return SubstitutedFold(
-            lines = kept + carried,
-            cashDeltaCents = cash(carried) - cash(displaced),
-            foodDeltaCents = food(carried) - food(displaced),
+            lines = folded,
+            cashDeltaCents = cash(folded) - cash(fresh),
+            foodDeltaCents = food(folded) - food(fresh),
         )
     }
 

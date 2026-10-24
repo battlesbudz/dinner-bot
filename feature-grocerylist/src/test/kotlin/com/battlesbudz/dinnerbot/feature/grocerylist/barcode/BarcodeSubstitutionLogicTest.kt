@@ -120,6 +120,10 @@ class BarcodeSubstitutionLogicTest {
         assertEquals(Store.ALDI, swapped.store)
         assertEquals(1, swapped.packsToBuy)
         assertEquals(499, swapped.estimatedPackPriceCents)
+        // The line's need is the dinner quantity (2 lb), not the pack
+        // size (4 lb): the list reads honestly, and Costing.buyLeftover
+        // can see the 2 lb that will remain (Codex, PR #24).
+        assertEquals(Quantity(2.0, MeasureUnit.POUND), swapped.needed)
         // Food cost is what the dinner uses, the planner's definition:
         // the planned need is 2 lb, the pack is 4 lb at $4.99, so the
         // attributed cost is 2 lb worth ($2.50), not the whole pack.
@@ -185,8 +189,12 @@ class BarcodeSubstitutionLogicTest {
         val fold = BarcodeScanLogic.foldSubstitutedLines(current, fresh)
         assertEquals(listOf("user-chicken-drumsticks"), fold.lines.map { it.itemId })
         assertEquals("chicken-breast", fold.lines.single().substitutedForItemId)
+        // No second pack is charged (the fresh line's $4.99 stands),
+        // but the line now feeds both dinners: its portion is the fresh
+        // dinner's $4.99 plus the swapped dinner's $4.99 (Codex, PR #24).
         assertEquals(-836, fold.cashDeltaCents)
-        assertEquals(-836, fold.foodDeltaCents)
+        assertEquals(998, fold.lines.single().portionCostCents)
+        assertEquals(-836 + 499, fold.foodDeltaCents)
     }
 
     @Test fun foldMergedMarkerSurvivesASecondReprice() {
@@ -202,7 +210,14 @@ class BarcodeSubstitutionLogicTest {
             first.lines.map { it.itemId },
         )
         val second = BarcodeScanLogic.foldSubstitutedLines(first.lines, fresh)
-        assertEquals(first.lines, second.lines)
+        assertEquals(
+            listOf("long-grain-white-rice", "user-chicken-drumsticks"),
+            second.lines.map { it.itemId },
+        )
+        assertEquals(
+            "chicken-breast",
+            second.lines.single { it.itemId == "user-chicken-drumsticks" }.substitutedForItemId,
+        )
         assertEquals(-836, second.cashDeltaCents)
     }
 
@@ -224,6 +239,31 @@ class BarcodeSubstitutionLogicTest {
             drumstickLines.map { it.substitutedForItemId }.toSet(),
         )
         assertEquals(499 - 836 - 620, fold.cashDeltaCents)
+        // The merged line carries both dinners' portions for its item.
+        val merged = drumstickLines.single { it.substitutedForItemId == "chicken-breast" }
+        assertEquals(998, merged.portionCostCents)
+    }
+
+    @Test fun chainedSwapKeepsTheRootDisplacedItem() {
+        // She swapped breast for drumsticks, then scanned the drumstick
+        // line and chose thighs instead (Codex, PR #24): the new line's
+        // marker must stay the breast, the item the planner would
+        // regenerate. Marking the drumsticks instead would resurrect
+        // the breast line at the next reprice, next to the thighs.
+        val drumsticks = item("user-chicken-drumsticks", "Chicken drumsticks", 499)
+        val thighs = item("chicken-thighs", "Chicken thighs", 620)
+        val firstSwap = BarcodeScanLogic.substituteLine(line(breast), drumsticks, 499)
+        val chained = BarcodeScanLogic.substituteLine(firstSwap, thighs, 615)
+        assertEquals("chicken-thighs", chained.itemId)
+        assertEquals("chicken-breast", chained.substitutedForItemId)
+        // And the fold honors the chain: the breast stays off, the
+        // thighs are on, no drumstick or breast line reappears.
+        val fresh = listOf(line(breast), line(rice))
+        val fold = BarcodeScanLogic.foldSubstitutedLines(listOf(chained), fresh)
+        assertEquals(
+            listOf("long-grain-white-rice", "chicken-thighs"),
+            fold.lines.map { it.itemId },
+        )
     }
 
     // ---- Piece 3: the remembered substitution ----

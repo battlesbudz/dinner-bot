@@ -1620,14 +1620,18 @@ private fun DinnerBotApp(
                                 // from the plans actually stored: the one
                                 // cooking night that uses it, when there
                                 // is exactly one across the stored weeks.
+                                // A swapped line keys by its ROOT planned
+                                // item: the dinner uses that item, and the
+                                // remembered-swap memory is paired to it.
                                 val contexts = mutableMapOf<String, String?>()
                                 (bigTripRows + topUpRows).forEach { row ->
-                                    if (row.line.itemId !in contexts) {
+                                    val rootId = row.line.substitutedForItemId ?: row.line.itemId
+                                    if (rootId !in contexts) {
                                         val plan = listOfNotNull(storedPlan, storedPlan2)
                                             .firstOrNull { it.id == row.planId }
-                                        contexts[row.line.itemId] = plan?.let {
+                                        contexts[rootId] = plan?.let {
                                             BarcodeScanLogic.recipeContextFor(
-                                                row.line.itemId, it.nights, recipesById,
+                                                rootId, it.nights, recipesById,
                                             )
                                         }
                                     }
@@ -1646,12 +1650,15 @@ private fun DinnerBotApp(
                                 // The recipe context is read from the
                                 // stored plan the row belongs to, so the
                                 // remembered swap names its dinner when
-                                // exactly one dinner uses the item.
+                                // exactly one dinner uses the item. A
+                                // swap from an already-swapped line reads
+                                // the context of the ROOT planned item.
                                 val plan = listOfNotNull(storedPlan, storedPlan2)
                                     .firstOrNull { it.id == row.planId }
                                 val recipeId = plan?.let {
                                     BarcodeScanLogic.recipeContextFor(
-                                        row.line.itemId, it.nights, recipesById,
+                                        row.line.substitutedForItemId ?: row.line.itemId,
+                                        it.nights, recipesById,
                                     )
                                 }
                                 scope.launch {
@@ -2044,7 +2051,10 @@ private suspend fun applyScanSubstitution(
         with(SeedMapper) {
             ScanSubstitution(
                 planId = row.planId.ifEmpty { null },
-                originalItemId = row.line.itemId,
+                // A swap made from an already-swapped line records the
+                // ROOT planned item, so the memory pairs the substitute
+                // with the dinner's item, not an intermediate swap.
+                originalItemId = row.line.substitutedForItemId ?: row.line.itemId,
                 substituteItemId = priced.id,
                 recipeId = recipeId,
                 substitutePriceCents = shelfPriceCents,
