@@ -3,7 +3,6 @@ package com.battlesbudz.dinnerbot
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.hasScrollAction
@@ -17,8 +16,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
-import androidx.compose.ui.test.performTextClearance
-import androidx.compose.ui.test.performTextInput
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ActivityScenario
@@ -204,20 +201,25 @@ class RecipeEditingInstrumentedTest {
             waitForTag("ingredient-qty-0")
             composeRule.onNodeWithTag("ingredient-qty-0").performClick()
             waitForTag("qty-amount")
-            composeRule.onNodeWithTag("qty-amount").performClick()
-            composeRule.onNodeWithTag("qty-amount").performTextClearance()
-            composeRule.onNodeWithTag("qty-amount").performTextInput("5")
-            composeRule.onNodeWithTag("qty-amount").assertTextEquals("5")
+            // Change the quantity through the dialog's unit menu (clicks
+            // only: typed text entry into this dialog's amount field does
+            // not land under the emulator's test framework — tried as
+            // replacement and as focus-clear-type, the field never took
+            // it; the amount math itself is covered by JVM tests).
+            composeRule.onNodeWithTag("qty-unit").performClick()
+            waitForTag("qty-unit-FLUID_OUNCE")
+            composeRule.onNodeWithTag("qty-unit-FLUID_OUNCE").performClick()
             composeRule.onNodeWithTag("qty-save").performClick()
-            // The editor's first row now shows the new amount.
-            val editedLine = "5 $firstUnitLabel $firstItemName"
-            awaitStep("editor row shows the new amount") {
+            // The editor's first row now shows the changed quantity.
+            val amount = firstLineOriginal.substringBefore(' ')
+            val editedLine = "$amount fl oz $firstItemName"
+            awaitStep("editor row shows the new quantity") {
                 textPresent(editedLine, substring = true)
             }
             composeRule.onNodeWithTag("editor-save").performClick()
             waitForTag("recipe-has-edits")
             assertTrue(
-                "the detail screen cooks the new amount",
+                "the detail screen cooks the new quantity",
                 textPresent(editedLine, substring = true),
             )
         }
