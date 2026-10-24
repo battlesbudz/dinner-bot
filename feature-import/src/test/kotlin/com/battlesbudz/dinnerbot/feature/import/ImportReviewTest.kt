@@ -104,7 +104,7 @@ class ImportReviewTest {
     @Test fun pantryCoveredLineReadsCoveredAndCooksUnchanged() {
         val row = rows(draftOf("2 pounds russet potatoes"), pantry = setOf("Potatoes")).single()
         assertTrue(row.ingredient.priceItemId == "russet-potatoes")
-        assertTrue(row.isCovered)
+        assertTrue(row.pantryCovered)
     }
 
     @Test fun asWrittenLineCoveredByAGenericPantryNameReadsCovered() {
@@ -115,7 +115,7 @@ class ImportReviewTest {
             book, setOf("Potatoes"),
         )
         assertEquals("waxy potatoes", row.ingredient.pantryItem)
-        assertTrue(row.isCovered)
+        assertTrue(row.pantryCovered)
     }
 
     @Test fun reviewCoverageEqualsTheWeeklyPlansCoverage() {
@@ -143,8 +143,8 @@ class ImportReviewTest {
                     id?.let { itemsById[it]?.name } ?: ingredient.pantryItem ?: "",
                 )
         }
-        assertEquals(reviewRows.map { it.isCovered }, planCoveredFlags)
-        assertEquals(listOf(true, true, false), reviewRows.map { it.isCovered })
+        assertEquals(reviewRows.map { it.pantryCovered }, planCoveredFlags)
+        assertEquals(listOf(true, true, false), reviewRows.map { it.pantryCovered })
     }
 
     private fun build(draft: ImportedDraft, title: String = "Test dinner"): Recipe =
