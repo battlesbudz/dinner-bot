@@ -1620,12 +1620,14 @@ private fun DinnerBotApp(
                                 // from the plans actually stored: the one
                                 // cooking night that uses it, when there
                                 // is exactly one across the stored weeks.
-                                // A swapped line keys by its ROOT planned
-                                // item: the dinner uses that item, and the
-                                // remembered-swap memory is paired to it.
+                                // A swapped line keys by its primary
+                                // displaced origin: the dinner uses that
+                                // item, and the remembered-swap memory is
+                                // paired to it.
                                 val contexts = mutableMapOf<Pair<String, String>, String?>()
                                 (bigTripRows + topUpRows).forEach { row ->
-                                    val rootId = row.line.substitutedForItemId ?: row.line.itemId
+                                    val rootId = BarcodeScanLogic.primaryOriginOf(row.line)
+                                        ?: row.line.itemId
                                     val key = row.planId to rootId
                                     if (key !in contexts) {
                                         val plan = listOfNotNull(storedPlan, storedPlan2)
@@ -1648,25 +1650,31 @@ private fun DinnerBotApp(
                                 }
                             },
                             onSubstitute = { row, substitute, barcode, shelfPriceCents ->
-                                // The recipe context is read from the
-                                // stored plan the row belongs to, so the
-                                // remembered swap names its dinner when
-                                // exactly one dinner uses the item. A
-                                // swap from an already-swapped line reads
-                                // the context of the ROOT planned item.
+                                // The recipe contexts are read from the
+                                // stored plan the row belongs to, one per
+                                // origin the new line will displace (the
+                                // row's own origins plus the row's item),
+                                // so each remembered record names its
+                                // dinner when exactly one dinner uses
+                                // that item.
                                 val plan = listOfNotNull(storedPlan, storedPlan2)
                                     .firstOrNull { it.id == row.planId }
-                                val recipeId = plan?.let {
-                                    BarcodeScanLogic.recipeContextFor(
-                                        row.line.substitutedForItemId ?: row.line.itemId,
-                                        it.nights, recipesById,
-                                    )
-                                }
+                                val origins = BarcodeScanLogic
+                                    .displacedOriginsOf(row.line.substitutedForItemId) +
+                                    row.line.itemId
+                                val recipeContextByItemId: Map<String, String?> =
+                                    origins.associateWith { origin ->
+                                        plan?.let {
+                                            BarcodeScanLogic.recipeContextFor(
+                                                origin, it.nights, recipesById,
+                                            )
+                                        }
+                                    }
                                 scope.launch {
                                     withContext(Dispatchers.IO) {
                                         applyScanSubstitution(
                                             database, row, substitute, barcode,
-                                            shelfPriceCents, recipeId,
+                                            shelfPriceCents, recipeContextByItemId,
                                         )
                                     }
                                     refresh()
@@ -2014,7 +2022,7 @@ private suspend fun applyScanSubstitution(
     substitute: PriceItem,
     barcode: String?,
     shelfPriceCents: Int,
-    recipeId: String?,
+    recipeContextByItemId: Map<String, String?>,
 ) {
     val stored = database.priceItemDao().getById(substitute.id)
         ?.let { with(SeedMapper) { it.toModel() } }
@@ -2078,21 +2086,26 @@ private suspend fun applyScanSubstitution(
         )
         database.planDao().insert(with(PlanMapper) { updated.toEntity() })
     }
-    database.scanSubstitutionDao().insert(
-        with(SeedMapper) {
-            ScanSubstitution(
-                planId = row.planId.ifEmpty { null },
-                // A swap made from an already-swapped line records the
-                // ROOT planned item, so the memory pairs the substitute
-                // with the dinner's item, not an intermediate swap.
-                originalItemId = row.line.substitutedForItemId ?: row.line.itemId,
-                substituteItemId = priced.id,
-                recipeId = recipeId,
-                substitutePriceCents = shelfPriceCents,
-                createdAtMillis = System.currentTimeMillis(),
-            ).toEntity()
-        },
-    )
+    // One remembered record per displaced origin, each with its own
+    // dinner context: a swap from an already-swapped line pairs the
+    // substitute with the original dinner's item, not the intermediate
+    // swap, and a swap from a write-time merged line pairs it with BOTH
+    // dinners the row stood for.
+    val stamp = System.currentTimeMillis()
+    BarcodeScanLogic.displacedOriginsOf(newLine.substitutedForItemId).forEach { origin ->
+        database.scanSubstitutionDao().insert(
+            with(SeedMapper) {
+                ScanSubstitution(
+                    planId = row.planId.ifEmpty { null },
+                    originalItemId = origin,
+                    substituteItemId = priced.id,
+                    recipeId = recipeContextByItemId[origin],
+                    substitutePriceCents = shelfPriceCents,
+                    createdAtMillis = stamp,
+                ).toEntity()
+            },
+        )
+    }
 }
 
 private suspend fun applyBackup(database: DinnerBotDatabase, data: BackupData) {

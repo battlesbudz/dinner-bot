@@ -290,7 +290,8 @@ fun GroceryListScreen(
                     // A scan from an already-swapped line looks its
                     // memory up by the ROOT planned item: that is the
                     // pairing the records are written against.
-                    val rootItemId = fromRow.line.substitutedForItemId ?: fromRow.line.itemId
+                    val rootItemId = BarcodeScanLogic.primaryOriginOf(fromRow.line)
+                        ?: fromRow.line.itemId
                     val remembered = BarcodeScanLogic.rememberedSubstitution(
                         scanSubstitutions,
                         rootItemId,
@@ -504,9 +505,13 @@ private fun GroceryRowView(
             )
             // A scan swap (PR v0.4.4) says what it replaced, so the
             // list never quietly differs from the plan.
-            line.substitutedForItemId?.let { originalId ->
+            val swappedFor = BarcodeScanLogic.displacedOriginsOf(line.substitutedForItemId)
+            if (swappedFor.isNotEmpty()) {
                 Text(
-                    "Swapped in for ${priceItemsById[originalId]?.name ?: "a planned item"}" +
+                    "Swapped in for " +
+                        swappedFor.joinToString(" and ") {
+                            priceItemsById[it]?.name ?: "a planned item"
+                        } +
                         " — this week only",
                     style = MaterialTheme.typography.bodySmall,
                 )

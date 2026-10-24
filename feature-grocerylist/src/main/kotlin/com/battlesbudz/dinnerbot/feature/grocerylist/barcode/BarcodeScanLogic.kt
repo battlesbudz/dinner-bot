@@ -63,6 +63,26 @@ object BarcodeScanLogic {
     /** The pack-rounding epsilon, Costing's own value, for pack counts. */
     private const val PACK_EPSILON: Double = 1e-9
 
+    /**
+     * The planned items a swap marker names, in order. The marker is a
+     * comma-joined list because one row can displace more than one
+     * planned item: a line born from a write-time merge also stood for
+     * the substitute's own planned use, and re-swapping that row must
+     * keep the fresh costing from resurrecting either origin (Codex,
+     * PR #24). Item ids are slugs and never contain a comma.
+     */
+    fun displacedOriginsOf(marker: String?): List<String> =
+        marker?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+
+    /** The first displaced origin of a line, its primary pairing. */
+    fun primaryOriginOf(line: GroceryLine): String? =
+        displacedOriginsOf(line.substitutedForItemId).firstOrNull()
+
+    /** The marker a swap of [original] carries: its origins, then itself. */
+    private fun markerFor(original: GroceryLine): String =
+        (displacedOriginsOf(original.substitutedForItemId) + original.itemId)
+            .distinct().joinToString(",")
+
     sealed interface Resolution {
         /** The code is linked; [item] is the price book item it names. */
         data class Linked(val item: PriceItem) : Resolution
@@ -209,12 +229,13 @@ object BarcodeScanLogic {
      *
      * The planned line's check-off state carries over: a line Andrea
      * already checked off was already dealt with, and its replacement
-     * must not reappear as still to buy. A swap made from an
-     * already-swapped line (the first substitute scanned, another
-     * chosen instead) keeps the ROOT displaced item as its marker,
-     * not the intermediate substitute: the fold must suppress the
-     * item the planner would regenerate, which is the original,
-     * never an intermediate the planner never heard of.
+     * must not reappear as still to buy. The marker names every origin
+     * the fold must suppress: the replaced line's own origins plus the
+     * line itself. A swap made from an already-swapped line therefore
+     * keeps the original displaced item (never only the intermediate
+     * substitute, which the planner would not regenerate on its own),
+     * and a swap made from a write-time MERGED line keeps both the
+     * first displaced item and the substitute's own planned use.
      */
     fun substituteLine(original: GroceryLine, substitute: PriceItem, shelfPriceCents: Int): GroceryLine {
         require(shelfPriceCents > 0) { "price must be positive" }
@@ -238,7 +259,7 @@ object BarcodeScanLogic {
                 portionCostCents = shelfPriceCents,
                 checkedOff = original.checkedOff,
                 reconciliationAdded = original.reconciliationAdded,
-                substitutedForItemId = original.substitutedForItemId ?: original.itemId,
+                substitutedForItemId = markerFor(original),
             )
         }
         val perUnitCents = shelfPriceCents.toDouble() / substitute.packQuantity.amount
@@ -258,23 +279,23 @@ object BarcodeScanLogic {
             // flag would move the purchase into the big trip's
             // section and change when it is scheduled (Codex, PR #24).
             reconciliationAdded = original.reconciliationAdded,
-            substitutedForItemId = original.substitutedForItemId ?: original.itemId,
+            substitutedForItemId = markerFor(original),
         )
     }
 
     /**
      * Merge a swap into a line that already buys the substitute for
      * another dinner of the same week (the write-time twin of the
-     * merge [foldSubstitutedLines] performs at reprice): inserting a
+     * carry [foldSubstitutedLines] performs at reprice): inserting a
      * second line would budget a second purchase the week may not
-     * need. The combined line carries both dinners' need (packs
-     * recomputed by the planner's pack math, never fewer than the
-     * line already bought), both dinners' food portions, the swap's
-     * marker, and the typed per-pack price when the line shops at the
-     * item's home store (the price just typed is today's truth there;
-     * at any other store the line keeps the price it was costed at).
-     * It reads as checked off only when both source lines were: any
-     * unchecked part is still to buy.
+     * need. The combined line carries both dinners' need, both
+     * dinners' food portions, and the swap's marker. Its price follows
+     * the line's own representation: at the item's home store, packs
+     * recomputed by the planner's pack math (never fewer than the line
+     * already bought) at the typed per-pack price; at an alternate
+     * store, the combined need priced at the scanned rate, in
+     * Costing's one-line need-cost form. It reads as checked off only
+     * when both source lines were: any unchecked part is still to buy.
      */
     fun mergeSwapIntoLine(existing: GroceryLine, swap: GroceryLine, item: PriceItem): GroceryLine {
         require(existing.itemId == item.id && swap.itemId == item.id) {
@@ -294,18 +315,35 @@ object BarcodeScanLogic {
             Costing.amountInPackUnit(swap.needed, item)
         val packsForCombined = ceil(combinedNeedInPackUnit / item.packQuantity.amount - PACK_EPSILON)
             .toInt().coerceAtLeast(1)
-        return existing.copy(
-            needed = Quantity(combinedNeedInPackUnit, item.packQuantity.unit),
-            packsToBuy = max(existing.packsToBuy, packsForCombined),
-            estimatedPackPriceCents = if (existing.store == item.homeStore) {
-                swap.estimatedPackPriceCents
-            } else {
-                existing.estimatedPackPriceCents
-            },
-            portionCostCents = (existing.portionCostCents ?: 0) + (swap.portionCostCents ?: 0),
-            checkedOff = existing.checkedOff && swap.checkedOff,
-            substitutedForItemId = swap.substitutedForItemId,
-        )
+        val combinedPortion = (existing.portionCostCents ?: 0) + (swap.portionCostCents ?: 0)
+        val combinedChecked = existing.checkedOff && swap.checkedOff
+        return if (existing.store == item.homeStore) {
+            existing.copy(
+                needed = Quantity(combinedNeedInPackUnit, item.packQuantity.unit),
+                packsToBuy = max(existing.packsToBuy, packsForCombined),
+                estimatedPackPriceCents = swap.estimatedPackPriceCents,
+                portionCostCents = combinedPortion,
+                checkedOff = combinedChecked,
+                substitutedForItemId = swap.substitutedForItemId,
+            )
+        } else {
+            // Alternate-store representation (Costing, for a Sam's item
+            // the gate routed elsewhere): packsToBuy 1 and the line's
+            // price IS the cost of the quantity needed, not a pack
+            // price. The merged price must cover the COMBINED need at
+            // the scanned rate, or the week keeps budgeting one dinner's
+            // amount for two dinners' food (Codex, PR #24).
+            val scannedRatePerPackUnit = swap.estimatedPackPriceCents / item.packQuantity.amount
+            existing.copy(
+                needed = Quantity(combinedNeedInPackUnit, item.packQuantity.unit),
+                packsToBuy = 1,
+                estimatedPackPriceCents = (combinedNeedInPackUnit * scannedRatePerPackUnit)
+                    .roundToInt(),
+                portionCostCents = combinedPortion,
+                checkedOff = combinedChecked,
+                substitutedForItemId = swap.substitutedForItemId,
+            )
+        }
     }
 
     /** A repriced week's lines with its scan substitutions folded back in, and the money deltas. */
@@ -333,9 +371,10 @@ object BarcodeScanLogic {
      * [mergeSwapIntoLine]), so the stored line's need, pack count and
      * portion already cover both dinners. Rebuilding it from the
      * fresh line would shrink the purchase back to one dinner's and
-     * double-count the other's portion. Only the per-pack price
-     * refreshes from the fresh costing, the way a reprice refreshes
-     * every other line. A fresh line for the item at a DIFFERENT store
+     * double-count the other's portion. The stored price stands too:
+     * it was typed at scan time, and a merged alternate-store line's
+     * price is its combined need cost, which no fresh one-dinner line
+     * can price. A fresh line for the item at a DIFFERENT store
      * is a separate purchase and stands; the swap carries alongside
      * it. A second swap for the same substitute has no fresh line
      * left to displace and carries as its own line: two swaps were
@@ -349,7 +388,7 @@ object BarcodeScanLogic {
     fun foldSubstitutedLines(current: List<GroceryLine>, fresh: List<GroceryLine>): SubstitutedFold {
         val swaps = current.filter { it.substitutedForItemId != null }
         if (swaps.isEmpty()) return SubstitutedFold(fresh, 0, 0)
-        val displacedIds = swaps.map { it.substitutedForItemId!! }.toSet()
+        val displacedIds = swaps.flatMap { displacedOriginsOf(it.substitutedForItemId) }.toSet()
         val kept = fresh.filter { it.itemId !in displacedIds }.toMutableList()
         val carried = mutableListOf<GroceryLine>()
         for (swap in swaps) {
@@ -357,8 +396,12 @@ object BarcodeScanLogic {
                 it.itemId == swap.itemId && it.store == swap.store
             }
             if (freshIndex >= 0) {
-                val freshLine = kept.removeAt(freshIndex)
-                carried += swap.copy(estimatedPackPriceCents = freshLine.estimatedPackPriceCents)
+                // The stored line carries whole, at its stored price:
+                // refreshing the price from the one-dinner fresh line
+                // would reset a merged line's combined cost (an
+                // alternate-store line's price IS its need cost).
+                kept.removeAt(freshIndex)
+                carried += swap
             } else {
                 carried += swap
             }
