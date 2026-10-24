@@ -287,6 +287,29 @@ class BarcodeSubstitutionLogicTest {
         assertEquals(189 + 850 - (189 + 836 + 525), fold.foodDeltaCents)
     }
 
+    @Test fun foldKeepsAFreshLineFromTheOtherTrip() {
+        // Codex, PR #24: the swap displaced a Week 2 TOP-UP line
+        // (reconciliation-added), while another dinner's drumstick
+        // line is a plain big-trip purchase. The write path kept them
+        // separate; the fold must too — dropping the fresh line would
+        // lose that dinner's need and move its purchase to the top-up.
+        val drumsticks = item("user-chicken-drumsticks", "Chicken drumsticks", 499)
+        val topUpSwap = BarcodeScanLogic.substituteLine(
+            line(breast).copy(reconciliationAdded = true), drumsticks, 499,
+        )
+        val fold = BarcodeScanLogic.foldSubstitutedLines(
+            listOf(topUpSwap),
+            listOf(line(breast), line(drumsticks)),
+        )
+        val drumstickLines = fold.lines.filter { it.itemId == "user-chicken-drumsticks" }
+        assertEquals(2, drumstickLines.size)
+        assertEquals(
+            listOf(false, true),
+            drumstickLines.map { it.reconciliationAdded }.sorted(),
+        )
+        assertTrue(fold.lines.none { it.itemId == "chicken-breast" })
+    }
+
     @Test fun foldKeepsACrossStoreFreshLineAsASeparatePurchase() {
         // The substitute is bought at Aldi by the swap and at Walmart
         // by another dinner's own line: separate purchases at separate

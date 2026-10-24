@@ -373,7 +373,8 @@ object BarcodeScanLogic {
      * When the fresh costing buys the substitute on its own (another
      * dinner in the week needs it too), the stored swap line CARRIES
      * AS A WHOLE and the fresh line drops — when they shop at the
-     * same store, so they are the same purchase. That is the only
+     * same store and on the same trip, so they are the same purchase.
+     * That is the only
      * honest read of the stored state: the write path already merged
      * the swap into the week's purchase for this item (see
      * [mergeSwapIntoLine]), so the stored line's need, pack count and
@@ -400,8 +401,14 @@ object BarcodeScanLogic {
         val kept = fresh.filter { it.itemId !in displacedIds }.toMutableList()
         val carried = mutableListOf<GroceryLine>()
         for (swap in swaps) {
+            // The same purchase only when store AND trip match, the
+            // write path's own merge rule: a fresh line from the other
+            // trip (big trip vs Week 2 top-up) is a different purchase
+            // whose need the swap does not include, and dropping it
+            // would lose that dinner and move the buy (Codex, PR #24).
             val freshIndex = kept.indexOfFirst {
-                it.itemId == swap.itemId && it.store == swap.store
+                it.itemId == swap.itemId && it.store == swap.store &&
+                    it.reconciliationAdded == swap.reconciliationAdded
             }
             if (freshIndex >= 0) {
                 // The stored line carries whole, at its stored price:
