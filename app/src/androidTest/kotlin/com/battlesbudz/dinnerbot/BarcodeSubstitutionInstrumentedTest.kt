@@ -7,7 +7,6 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -103,13 +102,10 @@ class BarcodeSubstitutionInstrumentedTest {
         val prefilled = composeRule.onNodeWithTag("new-item-name")
             .fetchSemanticsNode().config[SemanticsProperties.EditableText].text
         assertEquals("Granulated sugar", prefilled)
-        composeRule.onNodeWithTag("new-item-pack-description")
-            .performScrollTo().performTextInput("Bag, 4 lb")
-        composeRule.onNodeWithTag("new-item-pack-amount")
-            .performScrollTo().performTextInput("4")
-        composeRule.onNodeWithTag("new-item-price")
-            .performScrollTo().performTextInput("3.42")
-        composeRule.onNodeWithTag("new-item-confirm").performScrollTo().performClick()
+        composeRule.onNodeWithTag("new-item-pack-description").performTextInput("Bag, 4 lb")
+        composeRule.onNodeWithTag("new-item-pack-amount").performTextInput("4")
+        composeRule.onNodeWithTag("new-item-price").performTextInput("3.42")
+        composeRule.onNodeWithTag("new-item-confirm").performClick()
         assertNotNull("confirming the form must build the item", created)
         val built = created!!
         assertEquals("user-granulated-sugar", built.id)
