@@ -100,6 +100,13 @@ internal fun NightCard(
      * book as it stands, so it clears itself when the recipe prices.
      */
     costNote: String? = null,
+    /**
+     * Estimated cost per serving (v0.6.0 redesign): the mockups set each
+     * dinner's cost and time on its card. Computed by the caller from
+     * the price book; null hides the line (no estimate rather than a
+     * made-up one).
+     */
+    perServingCents: Int? = null,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -143,6 +150,12 @@ internal fun NightCard(
                             "${recipe.mainProtein} · ${recipe.activeMinutes} min",
                             style = MaterialTheme.typography.bodySmall,
                         )
+                        if (perServingCents != null) {
+                            Text(
+                                "About ${Money(perServingCents).format()} per serving",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
                     }
                 }
                 Column(horizontalAlignment = Alignment.End) {
@@ -206,6 +219,14 @@ fun PlannerScreen(
      * total includes guesses.
      */
     unpricedRecipeIds: Set<String> = emptySet(),
+    /** Estimated cost per serving by recipe id, for the night cards (v0.6.0 redesign). */
+    perServingCentsByRecipeId: Map<String, Int> = emptyMap(),
+    /**
+     * The week's nutrition summary card (v0.6.0 redesign): the Nutrition
+     * tab's weekly half, folded onto the Plan screen it describes. The
+     * caller composes it; the planner screens stay nutrition-free.
+     */
+    weekNutrition: @Composable () -> Unit = {},
 ) {
     // The day whose not-cooking reason is being picked, if any.
     var reasonForDay by remember { mutableStateOf<String?>(null) }
@@ -232,6 +253,7 @@ fun PlannerScreen(
                     "the price book, and keeps the cash under your weekly budget.",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            weekNutrition()
             return@Column
         }
 
@@ -279,6 +301,7 @@ fun PlannerScreen(
                 onRate = { rating -> onRate(night.recipeId, rating) },
                 onCook = { onCookNight(night.day) },
                 photoFile = photoFiles[night.recipeId],
+                perServingCents = perServingCentsByRecipeId[night.recipeId],
                 costNote = if (night.recipeId in unpricedRecipeIds) {
                     "Some ingredients have no price yet, so this dinner's cost is " +
                         "a guess for now — it will be exact after the first shop."
@@ -305,6 +328,8 @@ fun PlannerScreen(
                 )
             }
         }
+
+        weekNutrition()
     }
 
     val pickingDay = reasonForDay

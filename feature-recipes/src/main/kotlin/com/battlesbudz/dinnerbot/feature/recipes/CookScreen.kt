@@ -75,7 +75,7 @@ fun CookScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        TextButton(onClick = onBack) { Text("Back to the week") }
+        BackPill("Back to the week", onBack)
         Text("Cooking: ${recipe.title}", style = MaterialTheme.typography.headlineSmall)
         Text(
             "$dayLabel · check off each ingredient as you use it.",

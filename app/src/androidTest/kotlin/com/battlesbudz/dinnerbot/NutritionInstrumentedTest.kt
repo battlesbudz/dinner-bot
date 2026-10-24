@@ -2,6 +2,7 @@ package com.battlesbudz.dinnerbot
 
 import android.content.Context
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
@@ -23,9 +24,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Phase V2-6 flows: the Nutrition tab opens from the bottom navigation
- * with its estimate label and per-recipe figures, and a recipe's detail
- * screen carries its per-serving nutrition section.
+ * Phase V2-6 flows, as reshaped by the v0.6.0 redesign: the Nutrition
+ * tab is gone — the week's nutrition summary is a card on the Plan
+ * screen and per-recipe figures live on each recipe's detail screen,
+ * both still labeled as USDA estimates in plain words.
  */
 @RunWith(AndroidJUnit4::class)
 class NutritionInstrumentedTest {
@@ -79,16 +81,23 @@ class NutritionInstrumentedTest {
         }
     }
 
-    @Test fun nutritionTabShowsWeekAndRecipeFigures() {
+    private fun waitForTag(tag: String) {
+        composeRule.waitUntil(timeoutMillis = 15_000) {
+            composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    @Test fun weekNutritionCardShowsOnPlan() {
         ActivityScenario.launch(MainActivity::class.java).use {
             waitForText("Dinner Bot recipes")
-            composeRule.onNodeWithTag("tab-Nutrition").performClick()
-            waitForText("Every recipe, per serving")
-            // The estimates are labeled as USDA estimates, in plain words.
+            composeRule.onNodeWithTag("tab-Plan").performClick()
+            waitForText("This week's dinners")
+            composeRule.onNodeWithText("Plan my week").performClick()
+            // The week's nutrition card renders on Plan (v0.6.0: the old
+            // Nutrition tab's weekly half), labeled as USDA estimates.
+            waitForTag("week-nutrition-card")
+            waitForText("Week nutrition (estimate)")
             waitForTextContaining("Estimates from USDA FoodData Central data")
-            // Per-recipe figures render for the library (the first card
-            // alphabetically is composed at the top of the list).
-            waitForTextContaining("Bean and Cheese Burritos")
             waitForTextContaining("kcal")
             assertTrue(
                 composeRule.onAllNodesWithText("protein", substring = true)

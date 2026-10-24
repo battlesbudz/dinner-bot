@@ -4,8 +4,10 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,12 +18,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
 import com.battlesbudz.dinnerbot.core.model.Money
@@ -94,17 +102,18 @@ fun RecipeListScreen(
                 Row(
                     modifier = Modifier.padding(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     photoFiles[recipe.id]?.let { file ->
                         RecipePhotoImage(
                             file = file,
                             contentDescription = "Photo of ${recipe.title}",
                             modifier = Modifier
-                                .size(64.dp)
+                                .size(72.dp)
                                 .clip(MaterialTheme.shapes.small),
                         )
                     }
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(recipe.title, style = MaterialTheme.typography.titleMedium)
                         Text(
                             "${recipe.mainProtein} · ${recipe.cuisine} · ${recipe.activeMinutes} min",
@@ -123,9 +132,47 @@ fun RecipeListScreen(
                             null -> Unit
                         }
                     }
+                    // The price, set big at the right of the row the way
+                    // the approved mockups set it (v0.6.0 redesign).
+                    Text(
+                        Money(perServing).format(),
+                        style = MaterialTheme.typography.titleLarge,
+                    )
                 }
             }
         }
+    }
+}
+
+/** A small rounded stat pill, the mockups' shape for facts about a dinner. */
+@Composable
+private fun StatPill(text: String) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+        )
+    }
+}
+
+/**
+ * The standard back control (v0.6.0 redesign): a filled pill with a back
+ * arrow and its label, big enough to see and tap, sitting at the top of
+ * the screen it leaves. Battles reported the old text-only back links
+ * were easy to miss and could hide under the phone's own bars.
+ */
+@Composable
+fun BackPill(label: String, onBack: () -> Unit, modifier: Modifier = Modifier) {
+    Button(
+        onClick = onBack,
+        modifier = modifier.testTag("back-button"),
+    ) {
+        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+        Text(label, modifier = Modifier.padding(start = 6.dp))
     }
 }
 
@@ -180,8 +227,8 @@ fun RecipeDetailScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        TextButton(onClick = onBack) { Text("Back to recipes") }
-        Text(recipe.title, style = MaterialTheme.typography.headlineSmall)
+        BackPill("Back to recipes", onBack)
+        Text(recipe.title, style = MaterialTheme.typography.headlineMedium)
         Text(
             "${recipe.mainProtein} · ${recipe.cuisine} · ${recipe.activeMinutes} min active",
             style = MaterialTheme.typography.bodyMedium,
@@ -196,13 +243,20 @@ fun RecipeDetailScreen(
         if (recipe.dietTags.isNotEmpty()) {
             Text(recipe.dietTags.joinToString(", "), style = MaterialTheme.typography.bodySmall)
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatPill("${recipe.activeMinutes} min")
+            StatPill("$servings servings")
+            StatPill(recipe.mainProtein)
+            StatPill("${Money(perServing).format()} per serving")
+        }
 
-        // Household photo (Epic issue #10, D-V2-2): the household's own
-        // photo of this dinner, attached from the phone's photos through
-        // the system photo picker (no permission needed) and stored on
-        // this phone only. No photo is bundled with the app; a recipe
-        // with none shows the add entry and otherwise renders exactly
-        // as it did before photos existed.
+        // The recipe's photo heads the screen (v0.6.0 redesign), the way
+        // it heads the approved mockups. Household photo plumbing is
+        // unchanged (Epic issue #10, D-V2-2): the household's own photo
+        // of this dinner, attached from the phone's photos through the
+        // system photo picker (no permission needed) and stored on this
+        // phone only. No photo is bundled with the app; a recipe with
+        // none shows a clean placeholder and the add entry.
         val photoPicker = rememberLauncherForActivityResult(
             ActivityResultContracts.PickVisualMedia(),
         ) { picked -> if (picked != null) onPhotoPicked(picked) }
@@ -211,7 +265,6 @@ fun RecipeDetailScreen(
                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
             )
         }
-        Text("Photo", style = MaterialTheme.typography.titleMedium)
         if (photoFile != null) {
             RecipePhotoImage(
                 file = photoFile,
@@ -238,9 +291,23 @@ fun RecipeDetailScreen(
                 TextButton(onClick = onPhotoRemoved) { Text("Remove photo") }
             }
         } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "No photo yet",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Text(
-                "No photo yet. When you cook this dinner, add a photo of it from " +
-                    "your phone's photos. It is stored on this phone only.",
+                "When you cook this dinner, add a photo of it from your phone's photos. " +
+                    "It is stored on this phone only.",
                 style = MaterialTheme.typography.bodySmall,
             )
             OutlinedButton(
@@ -292,45 +359,61 @@ fun RecipeDetailScreen(
         // this household cooks it (the recipe handed in is already
         // won't-eat adapted) at the servings picked above. Estimates from
         // USDA data; a field USDA has no value for is marked partial
-        // instead of printing a total that pretends to be whole.
+        // instead of printing a total that pretends to be whole. Since
+        // the v0.6.0 redesign this card is the app's per-recipe nutrition
+        // home; the weekly summary lives on the Plan screen.
         val nutrition = remember(recipe, servings, nutritionByItemId, nutritionByPantrySlug) {
             NutritionCalculator.recipeNutrition(recipe, servings, nutritionByItemId, nutritionByPantrySlug)
         }
-        Text("Nutrition per serving (estimate)", style = MaterialTheme.typography.titleMedium)
-        listOf(
-            NutritionField.CALORIES,
-            NutritionField.PROTEIN,
-            NutritionField.FAT,
-            NutritionField.CARBOHYDRATE,
-            NutritionField.FIBER,
-            NutritionField.SODIUM,
-        ).forEach { field ->
-            val marker = if (field in nutrition.incompleteFields) " (partial)" else ""
-            Text(
-                "${field.label}: ${formatNutritionAmount(nutrition.perServing.value(field), field)}$marker",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        if (nutrition.isPartial) {
-            val names = nutrition.incompleteFields.sortedBy { it.ordinal }
-                .joinToString(", ") { it.label.lowercase() }
-            Text(
-                "Partial data: USDA FoodData Central has no $names value for one or more " +
-                    "ingredients here, so the $names total is incomplete.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        if (nutrition.closestMatchUsed) {
-            Text(
-                "Includes packaged foods matched to the closest USDA entry. " +
-                    "Estimates from USDA FoodData Central data.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-        } else {
-            Text(
-                "Estimates from USDA FoodData Central data.",
-                style = MaterialTheme.typography.bodySmall,
-            )
+        Card(modifier = Modifier.fillMaxWidth().testTag("recipe-nutrition-card")) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text("Nutrition per serving (estimate)", style = MaterialTheme.typography.titleMedium)
+                listOf(
+                    NutritionField.CALORIES,
+                    NutritionField.PROTEIN,
+                    NutritionField.FAT,
+                    NutritionField.CARBOHYDRATE,
+                    NutritionField.FIBER,
+                    NutritionField.SODIUM,
+                ).forEach { field ->
+                    val marker = if (field in nutrition.incompleteFields) " (partial)" else ""
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text("${field.label}:", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "${formatNutritionAmount(nutrition.perServing.value(field), field)}$marker",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+                if (nutrition.isPartial) {
+                    val names = nutrition.incompleteFields.sortedBy { it.ordinal }
+                        .joinToString(", ") { it.label.lowercase() }
+                    Text(
+                        "Partial data: USDA FoodData Central has no $names value for one or more " +
+                            "ingredients here, so the $names total is incomplete.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                if (nutrition.closestMatchUsed) {
+                    Text(
+                        "Includes packaged foods matched to the closest USDA entry. " +
+                            "Estimates from USDA FoodData Central data.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                } else {
+                    Text(
+                        "Estimates from USDA FoodData Central data.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
         }
 
         Text("Ingredients", style = MaterialTheme.typography.titleMedium)

@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -403,6 +404,40 @@ fun GroceryListScreen(
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 8.dp).testTag("guess-total-note"),
                 )
+            }
+            // Store total cards (v0.6.0 redesign): one rounded card per
+            // store on this trip, the store's item count and its total,
+            // set at the top of the list the way the approved mockups
+            // set it. The per-store sections below keep their own
+            // subtotal headers; these cards are the at-a-glance totals.
+            val allRows = rows + topUpRows
+            Store.entries.forEach { store ->
+                val storeRows = allRows.filter { it.line.store == store }
+                if (storeRows.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp)
+                            .testTag("store-total-${store.name}"),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(storeLabel(store), style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "${storeRows.size} ${if (storeRows.size == 1) "item" else "items"}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            Text(
+                                Money(storeRows.sumOf { GroceryListBuilder.lineCashCents(it.line) }).format(),
+                                style = MaterialTheme.typography.titleLarge,
+                            )
+                        }
+                    }
+                }
             }
         }
         if (twoWeekTrip) {
