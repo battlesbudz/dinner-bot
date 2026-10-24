@@ -92,7 +92,7 @@ object PopulatedV14Database {
             "`mainProtein` TEXT NOT NULL, `dietTagsJson` TEXT NOT NULL, " +
             "`ingredientsJson` TEXT NOT NULL, `stepsJson` TEXT NOT NULL, " +
             "`sourceUrl` TEXT, `origin` TEXT NOT NULL, " +
-            "`createdAtMillis` INTEGER NOT NULL, PRIMARY KEY(`id`))",,
+            "`createdAtMillis` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "CREATE TABLE IF NOT EXISTS `keep_prompt_asked` (`recipeId` TEXT NOT NULL, " +
             "`askedAtMillis` INTEGER NOT NULL, PRIMARY KEY(`recipeId`))"
     )
@@ -143,12 +143,6 @@ object PopulatedV14Database {
         db.execSQL("INSERT INTO pantry_items (id, name, owned) VALUES ('salt', 'Salt', 1)")
         db.execSQL(
             "INSERT INTO bulk_stock (itemId, amount, unit) VALUES ('pork-tenderloin', 4.5, 'POUND')",
-            // v0.5.2's weekly-list state on the first stored row: a
-            // covered line naming the pantry entry that covers it.
-            "UPDATE grocery_items SET coveredByPantryName = 'Potatoes' " +
-                "WHERE rowId = (SELECT MIN(rowId) FROM grocery_items)",
-            "INSERT INTO keep_prompt_asked (recipeId, askedAtMillis) " +
-                "VALUES ('her-chicken-soup', 1730000000000)",
         )
         db.execSQL(
             "INSERT INTO settings (id, householdSize, cookNightsJson, weeklyBudgetCents, wontEatJson, " +
@@ -189,6 +183,17 @@ object PopulatedV14Database {
                 "substitutedForItemId) " +
                 "VALUES ('plan-1', 'user-chicken-drumsticks', 'Chicken drumsticks', 'ALDI', " +
                 "4.0, 'POUND', 1, 499, 499, 0, 0, 'chicken-breast')",
+        )
+        // v0.5.2's weekly-list state on the first stored row: a covered
+        // line naming the pantry entry that covers it, plus the
+        // keep-prompt record for Andrea's soup.
+        db.execSQL(
+            "UPDATE grocery_items SET coveredByPantryName = 'Potatoes' " +
+                "WHERE rowId = (SELECT MIN(rowId) FROM grocery_items)",
+        )
+        db.execSQL(
+            "INSERT INTO keep_prompt_asked (recipeId, askedAtMillis) " +
+                "VALUES ('her-chicken-soup', 1730000000000)",
         )
         db.execSQL(
             "INSERT INTO ran_out_events (itemKey, displayName, stapleSide, priceItemId, bulkItemId, " +

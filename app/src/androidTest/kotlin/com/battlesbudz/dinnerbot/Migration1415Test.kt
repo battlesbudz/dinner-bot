@@ -89,7 +89,7 @@ class Migration1415Test {
                 assertEquals(1, db.recipePhotoDao().getAll().size)
                 val ranOut = db.ranOutDao().getAll()
                     .map { with(ReconciliationMapper) { it.toModel() } }
-                assertEquals(RanOutState.OUT_POSSIBLE, ranOut.single().state)
+                assertEquals(RanOutState.PENDING, ranOut.single().state)
                 assertEquals(1, db.cookCheckoffDao().getAll().size)
                 assertEquals(1, db.scanSubstitutionDao().getAll().size)
                 assertEquals(1, db.recipeOverrideDao().getAll().size)
