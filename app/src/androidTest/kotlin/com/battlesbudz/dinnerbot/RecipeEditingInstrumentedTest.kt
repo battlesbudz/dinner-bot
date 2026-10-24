@@ -17,7 +17,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
-import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ActivityScenario
@@ -203,7 +204,9 @@ class RecipeEditingInstrumentedTest {
             waitForTag("ingredient-qty-0")
             composeRule.onNodeWithTag("ingredient-qty-0").performClick()
             waitForTag("qty-amount")
-            composeRule.onNodeWithTag("qty-amount").performTextReplacement("5")
+            composeRule.onNodeWithTag("qty-amount").performClick()
+            composeRule.onNodeWithTag("qty-amount").performTextClearance()
+            composeRule.onNodeWithTag("qty-amount").performTextInput("5")
             composeRule.onNodeWithTag("qty-amount").assertTextEquals("5")
             composeRule.onNodeWithTag("qty-save").performClick()
             // The editor's first row now shows the new amount.
