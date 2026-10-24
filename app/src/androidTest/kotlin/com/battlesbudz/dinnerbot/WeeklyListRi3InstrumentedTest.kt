@@ -203,13 +203,20 @@ class WeeklyListRi3InstrumentedTest {
             composeRule.onNodeWithTag("uncross-russet-potatoes")
                 .performScrollTo()
                 .performClick()
+            awaitStep("covered row left the list") {
+                tagCount("covered-row-russet-potatoes") == 0
+            }
             awaitStep("potatoes row became a buy line") {
                 withDb { db ->
                     val row = db.groceryDao().getForPlan("plan-ri3")
                         .singleOrNull { it.itemId == "russet-potatoes" }
-                    row != null && row.packsToBuy == 1 &&
-                        row.coveredByPantryName == null && row.uncrossed
+                    row != null && row.packsToBuy == 1 && row.coveredByPantryName == null
                 }
+            }
+            withDb { db ->
+                val row = db.groceryDao().getForPlan("plan-ri3")
+                    .single { it.itemId == "russet-potatoes" }
+                assertTrue(row.uncrossed)
             }
             // Uncrossing is a list action only: the pantry still owns potatoes.
             withDb { db ->
@@ -236,8 +243,30 @@ class WeeklyListRi3InstrumentedTest {
                 sourceLink = null, createdAtMillis = 5L,
             )
             db.importedRecipeDao().upsert(with(SeedMapper) { imported.toEntity() })
+            // A second unpriced import, also cost 0: generation rotates
+            // the ranked pool by one, so the week's single night lands
+            // on one of the two either way — and the cap keeps it to one.
+            val second = ImportedRecipe(
+                recipe = Recipe(
+                    id = "imported-truffle-pasta", title = "Truffle Pasta Night",
+                    servings = 4, activeMinutes = 15, cuisine = "Test",
+                    mainProtein = "Pasta",
+                    ingredients = listOf(
+                        RecipeIngredient(
+                            pantryItem = "Truffle oil",
+                            quantity = Quantity(1.0, MeasureUnit.TABLESPOON),
+                        ),
+                    ),
+                    steps = listOf("Cook."), origin = RecipeOrigin.IMPORTED,
+                ),
+                sourceLink = null, createdAtMillis = 6L,
+            )
+            db.importedRecipeDao().upsert(with(SeedMapper) { second.toEntity() })
             db.recipeRatingDao().upsert(
                 RecipeRatingEntity("imported-saffron-rice", "UP", 1L),
+            )
+            db.recipeRatingDao().upsert(
+                RecipeRatingEntity("imported-truffle-pasta", "UP", 1L),
             )
         }
         ActivityScenario.launch(MainActivity::class.java).use {
@@ -247,13 +276,12 @@ class WeeklyListRi3InstrumentedTest {
             composeRule.onNodeWithText("Plan my week").performClick()
             waitForTag("unpriced-disclaimer")
             waitForText("One dinner is not priced yet")
-            waitForText("Saffron Rice Night", substring = true)
             composeRule.onNodeWithText("Got it").performClick()
             awaitStep("disclaimer dismissed") { tagCount("unpriced-disclaimer") == 0 }
-            // The plan itself carries the bookkeeping for the pop-up dinner.
+            // The planned night is one of her two unpriced imports.
             withDb { db ->
                 val plan = db.planDao().getLatest()!!
-                assertTrue(plan.nightsJson.contains("imported-saffron-rice"))
+                assertTrue(plan.nightsJson.contains("imported-"))
             }
         }
     }
