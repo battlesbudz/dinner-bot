@@ -240,9 +240,8 @@ object GuessPricer {
         return PriceItem(
             id = uniqueUserId(name, book),
             name = name,
-            category = guess?.let {
-                book.firstOrNull { item -> item.id == it.sourceItemId }?.category
-            } ?: DEFAULT_CATEGORY,
+            category = RecipePricing.equivalentsFor(name, book).firstOrNull()?.category
+                ?: DEFAULT_CATEGORY,
             homeStore = RecipePricing.guessStore(name, book),
             packDescription = "${formatAmount(amount)} ${pack.unit.label} (from a recipe)",
             packQuantity = pack,
