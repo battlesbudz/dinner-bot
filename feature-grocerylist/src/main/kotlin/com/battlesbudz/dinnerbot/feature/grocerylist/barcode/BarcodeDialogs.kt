@@ -347,12 +347,12 @@ fun NewItemFormDialog(
  * A scan from a shopping line that named a DIFFERENT item than the
  * line's (PR v0.4.4, Battles's drumsticks case: the line buys skinless
  * chicken breasts, the package in hand is drumsticks). She can buy this
- * instead — one pack onto THIS week's list at the typed price, the
- * planned line off this week only, the planned item's book price and
- * the recipe untouched — or just save the scanned item's price, the
- * behavior scans already had. When a past swap is remembered for this
- * line's item, [remembered] names it: a suggestion, shown and never
- * applied by itself.
+ * instead — onto THIS week's list at the typed per-pack price, as many
+ * packs as the dinner takes, the planned line off this week only, the
+ * planned item's book price and the recipe untouched — or just save
+ * the scanned item's price, the behavior scans already had. When a
+ * past swap is remembered for this line's item, [remembered] names it:
+ * a suggestion, shown and never applied by itself.
  */
 @Composable
 fun SubstituteChoiceDialog(
@@ -373,9 +373,10 @@ fun SubstituteChoiceDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "This is not the $lineDisplayName on your list. Buy this instead " +
-                        "and the $lineDisplayName comes off this week's list only — its " +
-                        "price in the book and the recipe stay as they are.",
+                    "This is not the $lineDisplayName on your list. Buy this instead, " +
+                        "at the shelf price for the pack, and the $lineDisplayName comes " +
+                        "off this week's list only — its price in the book and the recipe " +
+                        "stay as they are.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 if (remembered != null && rememberedSubstituteName != null) {

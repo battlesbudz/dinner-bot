@@ -2000,9 +2000,11 @@ private suspend fun saveScannedNewItem(database: DinnerBotDatabase, item: PriceI
  *    item's price is never touched.
  * 2. The barcode's link, when the scan carried one.
  * 3. The row surgery: the planned row comes off this week's list and
- *    the substitute's row goes on, marked with what it replaced, and
- *    the stored plan's cash and food totals move by the exact
- *    difference. The recipe and future weeks are not touched.
+ *    the substitute's row goes on, marked with what it replaced —
+ *    merged into the week's existing line for the substitute when
+ *    another dinner already buys it — and the stored plan's cash and
+ *    food totals move by the exact difference. The recipe and future
+ *    weeks are not touched.
  * 4. The remembered record, so the same swap is suggested next time.
  */
 private suspend fun applyScanSubstitution(
@@ -2033,17 +2035,38 @@ private suspend fun applyScanSubstitution(
         )
     }
     val newLine = BarcodeScanLogic.substituteLine(row.line, priced, shelfPriceCents)
+    // The week's totals move by the exact line movements below.
+    var cashDelta = -(row.line.packsToBuy * row.line.estimatedPackPriceCents)
+    var foodDelta = -(row.line.portionCostCents ?: 0)
+    // When another dinner this week already buys the substitute, the
+    // swap merges into that line instead of inserting a second one
+    // (the write-time twin of the reprice fold's merge): one line,
+    // packs enough for both dinners, both portions, the swap's marker.
+    val mergeTarget = database.groceryDao().getForPlan(row.planId)
+        .filter { it.rowId != row.rowId }
+        .firstOrNull {
+            it.itemId == priced.id && it.substitutedForItemId == null && !it.reconciliationAdded
+        }
     database.groceryDao().deleteRow(row.rowId)
-    database.groceryDao().insert(with(PlanMapper) { newLine.toEntity(row.planId) })
+    if (mergeTarget != null) {
+        val existingLine = with(PlanMapper) { mergeTarget.toModel() }
+        val merged = BarcodeScanLogic.mergeSwapIntoLine(existingLine, newLine, priced)
+        database.groceryDao().deleteRow(mergeTarget.rowId)
+        database.groceryDao().insert(with(PlanMapper) { merged.toEntity(row.planId) })
+        cashDelta += merged.packsToBuy * merged.estimatedPackPriceCents -
+            existingLine.packsToBuy * existingLine.estimatedPackPriceCents
+        foodDelta += (merged.portionCostCents ?: 0) - (existingLine.portionCostCents ?: 0)
+    } else {
+        database.groceryDao().insert(with(PlanMapper) { newLine.toEntity(row.planId) })
+        cashDelta += newLine.packsToBuy * newLine.estimatedPackPriceCents
+        foodDelta += newLine.portionCostCents ?: 0
+    }
     val planEntity = database.planDao().getById(row.planId)
     if (planEntity != null) {
         val plan = with(PlanMapper) { planEntity.toStoredPlan() }
         val updated = plan.copy(
-            cashNeededCents = plan.cashNeededCents -
-                row.line.packsToBuy * row.line.estimatedPackPriceCents +
-                newLine.packsToBuy * newLine.estimatedPackPriceCents,
-            foodCostCents = plan.foodCostCents -
-                (row.line.portionCostCents ?: 0) + (newLine.portionCostCents ?: 0),
+            cashNeededCents = plan.cashNeededCents + cashDelta,
+            foodCostCents = plan.foodCostCents + foodDelta,
         )
         database.planDao().insert(with(PlanMapper) { updated.toEntity() })
     }

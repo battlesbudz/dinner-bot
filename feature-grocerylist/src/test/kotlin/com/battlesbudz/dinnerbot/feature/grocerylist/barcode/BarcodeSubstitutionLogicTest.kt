@@ -134,6 +134,61 @@ class BarcodeSubstitutionLogicTest {
         assertEquals(836, breast.packPriceCents)
     }
 
+    @Test fun swapBuysEnoughPacksForThePlannedQuantity() {
+        // Codex, PR #24: a 1 lb substitute pack replacing a 2 lb need
+        // must buy two packs. One pack would leave the recipe short
+        // and the cash understated, while the list still said 2 lb.
+        val planned = line(breast)
+        val smallPack = item("user-chicken-drumsticks", "Chicken drumsticks", 300)
+            .copy(packQuantity = Quantity(1.0, MeasureUnit.POUND))
+        val swapped = BarcodeScanLogic.substituteLine(planned, smallPack, 300)
+        assertEquals(Quantity(2.0, MeasureUnit.POUND), swapped.needed)
+        assertEquals(2, swapped.packsToBuy)
+        assertEquals(300, swapped.estimatedPackPriceCents)
+        // The portion is still the dinner's use: 2 lb at $3.00/lb.
+        assertEquals(600, swapped.portionCostCents)
+    }
+
+    @Test fun swapPreservesThePlannedLinesCheckOffState() {
+        // Codex, PR #24: a line already checked off was already dealt
+        // with; its replacement must not reappear as still to buy.
+        val drumsticks = item("user-chicken-drumsticks", "Chicken drumsticks", 499)
+        val checked = line(breast).copy(checkedOff = true)
+        assertTrue(BarcodeScanLogic.substituteLine(checked, drumsticks, 499).checkedOff)
+        assertFalse(BarcodeScanLogic.substituteLine(line(breast), drumsticks, 499).checkedOff)
+    }
+
+    @Test fun swapMergesIntoAnExistingLineForTheSubstitute() {
+        // Codex, PR #24: another dinner this week already buys the
+        // substitute. The swap merges into that line at write time:
+        // combined need, packs enough for both, both portions, the
+        // marker, and the typed per-pack price at the home store.
+        val drumsticks = item("user-chicken-drumsticks", "Chicken drumsticks", 499)
+            .copy(packQuantity = Quantity(3.0, MeasureUnit.POUND))
+        val existing = GroceryLine(
+            itemId = drumsticks.id, displayName = drumsticks.name, store = Store.ALDI,
+            needed = Quantity(2.0, MeasureUnit.POUND), packsToBuy = 1,
+            estimatedPackPriceCents = 525, portionCostCents = 350,
+        )
+        val swap = BarcodeScanLogic.substituteLine(line(breast), drumsticks, 499)
+        val merged = BarcodeScanLogic.mergeSwapIntoLine(existing, swap, drumsticks)
+        assertEquals(Quantity(4.0, MeasureUnit.POUND), merged.needed)
+        assertEquals(2, merged.packsToBuy)
+        assertEquals(499, merged.estimatedPackPriceCents)
+        // Portions add: the existing dinner's 350 plus the swapped
+        // dinner's 2 lb at the typed $4.99 for a 3 lb pack (333).
+        assertEquals(350 + 333, merged.portionCostCents)
+        assertEquals("chicken-breast", merged.substitutedForItemId)
+        // Checked off only when both halves were.
+        assertFalse(merged.checkedOff)
+        val bothChecked = BarcodeScanLogic.mergeSwapIntoLine(
+            existing.copy(checkedOff = true),
+            swap.copy(checkedOff = true),
+            drumsticks,
+        )
+        assertTrue(bothChecked.checkedOff)
+    }
+
     @Test fun swapForALargerPackAttributesOnlyTheUsedPortion() {
         // Codex's case on PR #24: a 5 lb pack replacing a 1 lb need must
         // not attribute the whole shelf price as food cost.

@@ -10,6 +10,8 @@ import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.ScanSubstitution
 import com.battlesbudz.dinnerbot.core.model.Store
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceCorrection
+import kotlin.math.ceil
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
@@ -57,6 +59,9 @@ object BarcodeScanLogic {
 
     /** Prefix of every user-added item id; no seed id uses it. */
     const val USER_ITEM_ID_PREFIX: String = "user-"
+
+    /** The pack-rounding epsilon, Costing's own value, for pack counts. */
+    private const val PACK_EPSILON: Double = 1e-9
 
     sealed interface Resolution {
         /** The code is linked; [item] is the price book item it names. */
@@ -188,36 +193,84 @@ object BarcodeScanLogic {
      * record can be written. The planned recipe is not consulted and
      * not changed; the original item keeps its own book price.
      *
-     * The pack price is the CASH figure (one pack goes in the cart,
-     * [GroceryLine.packsToBuy] 1). The line's [GroceryLine.needed] is
-     * the DINNER quantity, exactly as on a planner line: the planned
-     * line's need expressed in the substitute's pack unit. That is what
-     * makes the list read "Need 2 lb" for a 2 lb need met by a 4 lb
-     * pack, and what lets Costing.buyLeftover see the 2 lb that will
-     * remain. The attributed food cost follows the planner's own
-     * definition (see Costing): that same need at the typed price's
-     * per-unit rate, never the whole pack when the pack is bigger.
+     * [shelfPriceCents] is the price of ONE pack, the pack in hand; it
+     * is the line's per-pack cash figure. The line buys as many packs
+     * as the dinner quantity takes, by the planner's own pack math
+     * (Costing): a 1 lb pack swapped in for a 2 lb need buys two
+     * packs, never one pack and a short recipe. The line's
+     * [GroceryLine.needed] is the DINNER quantity, exactly as on a
+     * planner line: the planned line's need expressed in the
+     * substitute's pack unit. That is what makes the list read "Need
+     * 2 lb" for a 2 lb need met by a 4 lb pack, and what lets
+     * Costing.buyLeftover see the 2 lb that will remain. The
+     * attributed food cost follows the planner's own definition (see
+     * Costing): that same need at the typed price's per-unit rate,
+     * never the whole pack when the pack is bigger.
      *
-     * A swap made from an already-swapped line (the first substitute
-     * scanned, another chosen instead) keeps the ROOT displaced item
-     * as its marker, not the intermediate substitute: the fold must
-     * suppress the item the planner would regenerate, which is the
-     * original, never an intermediate the planner never heard of.
+     * The planned line's check-off state carries over: a line Andrea
+     * already checked off was already dealt with, and its replacement
+     * must not reappear as still to buy. A swap made from an
+     * already-swapped line (the first substitute scanned, another
+     * chosen instead) keeps the ROOT displaced item as its marker,
+     * not the intermediate substitute: the fold must suppress the
+     * item the planner would regenerate, which is the original,
+     * never an intermediate the planner never heard of.
      */
     fun substituteLine(original: GroceryLine, substitute: PriceItem, shelfPriceCents: Int): GroceryLine {
         require(shelfPriceCents > 0) { "price must be positive" }
         require(substitute.id != original.itemId) { "a substitution names a different item" }
         val perUnitCents = shelfPriceCents.toDouble() / substitute.packQuantity.amount
         val needInPackUnit = Costing.amountInPackUnit(original.needed, substitute)
+        val packs = ceil(needInPackUnit / substitute.packQuantity.amount - PACK_EPSILON)
+            .toInt().coerceAtLeast(1)
         return GroceryLine(
             itemId = substitute.id,
             displayName = substitute.name,
             store = original.store,
             needed = Quantity(needInPackUnit, substitute.packQuantity.unit),
-            packsToBuy = 1,
+            packsToBuy = packs,
             estimatedPackPriceCents = shelfPriceCents,
             portionCostCents = (needInPackUnit * perUnitCents).roundToInt(),
+            checkedOff = original.checkedOff,
             substitutedForItemId = original.substitutedForItemId ?: original.itemId,
+        )
+    }
+
+    /**
+     * Merge a swap into a line that already buys the substitute for
+     * another dinner of the same week (the write-time twin of the
+     * merge [foldSubstitutedLines] performs at reprice): inserting a
+     * second line would budget a second purchase the week may not
+     * need. The combined line carries both dinners' need (packs
+     * recomputed by the planner's pack math, never fewer than the
+     * line already bought), both dinners' food portions, the swap's
+     * marker, and the typed per-pack price when the line shops at the
+     * item's home store (the price just typed is today's truth there;
+     * at any other store the line keeps the price it was costed at).
+     * It reads as checked off only when both source lines were: any
+     * unchecked part is still to buy.
+     */
+    fun mergeSwapIntoLine(existing: GroceryLine, swap: GroceryLine, item: PriceItem): GroceryLine {
+        require(existing.itemId == item.id && swap.itemId == item.id) {
+            "a swap merges only into a line for the same item"
+        }
+        require(existing.substitutedForItemId == null) { "only a plain line absorbs a swap" }
+        require(swap.substitutedForItemId != null) { "the absorbed line must be a swap" }
+        val combinedNeedInPackUnit = Costing.amountInPackUnit(existing.needed, item) +
+            Costing.amountInPackUnit(swap.needed, item)
+        val packsForCombined = ceil(combinedNeedInPackUnit / item.packQuantity.amount - PACK_EPSILON)
+            .toInt().coerceAtLeast(1)
+        return existing.copy(
+            needed = Quantity(combinedNeedInPackUnit, item.packQuantity.unit),
+            packsToBuy = max(existing.packsToBuy, packsForCombined),
+            estimatedPackPriceCents = if (existing.store == item.homeStore) {
+                swap.estimatedPackPriceCents
+            } else {
+                existing.estimatedPackPriceCents
+            },
+            portionCostCents = (existing.portionCostCents ?: 0) + (swap.portionCostCents ?: 0),
+            checkedOff = existing.checkedOff && swap.checkedOff,
+            substitutedForItemId = swap.substitutedForItemId,
         )
     }
 
