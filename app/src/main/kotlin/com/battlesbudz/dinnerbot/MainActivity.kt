@@ -1243,10 +1243,13 @@ private fun DinnerBotApp(
                     // packs coming home, but the projection derives stock
                     // from recipe needs and cannot see them; week 2 must
                     // not buy the same pack twice (Codex review, PR #23).
-                    // The pack read uses the merged fold only: a swapped
-                    // line is a purchase, not stock the projection tracks.
+                    // Scan substitutions reconcile here too (PR v0.4.4):
+                    // the read uses the SUBSTITUTED week 1 lines, so the
+                    // projection stops crediting the displaced item's
+                    // purchase and counts the substitute's leftover.
                     val stockForWeek2 = WeekPlanner.stockWithMergedPacks(
-                        stock1, merged1.lines, repriced1.lines, priceItems,
+                        stock1, kept1.lines, repriced1.lines, priceItems,
+                        stockOnHand = stock,
                     )
                     val repriced2 = WeekPlanner.recost(
                         settings = currentSettings,

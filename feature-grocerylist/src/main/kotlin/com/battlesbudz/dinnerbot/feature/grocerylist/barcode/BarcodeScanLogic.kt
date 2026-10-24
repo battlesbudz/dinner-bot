@@ -70,10 +70,12 @@ object BarcodeScanLogic {
      * planned item: a line born from a write-time merge also stood for
      * the substitute's own planned use, and re-swapping that row must
      * keep the fresh costing from resurrecting either origin (Codex,
-     * PR #24). Item ids are slugs and never contain a comma.
+     * PR #24). The parser itself lives in the core model
+     * ([com.battlesbudz.dinnerbot.core.model.displacedOriginsOf]);
+     * this delegate keeps the scan API in one place.
      */
     fun displacedOriginsOf(marker: String?): List<String> =
-        marker?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+        com.battlesbudz.dinnerbot.core.model.displacedOriginsOf(marker)
 
     /** The first displaced origin of a line, its primary pairing. */
     fun primaryOriginOf(line: GroceryLine): String? =

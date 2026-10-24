@@ -169,6 +169,16 @@ data class GroceryLine(
     val substitutedForItemId: String? = null,
 )
 
+/**
+ * The planned items a swap marker names, in order (see
+ * [GroceryLine.substitutedForItemId]): every origin a reprice must
+ * keep off the fresh list. Item ids are slugs and never contain a
+ * comma. Lives in the core model because the planner's stock
+ * projection reconciles against the same origins.
+ */
+fun displacedOriginsOf(marker: String?): List<String> =
+    marker?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+
 @Serializable
 data class PantryItem(
     val id: String,

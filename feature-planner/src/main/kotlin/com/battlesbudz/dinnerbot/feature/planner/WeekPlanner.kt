@@ -2,6 +2,7 @@ package com.battlesbudz.dinnerbot.feature.planner
 
 import com.battlesbudz.dinnerbot.core.model.Costing
 import com.battlesbudz.dinnerbot.core.model.GroceryLine
+import com.battlesbudz.dinnerbot.core.model.displacedOriginsOf
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
 import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.Perishables
@@ -396,12 +397,24 @@ object WeekPlanner {
      * the costing itself produced ([costedLines]) are already in the
      * projection and are not counted again; only merged lines with no
      * costed counterpart add their packs.
+     *
+     * Scan substitutions (PR v0.4.4) are reconciled the same way,
+     * against the week's actual lines: the projection credited the
+     * DISPLACED item's purchase and drew its stock down for a need the
+     * substitute actually met, so a displaced Sam's item's projection
+     * is restored to the stock the week started with ([stockOnHand]);
+     * and a substitute bought at Sam's leaves its leftover behind,
+     * beyond whatever the costed counterpart already projected (a
+     * merged swap line's packs cover two dinners, the costed line's
+     * only one). Without this, week 2 could skip a purchase the swap
+     * consumed or budget a pack the swap already bought (Codex).
      */
     fun stockWithMergedPacks(
         stock: Map<String, Quantity>,
         weekLines: List<GroceryLine>,
         costedLines: List<GroceryLine>,
         priceItems: List<PriceItem>,
+        stockOnHand: Map<String, Quantity> = stock,
     ): Map<String, Quantity> {
         val itemsById = priceItems.associateBy { it.id }
         val costedIds = costedLines.map { it.itemId }.toSet()
@@ -418,6 +431,49 @@ object WeekPlanner {
                 item.packQuantity.unit,
             )
             changed = true
+        }
+        val swaps = weekLines.filter { it.substitutedForItemId != null }
+        if (swaps.isNotEmpty()) {
+            for (line in swaps) {
+                val item = itemsById[line.itemId] ?: continue
+                if (item.homeStore != Store.SAMS_CLUB || line.store != Store.SAMS_CLUB) continue
+                val packBase = item.packQuantity.toBase()
+                val leftoverBase = line.packsToBuy * packBase - line.needed.toBase()
+                val costed = costedLines.firstOrNull {
+                    it.itemId == line.itemId && it.store == Store.SAMS_CLUB
+                }
+                val costedLeftoverBase = costed?.let {
+                    it.packsToBuy * packBase - it.needed.toBase()
+                } ?: 0.0
+                val deltaBase = leftoverBase - costedLeftoverBase
+                if (deltaBase == 0.0) continue
+                val totalBase = (result[item.id]?.toBase() ?: 0.0) + deltaBase
+                if (totalBase <= STOCK_EPSILON) {
+                    result.remove(item.id)
+                } else {
+                    result[item.id] = Quantity(
+                        totalBase / item.packQuantity.unit.toBaseFactor,
+                        item.packQuantity.unit,
+                    )
+                }
+                changed = true
+            }
+            // An item that is itself a substitute this week keeps its
+            // reconciled entry; only purely displaced items restore.
+            val substituteIds = swaps.map { it.itemId }.toSet()
+            val displacedIds = swaps.flatMap { displacedOriginsOf(it.substitutedForItemId) }
+                .toSet() - substituteIds
+            for (id in displacedIds) {
+                val item = itemsById[id] ?: continue
+                if (item.homeStore != Store.SAMS_CLUB) continue
+                val onHand = stockOnHand[id]
+                if (onHand == null) {
+                    if (result.remove(id) != null) changed = true
+                } else if (result[id] != onHand) {
+                    result[id] = onHand
+                    changed = true
+                }
+            }
         }
         return if (changed) result else stock
     }
