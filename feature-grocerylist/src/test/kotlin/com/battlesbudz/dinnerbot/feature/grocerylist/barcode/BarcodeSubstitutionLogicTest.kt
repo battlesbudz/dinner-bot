@@ -403,11 +403,13 @@ class BarcodeSubstitutionLogicTest {
 
     @Test fun mergeAtAnAlternateStorePricesTheCombinedNeed() {
         // Codex, PR #24, its own example: a Sam's item routed to
-        // Walmart carries Costing's alternate form (packsToBuy 1, the
-        // price the cost of the quantity needed: 2 lb for $2). Merging
-        // a second 2 lb dinner in via a scanned 4 lb pack at $4 must
-        // reprice the line to the combined need at the scanned rate:
-        // $4, not the $2 one dinner cost.
+        // Walmart starts in Costing's alternate form (packsToBuy 1,
+        // the price the cost of the quantity needed: 2 lb for $2).
+        // Merging a second 2 lb dinner in via a scanned 4 lb pack at
+        // $4 reprices the line to the combined purchase: one 4 lb
+        // pack at the scanned $4, not the $2 one dinner cost. The
+        // merged line takes the pack form every swap line uses, so a
+        // later correction prices it per pack like any other swap.
         val samsItem = item("sams-chicken", "Sam's chicken", 800).copy(
             homeStore = Store.SAMS_CLUB,
             packQuantity = Quantity(4.0, MeasureUnit.POUND),

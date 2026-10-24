@@ -288,14 +288,12 @@ object BarcodeScanLogic {
      * another dinner of the same week (the write-time twin of the
      * carry [foldSubstitutedLines] performs at reprice): inserting a
      * second line would budget a second purchase the week may not
-     * need. The combined line carries both dinners' need, both
-     * dinners' food portions, and the swap's marker. Its price follows
-     * the line's own representation: at the item's home store, packs
-     * recomputed by the planner's pack math (never fewer than the line
-     * already bought) at the typed per-pack price; at an alternate
-     * store, the combined need priced at the scanned rate, in
-     * Costing's one-line need-cost form. It reads as checked off only
-     * when both source lines were: any unchecked part is still to buy.
+     * need. The combined line carries both dinners' need (packs
+     * recomputed by the planner's pack math, never fewer than the
+     * line already bought), both dinners' food portions, the swap's
+     * marker, and the typed per-pack price, at any store. It reads as
+     * checked off only when both source lines were: any unchecked
+     * part is still to buy.
      */
     fun mergeSwapIntoLine(existing: GroceryLine, swap: GroceryLine, item: PriceItem): GroceryLine {
         require(existing.itemId == item.id && swap.itemId == item.id) {
@@ -315,35 +313,22 @@ object BarcodeScanLogic {
             Costing.amountInPackUnit(swap.needed, item)
         val packsForCombined = ceil(combinedNeedInPackUnit / item.packQuantity.amount - PACK_EPSILON)
             .toInt().coerceAtLeast(1)
-        val combinedPortion = (existing.portionCostCents ?: 0) + (swap.portionCostCents ?: 0)
-        val combinedChecked = existing.checkedOff && swap.checkedOff
-        return if (existing.store == item.homeStore) {
-            existing.copy(
-                needed = Quantity(combinedNeedInPackUnit, item.packQuantity.unit),
-                packsToBuy = max(existing.packsToBuy, packsForCombined),
-                estimatedPackPriceCents = swap.estimatedPackPriceCents,
-                portionCostCents = combinedPortion,
-                checkedOff = combinedChecked,
-                substitutedForItemId = swap.substitutedForItemId,
-            )
-        } else {
-            // Alternate-store representation (Costing, for a Sam's item
-            // the gate routed elsewhere): packsToBuy 1 and the line's
-            // price IS the cost of the quantity needed, not a pack
-            // price. The merged price must cover the COMBINED need at
-            // the scanned rate, or the week keeps budgeting one dinner's
-            // amount for two dinners' food (Codex, PR #24).
-            val scannedRatePerPackUnit = swap.estimatedPackPriceCents / item.packQuantity.amount
-            existing.copy(
-                needed = Quantity(combinedNeedInPackUnit, item.packQuantity.unit),
-                packsToBuy = 1,
-                estimatedPackPriceCents = (combinedNeedInPackUnit * scannedRatePerPackUnit)
-                    .roundToInt(),
-                portionCostCents = combinedPortion,
-                checkedOff = combinedChecked,
-                substitutedForItemId = swap.substitutedForItemId,
-            )
-        }
+        // One form at every store (Codex, PR #24): the merged line
+        // prices per scanned pack, like every swap line. Costing's
+        // alternate-store form (packsToBuy 1, price = need cost) is
+        // NOT kept for the existing line: a merged line in that form
+        // cannot be told apart from a pack-priced one at correction
+        // time, and the two forms price the same correction
+        // differently. The cash is the same either way (the combined
+        // need at the scanned rate); only the representation changes.
+        return existing.copy(
+            needed = Quantity(combinedNeedInPackUnit, item.packQuantity.unit),
+            packsToBuy = max(existing.packsToBuy, packsForCombined),
+            estimatedPackPriceCents = swap.estimatedPackPriceCents,
+            portionCostCents = (existing.portionCostCents ?: 0) + (swap.portionCostCents ?: 0),
+            checkedOff = existing.checkedOff && swap.checkedOff,
+            substitutedForItemId = swap.substitutedForItemId,
+        )
     }
 
     /**
