@@ -1601,14 +1601,26 @@ private fun DinnerBotApp(
                                         // This week's rows for the item at its
                                         // home store show the new pack price,
                                         // the same update a tap correction makes.
+                                        // A swapped row's frozen portion moves
+                                        // with the corrected rate too.
                                         (groceryRows + groceryRows2)
                                             .filter {
                                                 it.line.itemId == corrected.id &&
                                                     it.line.store == corrected.homeStore
                                             }
                                             .forEach { row ->
-                                                database.groceryDao()
-                                                    .updatePackPrice(row.rowId, corrected.packPriceCents)
+                                                if (row.line.substitutedForItemId != null) {
+                                                    database.groceryDao().updatePackPriceAndPortion(
+                                                        row.rowId, corrected.packPriceCents,
+                                                        BarcodeScanLogic.correctedSwapPortion(
+                                                            row.line, corrected,
+                                                            corrected.packPriceCents,
+                                                        ),
+                                                    )
+                                                } else {
+                                                    database.groceryDao()
+                                                        .updatePackPrice(row.rowId, corrected.packPriceCents)
+                                                }
                                             }
                                     }
                                     refresh()
@@ -1961,8 +1973,10 @@ private suspend fun syncPantryStaples(database: DinnerBotDatabase, settings: Hou
 private suspend fun correctLinePrice(database: DinnerBotDatabase, row: GroceryRow, totalCents: Int) {
     val entity = database.priceItemDao().getById(row.line.itemId)
     var newPackPrice = totalCents
+    var correctedItem: PriceItem? = null
     if (entity != null) {
         val item = with(SeedMapper) { entity.toModel() }
+        correctedItem = item
         if (row.line.store == item.homeStore) {
             val perPack = (totalCents.toDouble() / row.line.packsToBuy.coerceAtLeast(1))
                 .roundToInt().coerceAtLeast(1)
@@ -1982,7 +1996,19 @@ private suspend fun correctLinePrice(database: DinnerBotDatabase, row: GroceryRo
             }
         }
     }
-    database.groceryDao().updatePackPrice(row.rowId, newPackPrice)
+    // A swapped row's portion is frozen at its scanned rate (the fold
+    // carries the line whole), so the correction recomputes it from
+    // the corrected price; a planner line's portion is rebuilt at the
+    // next reprice and needs no write here (PR v0.4.4, Codex).
+    val item = correctedItem
+    if (item != null && row.line.substitutedForItemId != null) {
+        database.groceryDao().updatePackPriceAndPortion(
+            row.rowId, newPackPrice,
+            BarcodeScanLogic.correctedSwapPortion(row.line, item, newPackPrice),
+        )
+    } else {
+        database.groceryDao().updatePackPrice(row.rowId, newPackPrice)
+    }
 }
 
 /**

@@ -113,6 +113,17 @@ interface GroceryDao {
     @Query("UPDATE grocery_items SET packPriceCents = :packPriceCents WHERE rowId = :rowId")
     suspend fun updatePackPrice(rowId: Long, packPriceCents: Int)
 
+    /**
+     * A price correction on a scan-swapped row (PR v0.4.4): the swap
+     * line is carried whole at reprice, so its food portion must move
+     * with its price or the week's food cost keeps the old rate.
+     */
+    @Query(
+        "UPDATE grocery_items SET packPriceCents = :packPriceCents, " +
+            "portionCostCents = :portionCostCents WHERE rowId = :rowId",
+    )
+    suspend fun updatePackPriceAndPortion(rowId: Long, packPriceCents: Int, portionCostCents: Int)
+
     @Query("DELETE FROM grocery_items WHERE rowId = :rowId")
     suspend fun deleteRow(rowId: Long)
 

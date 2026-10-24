@@ -426,6 +426,27 @@ class BarcodeSubstitutionLogicTest {
         assertEquals(400, merged.estimatedPackPriceCents)
     }
 
+    @Test fun correctedSwapPortionFollowsTheCorrectedRate() {
+        // Codex, PR #24: a price correction on a swapped row moves its
+        // pack price; the portion must be recomputed from the corrected
+        // rate or the reprice fold carries the stale one forever.
+        val drumsticks = item("user-chicken-drumsticks", "Chicken drumsticks", 499)
+        val swapped = BarcodeScanLogic.substituteLine(line(breast), drumsticks, 499)
+        // Need 2 lb, pack 2 lb, corrected pack price $5.99: portion 599.
+        assertEquals(599, BarcodeScanLogic.correctedSwapPortion(swapped, drumsticks, 599))
+        // A bigger pack: need 1 lb of a 5 lb pack corrected to $8.00:
+        // the portion is 1 lb at the corrected rate, 160.
+        val bigPack = drumsticks.copy(packQuantity = Quantity(5.0, MeasureUnit.POUND))
+        val smallNeed = line(breast).copy(needed = Quantity(1.0, MeasureUnit.POUND))
+        val bigSwap = BarcodeScanLogic.substituteLine(smallNeed, bigPack, 750)
+        assertEquals(160, BarcodeScanLogic.correctedSwapPortion(bigSwap, bigPack, 800))
+        // An alternate-store line's price is its need cost, so the
+        // portion is the corrected total itself.
+        val alternate = swapped.copy(store = Store.WALMART)
+        val samsHome = drumsticks.copy(homeStore = Store.SAMS_CLUB)
+        assertEquals(450, BarcodeScanLogic.correctedSwapPortion(alternate, samsHome, 450))
+    }
+
     // ---- Piece 3: the remembered substitution ----
 
     private fun record(
