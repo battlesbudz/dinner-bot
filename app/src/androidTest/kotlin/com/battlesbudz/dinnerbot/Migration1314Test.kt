@@ -60,13 +60,14 @@ class Migration1314Test {
                 DinnerBotDatabase.MIGRATION_11_12,
                 DinnerBotDatabase.MIGRATION_12_13,
                 DinnerBotDatabase.MIGRATION_13_14,
+                DinnerBotDatabase.MIGRATION_14_15,
             )
             .build()
 
     @Test fun upgradeFromV13KeepsEveryKindOfUserData() = runBlocking {
         val db = openMigrated()
         try {
-            assertEquals(14, db.openHelper.readableDatabase.version)
+            assertEquals(15, db.openHelper.readableDatabase.version)
 
             // Prices, pantry, stock, settings, ratings — the whole v13 base.
             val breast = db.priceItemDao().getById("chicken-breast")!!

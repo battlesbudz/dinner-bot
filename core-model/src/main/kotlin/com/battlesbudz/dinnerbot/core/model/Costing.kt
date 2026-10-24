@@ -210,13 +210,6 @@ object Costing {
         val stockCoveredItemIds: Set<String>,
         /** Priced items whose need was covered by a matching owned pantry entry. */
         val pantryCoveredItemIds: Set<String> = emptySet(),
-        /**
-         * The placeholder guesses inside [cashNeededCents] (Phase RI-3):
-         * the part of the week's cash that is a labeled guess for
-         * ingredients with no real price yet, not a saved price. Zero
-         * whenever every ingredient is priced.
-         */
-        val guessTotalCents: Int = 0,
     )
 
     /**
@@ -408,20 +401,20 @@ object Costing {
 
     /**
      * Price a full set of recipes for one week. Convenience over
-     * [aggregateNeeds] + [costNeeds], plus the as-written pass
-     * (Phase RI-3): an ingredient no book item prices — an imported
-     * recipe's unmatched line — stays on the list, as Battles ruled.
-     * Pantry-covered by name, it is a covered line like any other;
-     * otherwise it is a buy line carrying a [PriceGuess] in place of a
-     * price, and the guess counts in the week's cash. As-written
-     * ingredients a book item names exactly were already aggregated as
-     * that item's need by [aggregateNeeds], so they never reach here.
+     * [aggregateNeeds] + [costNeeds], plus one list-only extra
+     * (Phase RI-3): an as-written ingredient no book item prices, when
+     * the pantry covers it by name, still appears on the list as a
+     * covered line — the list shows everything a dinner needs. Since
+     * Battles's 2026-10-24 correction, imported ingredients always
+     * carry real book items (guess-priced until shopped), so an
+     * unresolved as-written ingredient outside the pantry's cover is
+     * a legacy corner: it prices nothing and lists nothing, while the
+     * recipe still counts as not yet priced for the planner's rules.
      *
-     * The as-written pass runs only for [forList] callers — the ones
-     * building a week's shopping list (the planner's week costing, the
-     * grocery list builder). Money-only callers (food-cost reads, gate
-     * projections) leave it off and see exactly the priced lines, as
-     * before.
+     * The extra runs only for [forList] callers — the ones building a
+     * week's shopping list (the planner's week costing, the grocery
+     * list builder). Money-only callers leave it off and see exactly
+     * the priced lines, as before.
      */
     fun costRecipes(
         recipes: List<Recipe>,
@@ -470,7 +463,6 @@ object Costing {
         if (asWritten.isEmpty()) return costed
 
         val extraLines = mutableListOf<GroceryLine>()
-        var guessCash = 0
         for ((id, need) in asWritten) {
             val coveringName = pantryOwnedNames.firstOrNull { owned ->
                 val ownedWords = NameWords.of(owned)
@@ -489,27 +481,9 @@ object Costing {
                     portionCostCents = null,
                     coveredByPantryName = coveringName,
                 )
-            } else {
-                val guess = RecipePricing.guessFor(need.displayName, itemsById.values)
-                val guessCents = guess?.cents ?: 0
-                guessCash += guessCents
-                extraLines += GroceryLine(
-                    itemId = id,
-                    displayName = need.displayName,
-                    store = RecipePricing.guessStore(need.displayName, itemsById.values),
-                    needed = need.needed,
-                    packsToBuy = 1,
-                    estimatedPackPriceCents = 0,
-                    portionCostCents = null,
-                    uncrossed = uncrossed,
-                    priceGuessCents = guessCents,
-                )
             }
         }
-        return costed.copy(
-            lines = costed.lines + extraLines,
-            cashNeededCents = costed.cashNeededCents + guessCash,
-            guessTotalCents = guessCash,
-        )
+        if (extraLines.isEmpty()) return costed
+        return costed.copy(lines = costed.lines + extraLines)
     }
 }

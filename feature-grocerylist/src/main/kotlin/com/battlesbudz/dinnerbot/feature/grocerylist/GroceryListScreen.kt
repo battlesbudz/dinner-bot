@@ -391,14 +391,15 @@ fun GroceryListScreen(
             if (cameraDeniedNote) {
                 CameraDeniedNote(modifier = Modifier.padding(top = 8.dp))
             }
-            // Placeholder guesses are part of the total (Phase RI-3):
-            // say so where the total is said, and each guessed line is
-            // marked on its own row.
-            if ((rows + topUpRows).any { it.line.priceGuessCents != null }) {
+            // Guess-priced items are part of the total (Phase RI-3,
+            // Battles's correction 2026-10-24): say so where the total
+            // is said, and each guessed line is marked on its own row.
+            if ((rows + topUpRows).any { priceItemsById[it.line.itemId]?.guessPriced == true }) {
                 Text(
-                    "The total includes guesses for items with no price yet; those lines " +
-                        "are marked as guesses. The real price replaces the guess the " +
-                        "first time the item is scanned or its price is corrected.",
+                    "The total includes guessed prices for items brought in by " +
+                        "recipe imports; those lines are marked as guesses. The real " +
+                        "price replaces the guess the first time the item is scanned " +
+                        "or its price is corrected.",
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 8.dp).testTag("guess-total-note"),
                 )
@@ -538,12 +539,14 @@ private fun GroceryRowView(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            // A placeholder guess (Phase RI-3): no real price exists
-            // for this ingredient yet, so the line says so plainly
-            // instead of wearing a price it does not have.
-            if (line.priceGuessCents != null) {
+            // A guess-priced item (Phase RI-3, Battles's correction
+            // 2026-10-24): the item is in the book at a guessed price
+            // from its recipe import. The line says so plainly; the
+            // price still corrects by scan or tap like any other, and
+            // that first correction clears the guess for good.
+            if (priceItemsById[line.itemId]?.guessPriced == true) {
                 Text(
-                    "No price yet — this is a guess from similar items in the price book",
+                    "Guessed price — becomes the real price when this item is shopped",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -575,32 +578,22 @@ private fun GroceryRowView(
             }
         }
         Column(horizontalAlignment = Alignment.End) {
-            val guessCents = line.priceGuessCents
-            if (guessCents != null) {
-                // A guessed line has no price to correct and no book
-                // item to scan against: the guess just shows, labeled
-                // by the note on the row.
-                Text(
-                    Money(guessCents).format(),
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(8.dp),
-                )
+            Text(
+                Money(GroceryListBuilder.lineCashCents(line)).format(),
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.clickable { onEditPrice(row) }.padding(8.dp),
+            )
+            if (priceItemsById[line.itemId]?.guessPriced == true) {
                 Text(
                     "guess",
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(end = 8.dp),
                 )
-            } else {
-                Text(
-                    Money(GroceryListBuilder.lineCashCents(line)).format(),
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.clickable { onEditPrice(row) }.padding(8.dp),
-                )
-                TextButton(
-                    onClick = { onScanRow(row) },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                ) { Text("Scan", style = MaterialTheme.typography.bodySmall) }
             }
+            TextButton(
+                onClick = { onScanRow(row) },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            ) { Text("Scan", style = MaterialTheme.typography.bodySmall) }
         }
     }
 }

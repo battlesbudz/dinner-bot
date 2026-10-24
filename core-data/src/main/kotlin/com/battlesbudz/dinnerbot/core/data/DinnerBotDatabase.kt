@@ -101,6 +101,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * carries over untouched, which the instrumented migration test
  * proves from a populated v12 database.
  *
+ * Version 15 (Phase RI-3, Battles's correction 2026-10-24) adds the
+ * guess-priced mark to price_items through [MIGRATION_14_15]: an item
+ * that entered the book from a recipe import carries its guessed price
+ * until the first real price write clears the mark.
+ *
  * Version 14 (Phase RI-3, v0.5.2) carries the weekly list's new line
  * state through [MIGRATION_13_14]: grocery_items gains
  * coveredByPantryName (the pantry entry a crossed-out line names; null
@@ -139,7 +144,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ImportedRecipeEntity::class,
         KeepPromptEntity::class,
     ],
-    version = 14,
+    version = 15,
     exportSchema = false,
 )
 abstract class DinnerBotDatabase : RoomDatabase() {
@@ -349,13 +354,30 @@ abstract class DinnerBotDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v14 to v15: the guess-priced mark on price book items
+         * (Battles's correction, 2026-10-24). Additive with a default:
+         * every existing item starts unmarked — its price is a real
+         * one. The backfill that creates items for pre-correction
+         * imports runs in the app's load path, not here: it needs the
+         * price book and the stored recipes together, which a
+         * migration cannot see whole.
+         */
+        val MIGRATION_14_15: Migration = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `price_items` ADD COLUMN `guessPriced` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
         fun create(context: Context): DinnerBotDatabase =
             Room.databaseBuilder(context.applicationContext, DinnerBotDatabase::class.java, "dinner-bot.db")
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
                     MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
                     MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
-                    MIGRATION_13_14,
+                    MIGRATION_13_14, MIGRATION_14_15,
                 )
                 .fallbackToDestructiveMigration()
                 .build()

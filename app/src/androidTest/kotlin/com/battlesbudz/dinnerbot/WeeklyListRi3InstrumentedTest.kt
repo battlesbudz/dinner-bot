@@ -257,15 +257,25 @@ class WeeklyListRi3InstrumentedTest {
 
     @Test fun generatingAWeekWithAnUnpricedImportedDinnerShowsTheDisclaimer() {
         withDb { db ->
+            // Two not-yet-priced imports of Andrea's. Their unmatched
+            // ingredients share the head noun "salt", whose only book
+            // equivalent is the 89-cent Salt staple, so each import's
+            // guessed food cost is the lowest in the pool and the
+            // week's single night lands on one of them — whichever one
+            // generation picks, the disclaimer must name it. (Under
+            // v0.5.2's computed guesses these dinners cost $0; under
+            // the correction they carry real guessed prices, so the
+            // fixture uses the cheapest equivalents in the book, and
+            // servings 8 against a household of 4 halves the cost.)
             val imported = ImportedRecipe(
                 recipe = Recipe(
-                    id = "imported-saffron-rice", title = "Saffron Rice Night",
-                    servings = 4, activeMinutes = 20, cuisine = "Test",
-                    mainProtein = "Rice",
+                    id = "imported-sea-salt-night", title = "Sea Salt Night",
+                    servings = 8, activeMinutes = 20, cuisine = "Test",
+                    mainProtein = "Vegetables",
                     ingredients = listOf(
                         RecipeIngredient(
-                            pantryItem = "Saffron",
-                            quantity = Quantity(0.5, MeasureUnit.OUNCE),
+                            pantryItem = "Sea salt",
+                            quantity = Quantity(2.0, MeasureUnit.TEASPOON),
                         ),
                     ),
                     steps = listOf("Cook."), origin = RecipeOrigin.IMPORTED,
@@ -273,18 +283,15 @@ class WeeklyListRi3InstrumentedTest {
                 sourceLink = null, createdAtMillis = 5L,
             )
             db.importedRecipeDao().upsert(with(SeedMapper) { imported.toEntity() })
-            // A second unpriced import, also cost 0: generation rotates
-            // the ranked pool by one, so the week's single night lands
-            // on one of the two either way — and the cap keeps it to one.
             val second = ImportedRecipe(
                 recipe = Recipe(
-                    id = "imported-truffle-pasta", title = "Truffle Pasta Night",
-                    servings = 4, activeMinutes = 15, cuisine = "Test",
-                    mainProtein = "Pasta",
+                    id = "imported-kosher-salt-night", title = "Kosher Salt Night",
+                    servings = 8, activeMinutes = 15, cuisine = "Test",
+                    mainProtein = "Vegetables",
                     ingredients = listOf(
                         RecipeIngredient(
-                            pantryItem = "Truffle oil",
-                            quantity = Quantity(1.0, MeasureUnit.TABLESPOON),
+                            pantryItem = "Kosher salt",
+                            quantity = Quantity(2.0, MeasureUnit.TEASPOON),
                         ),
                     ),
                     steps = listOf("Cook."), origin = RecipeOrigin.IMPORTED,
@@ -293,10 +300,10 @@ class WeeklyListRi3InstrumentedTest {
             )
             db.importedRecipeDao().upsert(with(SeedMapper) { second.toEntity() })
             db.recipeRatingDao().upsert(
-                RecipeRatingEntity("imported-saffron-rice", "UP", 1L),
+                RecipeRatingEntity("imported-sea-salt-night", "UP", 1L),
             )
             db.recipeRatingDao().upsert(
-                RecipeRatingEntity("imported-truffle-pasta", "UP", 1L),
+                RecipeRatingEntity("imported-kosher-salt-night", "UP", 1L),
             )
         }
         ActivityScenario.launch(MainActivity::class.java).use {

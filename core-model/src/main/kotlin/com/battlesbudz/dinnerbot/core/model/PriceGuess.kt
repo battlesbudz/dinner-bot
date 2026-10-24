@@ -2,25 +2,24 @@ package com.battlesbudz.dinnerbot.core.model
 
 /**
  * Priced-ness and placeholder price guesses (Phase RI-3, plan section
- * 5.5; Battles's rulings 5 and 6 and his third-round placeholder ruling).
+ * 5.5, as corrected by Battles 2026-10-24).
  *
- * Priced-ness is COMPUTED from the price book as it stands, never
- * stored: an ingredient counts as priced when it resolves to a price
- * book item, either by the item id it carries or because a book item
- * now exists whose normalized name equals the ingredient's as-written
- * text exactly. The moment an item enters the book (a barcode scan's
- * new-product flow, a typed correction) and its name matches, the
- * recipe's state updates with no stored flag to go stale.
- *
- * An ingredient with no real price gets a [PriceGuess]: the median pack
- * price of the equivalent items already in the book, where equivalents
- * share the ingredient's head noun (other onions for an onion variety);
- * the whole book's median pack price when nothing shares the head noun.
- * The guess counts in week totals and is labeled as a guess wherever it
- * appears. It never writes into the price book, never survives into a
- * backup, and is replaced the moment the ingredient is priced. No price
+ * The original plan computed guesses on the fly and never persisted
+ * them. Battles corrected the design: everything is in the pricing
+ * book. An ingredient that matches nothing at import becomes a REAL
+ * price book item at its guessed price (see [GuessPricer]), carrying
+ * the persistent [PriceItem.guessPriced] mark until the first scan or
+ * price correction writes the real shelf price and clears it. No price
  * ever comes from the internet (ruling 12): the guess is computed on
  * the phone from her own price book.
+ *
+ * Priced-ness is computed from the book as it stands: an ingredient
+ * counts as priced when it resolves to a price book item — by the id
+ * it carries, or, for an as-written ingredient, by exact normalized-
+ * name equality — AND that item is not guess-marked. A recipe counts
+ * as priced when every ingredient does, so a recipe leaves the
+ * not-yet-priced class automatically as its items are shopped and
+ * corrected.
  */
 data class PriceGuess(
     /** The guessed pack price, cents. */
@@ -66,11 +65,16 @@ object RecipePricing {
         return itemsById.values.firstOrNull { NameWords.of(it.name) == words }
     }
 
-    /** True when [ingredient] counts as priced against the book as it stands. */
+    /**
+     * True when [ingredient] counts as priced against the book as it
+     * stands: it resolves to a book item, and that item's price is a
+     * real one — an item still carrying its import guess does not make
+     * the ingredient priced (Battles's correction, 2026-10-24).
+     */
     fun isIngredientPriced(
         ingredient: RecipeIngredient,
         itemsById: Map<String, PriceItem>,
-    ): Boolean = resolvedItem(ingredient, itemsById) != null
+    ): Boolean = resolvedItem(ingredient, itemsById)?.guessPriced == false
 
     /** The ingredients of [recipe] with no real price yet, in recipe order. */
     fun unpricedIngredients(
@@ -143,4 +147,133 @@ object RecipePricing {
             (sorted[mid - 1] + sorted[mid] + 1) / 2
         }
     }
+}
+
+/**
+ * Import-time price book creation (Battles's correction, 2026-10-24).
+ *
+ * When a recipe is imported, created by hand, or edited into a new
+ * as-written ingredient, every ingredient that still matches nothing in
+ * the book gets a real book item of its own — everything is in the
+ * pricing book. The item carries the placeholder guess as its starting
+ * price and the [PriceItem.guessPriced] mark; the first scan or price
+ * correction replaces the price with the real one and clears the mark.
+ * An ingredient whose name exactly matches an existing item — including
+ * an item an earlier import created — links to it instead of making a
+ * duplicate, so later imports dedupe on their own.
+ *
+ * The same pass backfills installs from before the correction: any
+ * stored imported recipe still holding as-written ingredients is run
+ * through [linkRecipes] on upgrade and gains its items identically.
+ */
+object GuessPricer {
+
+    /** What a linking pass produced: the new book items plus the linked recipes. */
+    data class LinkResult(
+        val itemsToAdd: List<PriceItem>,
+        val recipes: List<ImportedRecipe>,
+    )
+
+    /**
+     * Link every as-written ingredient in [recipe] to the book: an
+     * exact-name match when one exists, a new guess-priced item
+     * otherwise. Returns the linked recipe and the items created
+     * (empty when everything already resolved).
+     */
+    fun linkRecipe(
+        recipe: Recipe,
+        book: List<PriceItem>,
+        checkedDate: String,
+    ): Pair<Recipe, List<PriceItem>> {
+        val working = book.toMutableList()
+        val created = mutableListOf<PriceItem>()
+        val ingredients = recipe.ingredients.map { ingredient ->
+            if (ingredient.priceItemId != null) return@map ingredient
+            val asWritten = ingredient.pantryItem ?: return@map ingredient
+            val words = NameWords.of(asWritten)
+            val match = working.firstOrNull { NameWords.of(it.name) == words }
+            if (match != null) {
+                ingredient.copy(priceItemId = match.id, pantryItem = null)
+            } else {
+                val item = guessItemFor(ingredient, working, checkedDate)
+                working += item
+                created += item
+                ingredient.copy(priceItemId = item.id, pantryItem = null)
+            }
+        }
+        return recipe.copy(ingredients = ingredients) to created
+    }
+
+    /** [linkRecipe] across stored imported recipes, threading the growing book. */
+    fun linkRecipes(
+        records: List<ImportedRecipe>,
+        book: List<PriceItem>,
+        checkedDate: String,
+    ): LinkResult {
+        val working = book.toMutableList()
+        val created = mutableListOf<PriceItem>()
+        val linked = records.map { record ->
+            val (recipe, made) = linkRecipe(record.recipe, working, checkedDate)
+            working += made
+            created += made
+            if (made.isEmpty() && recipe == record.recipe) record else record.copy(recipe = recipe)
+        }
+        return LinkResult(created, linked)
+    }
+
+    /**
+     * The guess-priced book item for one unmatched [ingredient]: the
+     * plan's median guess as its price, the ingredient's own parsed
+     * amount as its pack, the store its equivalents shop at, and a
+     * user-item id in the scan-added convention.
+     */
+    fun guessItemFor(
+        ingredient: RecipeIngredient,
+        book: List<PriceItem>,
+        checkedDate: String,
+    ): PriceItem {
+        val name = ingredient.pantryItem?.trim().orEmpty()
+        val guess = RecipePricing.guessFor(name, book)
+        val priceCents = guess?.cents ?: FALLBACK_GUESS_CENTS
+        val amount = if (ingredient.quantity.amount > 0.0) ingredient.quantity.amount else 1.0
+        val pack = Quantity(amount, ingredient.quantity.unit)
+        return PriceItem(
+            id = uniqueUserId(name, book),
+            name = name,
+            category = RecipePricing.equivalentsFor(name, book).firstOrNull()?.category
+                ?: DEFAULT_CATEGORY,
+            homeStore = RecipePricing.guessStore(name, book),
+            packDescription = "${formatAmount(amount)} ${pack.unit.label} (from a recipe)",
+            packQuantity = pack,
+            packPriceCents = priceCents,
+            pricePerUnitCents = priceCents.toDouble() / amount,
+            checkedDate = checkedDate,
+            source = GUESS_SOURCE,
+            guessPriced = true,
+        )
+    }
+
+    /** "user-<slug>" in the scan-added convention, suffixed until it is free. */
+    private fun uniqueUserId(name: String, book: List<PriceItem>): String {
+        val slug = NameWords.of(name).joinToString("-").ifBlank { "item" }
+        val taken = book.map { it.id }.toSet()
+        var candidate = "user-$slug"
+        var suffix = 2
+        while (candidate in taken) {
+            candidate = "user-$slug-$suffix"
+            suffix++
+        }
+        return candidate
+    }
+
+    private fun formatAmount(amount: Double): String =
+        if (amount % 1.0 == 0.0) amount.toInt().toString()
+        else amount.toString().trimEnd('0').trimEnd('.')
+
+    /** The book is never empty in the app; a dollar if it somehow is. */
+    const val FALLBACK_GUESS_CENTS: Int = 100
+
+    const val DEFAULT_CATEGORY: String = "Other"
+
+    const val GUESS_SOURCE: String = "Recipe import — guessed price"
 }

@@ -68,4 +68,20 @@ class SeedMapperTest {
         assertEquals(settings, back)
         assertEquals(listOf("dairy-free", "vegetarian"), back.dietPresets)
     }
+
+    @Test fun priceItemGuessMarkRoundTrips() {
+        // The guess mark is stored state (Battles's correction,
+        // 2026-10-24): it must survive the entity round trip exactly.
+        val item = PriceItem(
+            id = "user-white-onion", name = "White onion", category = "Produce",
+            homeStore = Store.ALDI, packDescription = "2 lb (from a recipe)",
+            packQuantity = Quantity.pounds(2.0), packPriceCents = 139,
+            pricePerUnitCents = 69.5, checkedDate = "2026-10-24",
+            source = "Recipe import — guessed price",
+            guessPriced = true,
+        )
+        val back = with(SeedMapper) { item.toEntity().toModel() }
+        assertEquals(item, back)
+        assertEquals(true, back.guessPriced)
+    }
 }

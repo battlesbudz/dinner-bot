@@ -65,16 +65,15 @@ class GroceryListBuilderTest {
             planOf("spaghetti-night", "egg-night"), recipesById, book, emptyMap(), servings = 4,
         )
         // The spaghetti dinner's as-written Salt line has no book item
-        // in this fixture and no pantry cover was passed, so Phase RI-3
-        // keeps it on the list as a guess line: the whole-book median
-        // of 185, 185, 198, 209, 2168 is 198, shelved at Aldi.
-        val salt = built.lines.single { it.displayName.contains("Salt") }
-        assertEquals(198, salt.priceGuessCents)
-        // Aldi: spaghetti 32 oz total = 1 pack 209, sauce 185, eggs 185 -> 579, plus the salt guess.
-        assertEquals(579 + 198, built.cashByStoreCents[Store.ALDI])
+        // in this fixture and no pantry cover was passed, so it stays
+        // off the list: unresolved as-written ingredients price and
+        // list nothing (imports link theirs into the book instead).
+        assertTrue(built.lines.none { it.displayName.contains("Salt") })
+        // Aldi: spaghetti 32 oz total = 1 pack 209, sauce 185, eggs 185 -> 579.
+        assertEquals(579, built.cashByStoreCents[Store.ALDI])
         // Walmart: turkey 1 lb = 198.
         assertEquals(198, built.cashByStoreCents[Store.WALMART])
-        assertEquals(579 + 198 + 198, built.totalCashCents)
+        assertEquals(579 + 198, built.totalCashCents)
     }
 
     @Test fun scalingDoublesPackCounts() {

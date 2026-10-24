@@ -50,8 +50,10 @@ sealed interface ImportStart {
  * The recipe import flow (Phase RI-2): intake (share sheet, paste a
  * link, paste text, or a hand-made blank), the one-shot page fetch for
  * links, and the review screen every import lands on before anything
- * saves. A review abandoned midway saves nothing; import writes no
- * price book item, no pantry row, and no barcode link, ever.
+ * saves. A review abandoned midway saves nothing. On save, an
+ * ingredient with no match joins the price book at a guessed price
+ * (Battles's correction, 2026-10-24); no pantry row and no barcode
+ * link is ever written by an import.
  */
 @Composable
 fun RecipeImportFlow(
@@ -486,8 +488,8 @@ private fun ReviewRow(
                 style = MaterialTheme.typography.bodySmall,
             )
             else -> Text(
-                "No match in the price book: it stays as written and prices at nothing " +
-                    "until it is in the book.",
+                "No match in the price book: saving adds it to the book at a " +
+                    "guessed price, corrected the first time it is shopped.",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.testTag("import-row-$index-unmatched"),
             )

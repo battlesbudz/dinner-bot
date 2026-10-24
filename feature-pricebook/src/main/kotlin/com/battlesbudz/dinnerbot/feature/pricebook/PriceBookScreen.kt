@@ -78,6 +78,12 @@ fun PriceBookScreen(
                             modifier = Modifier.clickable { editingPrice = item }.padding(4.dp),
                         )
                     }
+                    if (item.guessPriced) {
+                        Text(
+                            "Guessed price — from a recipe import, not shopped yet",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                     if (item.userCorrected) {
                         Text("Your corrected price", style = MaterialTheme.typography.bodySmall)
                     }
