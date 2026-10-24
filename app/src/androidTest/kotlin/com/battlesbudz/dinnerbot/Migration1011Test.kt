@@ -31,7 +31,9 @@ import org.junit.runner.RunWith
  * MIGRATION_10_11 with every row intact. The migration adds the
  * scan_substitutions table (created empty; swaps accumulate from the
  * upgrade on) and the nullable grocery_items.substitutedForItemId
- * column (null on every stored row).
+ * column (null on every stored row). (The builder chains on through
+ * MIGRATION_11_12 to the current version, per the chain pattern every
+ * version bump follows; the v11 additions are what this test proves.)
  */
 @RunWith(AndroidJUnit4::class)
 class Migration1011Test {
@@ -204,10 +206,11 @@ class Migration1011Test {
                 DinnerBotDatabase.MIGRATION_8_9,
                 DinnerBotDatabase.MIGRATION_9_10,
                 DinnerBotDatabase.MIGRATION_10_11,
+                DinnerBotDatabase.MIGRATION_11_12,
             )
             .build()
         try {
-            assertEquals(11, db.openHelper.readableDatabase.version)
+            assertEquals(12, db.openHelper.readableDatabase.version)
 
             // User data survives whole, corrected price and staple flag included.
             val breast = db.priceItemDao().getById("chicken-breast")!!

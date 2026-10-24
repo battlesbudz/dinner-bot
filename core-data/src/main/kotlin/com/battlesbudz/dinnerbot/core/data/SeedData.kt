@@ -16,6 +16,7 @@ import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Quantity
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeIngredient
+import com.battlesbudz.dinnerbot.core.model.RecipeOverride
 import com.battlesbudz.dinnerbot.core.model.RecipePhoto
 import com.battlesbudz.dinnerbot.core.model.RecipesFile
 import com.battlesbudz.dinnerbot.core.model.ReminderSettings
@@ -170,6 +171,18 @@ object SeedMapper {
         createdAtMillis = createdAtMillis,
     )
 
+    fun RecipeOverride.toEntity(): RecipeOverrideEntity = RecipeOverrideEntity(
+        recipeId = recipeId,
+        ingredientsJson = json.encodeToString(ingredientList, ingredients),
+        updatedAtMillis = updatedAtMillis,
+    )
+
+    fun RecipeOverrideEntity.toModel(): RecipeOverride = RecipeOverride(
+        recipeId = recipeId,
+        ingredients = json.decodeFromString(ingredientList, ingredientsJson),
+        updatedAtMillis = updatedAtMillis,
+    )
+
     fun RecipePhoto.toEntity(): RecipePhotoEntity = RecipePhotoEntity(
         recipeId = recipeId,
         fileName = fileName,
@@ -277,25 +290,49 @@ class SeedLoader(private val db: DinnerBotDatabase) {
     }
 
     /**
-     * Keep the stored seed recipes identical to the bundled seed file.
-     * Recipes are pure seed content (the app never lets the user edit them),
-     * so when a new app version ships changed seed recipes (v0.1.1 added the
-     * essential/removable ingredient marks), the stored rows are replaced
-     * from the asset. This touches ONLY the recipes table: settings, price
-     * items (including Andrea's corrections), pantry, stock, and plans are
-     * user data and are never touched here. No Room schema change is needed
-     * because ingredients live in a JSON column. Returns how many recipes
-     * were written (0 when the stored set already matches the bundle).
+     * Keep the stored seed recipes in step with the bundled seed file,
+     * under Battles's refresh rule (Phase RI-1): a recipe Andrea has
+     * changed is NEVER refreshed, and refresh delivers additions only for
+     * it. Concretely:
+     *
+     * - A recipe carrying a household override keeps its STORED row whole:
+     *   the bundle's version of it is not written at all, in whole or in
+     *   part. Her ingredient list stands in the override table (which this
+     *   function never writes), and the merge on the load path cooks it.
+     * - A recipe with no override refreshes from the bundle exactly as
+     *   before (v0.1.1's essential/removable marks arrived this way).
+     * - A bundled recipe the phone does not have yet is added.
+     * - A recipe the bundle no longer carries leaves the library, and an
+     *   override it leaves behind is orphaned and cleaned up here.
+     *
+     * This touches ONLY the recipes table and orphaned override rows:
+     * settings, price items (including Andrea's corrections), pantry,
+     * stock, and plans are user data and are never touched here. Returns
+     * how many recipes were written (0 when nothing changed).
      */
     suspend fun refreshSeedRecipes(recipesJson: String): Int {
         val bundled = SeedDataParser.parseRecipes(recipesJson)
+        val bundledById = bundled.associateBy { it.id }
         val stored = db.recipeDao().getAll().map { with(SeedMapper) { it.toModel() } }
+        val storedById = stored.associateBy { it.id }
+        val overrideIds = db.recipeOverrideDao().getAll().map { it.recipeId }.toSet()
+
+        // A bundle that drops a recipe retires it; its override, if any,
+        // is orphaned and goes with it. Overrides for recipes the bundle
+        // still carries are never touched.
+        val orphaned = overrideIds.filter { it !in bundledById }
+        orphaned.forEach { db.recipeOverrideDao().delete(it) }
+
+        val result = bundled.map { seed ->
+            val kept = storedById[seed.id]
+            if (seed.id in overrideIds && kept != null) kept else seed
+        }
         // Compare by id: the DAO returns rows ordered by title, the bundle
         // is in file order, and list equality would never see them as equal.
-        if (stored.associateBy { it.id } == bundled.associateBy { it.id }) return 0
+        if (storedById == result.associateBy { it.id }) return 0
         db.recipeDao().deleteAll()
-        db.recipeDao().insertAll(bundled.map { with(SeedMapper) { it.toEntity() } })
-        return bundled.size
+        db.recipeDao().insertAll(result.map { with(SeedMapper) { it.toEntity() } })
+        return result.size
     }
 
     /**

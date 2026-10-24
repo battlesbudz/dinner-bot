@@ -66,6 +66,7 @@ import com.battlesbudz.dinnerbot.core.model.CookCheckoff
 import com.battlesbudz.dinnerbot.core.model.Costing
 import com.battlesbudz.dinnerbot.core.model.DietPreset
 import com.battlesbudz.dinnerbot.core.model.DietPresets
+import com.battlesbudz.dinnerbot.core.model.EffectiveRecipes
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
 import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
 import com.battlesbudz.dinnerbot.core.model.PantryItem
@@ -76,13 +77,17 @@ import com.battlesbudz.dinnerbot.core.model.RanOutSource
 import com.battlesbudz.dinnerbot.core.model.RanOutState
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeAdaptation
+import com.battlesbudz.dinnerbot.core.model.RecipeIngredient
+import com.battlesbudz.dinnerbot.core.model.RecipeOverride
 import com.battlesbudz.dinnerbot.core.model.RecipePhoto
 import com.battlesbudz.dinnerbot.core.model.RecipePhotos
 import com.battlesbudz.dinnerbot.core.model.RecipeRating
 import com.battlesbudz.dinnerbot.core.model.ReconciledOut
 import com.battlesbudz.dinnerbot.core.model.ScanSubstitution
+import com.battlesbudz.dinnerbot.core.model.TonightOverrides
 import com.battlesbudz.dinnerbot.feature.backup.BackupBarcodeLink
 import com.battlesbudz.dinnerbot.feature.backup.BackupData
+import com.battlesbudz.dinnerbot.feature.backup.BackupRecipeOverride
 import com.battlesbudz.dinnerbot.feature.backup.BackupRecipeRating
 import com.battlesbudz.dinnerbot.feature.backup.BackupEngine
 import com.battlesbudz.dinnerbot.feature.backup.BackupScanSubstitution
@@ -185,6 +190,12 @@ private fun DinnerBotApp(
     var storedPlan2 by remember { mutableStateOf<PlanMapper.StoredPlan?>(null) }
     var groceryRows2 by remember { mutableStateOf<List<GroceryRow>>(emptyList()) }
     var ratings by remember { mutableStateOf<Map<String, RecipeRating>>(emptyMap()) }
+    // Household recipe edits (Phase RI-1): Andrea's saved ingredient
+    // lists over library recipes, by recipe id. The recipes state below
+    // is always the EFFECTIVE set (seed + these overrides merged on the
+    // load path); this map is kept beside it so screens can show which
+    // recipes carry her edits and offer restore-original.
+    var recipeOverrides by remember { mutableStateOf<Map<String, RecipeOverride>>(emptyMap()) }
     // Household recipe photos (Epic issue #10): the records, and the
     // photo files that actually exist on this phone, by recipe id.
     var recipePhotos by remember { mutableStateOf<Map<String, RecipePhoto>>(emptyMap()) }
@@ -240,7 +251,17 @@ private fun DinnerBotApp(
             val s = database.settingsDao().get()?.let { with(SeedMapper) { it.toModel() } }
                 ?: OnboardingDefaults.initialSettings()
             SeedLoader(database).seedPantryIfEmpty(OnboardingDefaults.DEFAULT_STAPLES, s.pantryStaples)
-            val r = database.recipeDao().getAll().map { with(SeedMapper) { it.toModel() } }
+            // THE recipe load path (Phase RI-1, plan section 5.1): stored
+            // seed recipes with the household overrides merged over them.
+            // Every surface (planner, recipe screens, costing, grocery
+            // list, nutrition) consumes this one effective set, so the
+            // seed version of a corrected dish can never leak through a
+            // second path.
+            val storedRecipes = database.recipeDao().getAll().map { with(SeedMapper) { it.toModel() } }
+            val loadedOverrides = database.recipeOverrideDao().getAll()
+                .map { with(SeedMapper) { it.toModel() } }
+                .associateBy { it.recipeId }
+            val r = EffectiveRecipes.applyOverrides(storedRecipes, loadedOverrides)
             val p = database.priceItemDao().getAll().map { with(SeedMapper) { it.toModel() } }
             val pantry = database.pantryDao().getAll().map { with(SeedMapper) { it.toModel() } }
             val stocks = database.bulkStockDao().getAll().map { with(SeedMapper) { it.toModel() } }
@@ -291,7 +312,7 @@ private fun DinnerBotApp(
                 s, r, p, pantry, stocks, plan, rows, plan2, rows2,
                 loadedRatings, loadedPresets, loadedLinks, loadedNutrition,
                 loadedRanOut, loadedCheckoffs, loadedPhotoById, loadedPhotoFiles,
-                addedStaples, loadedSubstitutions,
+                addedStaples, loadedSubstitutions, loadedOverrides,
             )
         }
         settings = loaded.settings
@@ -312,6 +333,7 @@ private fun DinnerBotApp(
         ranOutEvents = loaded.ranOutEvents
         cookCheckoffs = loaded.cookCheckoffs
         scanSubstitutions = loaded.scanSubstitutions
+        recipeOverrides = loaded.recipeOverrides
         staplesAddedAtLoad = loaded.staplesAdded
         loading = false
     }
@@ -583,7 +605,7 @@ private fun DinnerBotApp(
     ): WeekPlanner.WeekPlan {
         if (resolvedOuts.none { it.priceItemId != null }) return plan
         val recipesByIdLocal = adaptationFor(forSettings).recipes.associateBy { it.id }
-        val dinners = plan.nights.filterNot { it.notCooking }.mapNotNull { recipesByIdLocal[it.recipeId] }
+        val dinners = EffectiveRecipes.resolveDinners(plan.nights, recipesByIdLocal)
         val (needs, _) = Costing.aggregateNeeds(dinners, forSettings.householdSize, priceItems.associateBy { it.id })
         val result = ReconciliationMerge.merge(
             lines = plan.lines,
@@ -859,6 +881,41 @@ private fun DinnerBotApp(
         }
     }
 
+    /**
+     * Save a from-now-on ingredient edit (Phase RI-1): the edited list
+     * becomes the recipe's household version, stored as its override row
+     * and merged over the seed recipe on every load from now on. A stored
+     * plan keeps the lines it was priced with; the week picks the edit up
+     * when it is next built or repriced, the way price corrections
+     * already behave (plan section 5.2).
+     */
+    fun saveRecipeOverride(recipeId: String, ingredients: List<RecipeIngredient>) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                database.recipeOverrideDao().upsert(
+                    with(SeedMapper) {
+                        RecipeOverride(recipeId, ingredients, System.currentTimeMillis()).toEntity()
+                    },
+                )
+            }
+            refresh()
+        }
+    }
+
+    /**
+     * Restore-original (Phase RI-1): the household edit is deleted and
+     * the current seed version stands again whole. The recipe's rating
+     * and photo are separate rows and are not touched.
+     */
+    fun restoreRecipeOriginal(recipeId: String) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                database.recipeOverrideDao().delete(recipeId)
+            }
+            refresh()
+        }
+    }
+
     /** Set, change, or clear (null) one recipe's thumbs rating, then reload. */
     fun rateRecipe(recipeId: String, rating: RecipeRating?) {
         scope.launch {
@@ -1036,6 +1093,9 @@ private fun DinnerBotApp(
                         substitutePriceCents = record.substitutePriceCents,
                         createdAtMillis = record.createdAtMillis,
                     )
+                },
+                recipeOverrides = recipeOverrides.values.map { override ->
+                    BackupRecipeOverride(override.recipeId, override.ingredients)
                 },
             ),
         )
@@ -1298,6 +1358,98 @@ private fun DinnerBotApp(
                 }
             }
 
+            /**
+             * A tonight-only ingredient edit (Phase RI-1, ruling D1):
+             * the edited list lands on that night's plan record only, and
+             * the plan is repriced in place (same dinners, tonight's
+             * version of the edited one) so tonight's grocery list and
+             * cash reflect it immediately. The saved recipe is never
+             * touched, and no other night changes. Reconciliation-merged
+             * and scan-substituted lines are folded back exactly as a
+             * pantry reprice folds them.
+             */
+            fun applyTonightEdits(
+                planId: String,
+                day: String,
+                ingredients: List<RecipeIngredient>,
+            ) {
+                val edits = TonightOverrides(ingredients)
+                fun edited(view: WeekPlanner.WeekPlan): WeekPlanner.WeekPlan =
+                    view.copy(
+                        nights = view.nights.map { night ->
+                            if (night.day == day) night.copy(tonightEdits = edits) else night
+                        },
+                    )
+                val sp = storedPlan ?: return
+                val view = weekPlanView ?: return
+                val sp2 = storedPlan2
+                val view2 = weekPlanView2
+                if (sp2 != null && view2 != null && fortnightView != null) {
+                    val editedView1 = if (sp.id == planId) edited(view) else view
+                    val editedView2 = if (sp2.id == planId) edited(view2) else view2
+                    val owned = PantryLogic.ownedNames(pantryItems)
+                    val stock = PantryLogic.stockMap(bulkStocks)
+                    val dinners = EffectiveRecipes.resolveDinners(
+                        editedView1.nights + editedView2.nights, recipesById,
+                    )
+                    val gate = WeekPlanner.fortnightGateForDinners(currentSettings, dinners, priceItems)
+                    val repriced1 = WeekPlanner.recost(
+                        settings = currentSettings,
+                        current = editedView1,
+                        recipes = adaptation.recipes,
+                        priceItems = priceItems,
+                        stockOnHand = stock,
+                        pantryOwnedNames = owned,
+                        gateOverride = gate,
+                    )
+                    val kept1 = keepSubstitutedLines(
+                        editedView1, keepMergedLines(editedView1, repriced1),
+                    )
+                    val stock1 = WeekPlanner.projectedStockAfter(
+                        currentSettings, repriced1, adaptation.recipes, priceItems, stock, owned, gate,
+                    )
+                    val stockForWeek2 = WeekPlanner.stockWithMergedPacks(
+                        stock1, kept1.lines, repriced1.lines, priceItems,
+                        stockOnHand = stock,
+                    )
+                    val repriced2 = WeekPlanner.recost(
+                        settings = currentSettings,
+                        current = editedView2,
+                        recipes = adaptation.recipes,
+                        priceItems = priceItems,
+                        stockOnHand = stockForWeek2,
+                        pantryOwnedNames = owned,
+                        gateOverride = gate,
+                    )
+                    val kept2 = keepSubstitutedLines(
+                        editedView2, keepMergedLines(editedView2, repriced2),
+                    )
+                    persistFortnight(
+                        WeekPlanner.composeFortnight(kept1, kept2, priceItems),
+                        keepIds = sp.id to sp2.id,
+                        forSettings = currentSettings,
+                    )
+                    return
+                }
+                if (sp.id != planId) return
+                val editedView = edited(view)
+                val repriced = keepSubstitutedLines(
+                    editedView,
+                    keepMergedLines(
+                        editedView,
+                        WeekPlanner.recost(
+                            settings = currentSettings,
+                            current = editedView,
+                            recipes = adaptation.recipes,
+                            priceItems = priceItems,
+                            stockOnHand = PantryLogic.stockMap(bulkStocks),
+                            pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
+                        ),
+                    ),
+                )
+                persistPlan(repriced, keepId = sp.id, forSettings = currentSettings)
+            }
+
             // v0.4.3 upgrade (Codex review, PR #23): when this load added
             // the newly priced staples to the book, reprice the stored
             // week once so the active plan reflects them immediately —
@@ -1331,6 +1483,14 @@ private fun DinnerBotApp(
                                     onBack = { openRecipeId = null },
                                     rating = ratings[open.id],
                                     onRate = { rateRecipe(open.id, it) },
+                                    savedRecipe = recipes.firstOrNull { it.id == open.id },
+                                    hasHouseholdEdits = EffectiveRecipes.hasOverride(
+                                        open.id, recipeOverrides,
+                                    ),
+                                    onSaveIngredients = { edited ->
+                                        saveRecipeOverride(open.id, edited)
+                                    },
+                                    onRestoreOriginal = { restoreRecipeOriginal(open.id) },
                                     nutritionByItemId = nutritionByItemId,
                                     nutritionByPantrySlug = nutritionByPantrySlug,
                                     photo = recipePhotos[open.id],
@@ -1355,7 +1515,14 @@ private fun DinnerBotApp(
                                 listOfNotNull(storedPlan, storedPlan2).firstOrNull { it.id == t.planId }
                             }
                             val targetNight = targetPlan?.nights?.firstOrNull { it.day == target?.day }
-                            val targetRecipe = targetNight?.let { recipesById[it.recipeId] }
+                            // Tonight's dinner resolves per night (Phase
+                            // RI-1): the saved (adapted) recipe with the
+                            // night's tonight-only edits applied last.
+                            val targetRecipe = targetNight?.let { night ->
+                                recipesById[night.recipeId]?.let { saved ->
+                                    EffectiveRecipes.applyTonight(saved, night)
+                                }
+                            }
                             if (target != null && targetPlan != null && targetNight != null && targetRecipe != null) {
                                 // The cook view (Phase V2-7): tonight's
                                 // dinner with its check-offs and ran-out
@@ -1405,6 +1572,12 @@ private fun DinnerBotApp(
                                     planId = target.planId,
                                     pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
                                     onBack = { cookTarget = null },
+                                    onSaveTonightOnly = { edited ->
+                                        applyTonightEdits(target.planId, target.day, edited)
+                                    },
+                                    onSaveFromNowOn = { edited ->
+                                        saveRecipeOverride(targetNight.recipeId, edited)
+                                    },
                                 )
                             } else if (fortnightView != null && storedPlan != null && storedPlan2 != null) {
                             FortnightPlannerScreen(
@@ -1921,6 +2094,8 @@ private data class LoadedState(
     val staplesAdded: Int,
     /** Remembered scan substitutions (PR v0.4.4). */
     val scanSubstitutions: List<ScanSubstitution>,
+    /** Household recipe edits by recipe id (Phase RI-1); the recipes above already carry them merged. */
+    val recipeOverrides: Map<String, RecipeOverride>,
 )
 
 /** The Sunday gate's inputs, re-read from the store at request time. */
@@ -2202,6 +2377,21 @@ private suspend fun applyBackup(database: DinnerBotDatabase, data: BackupData) {
                     recipeId = saved.recipeId,
                     substitutePriceCents = saved.substitutePriceCents,
                     createdAtMillis = saved.createdAtMillis,
+                ).toEntity()
+            },
+        )
+    }
+    // Household recipe edits replace wholesale (Phase RI-1): a pre-v6
+    // backup has none, which clears them — the same semantics as the
+    // ratings and links above, since importing replaces this phone's
+    // data. Tonight-only edits ride on plans and do not restore, like
+    // the plans themselves.
+    database.recipeOverrideDao().deleteAll()
+    data.recipeOverrides.forEach { saved ->
+        database.recipeOverrideDao().upsert(
+            with(SeedMapper) {
+                RecipeOverride(
+                    saved.recipeId, saved.ingredients, System.currentTimeMillis(),
                 ).toEntity()
             },
         )

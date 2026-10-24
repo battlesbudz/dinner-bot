@@ -199,10 +199,11 @@ class Migration910Test {
                 DinnerBotDatabase.MIGRATION_8_9,
                 DinnerBotDatabase.MIGRATION_9_10,
                 DinnerBotDatabase.MIGRATION_10_11,
+                DinnerBotDatabase.MIGRATION_11_12,
             )
             .build()
         try {
-            assertEquals(11, db.openHelper.readableDatabase.version)
+            assertEquals(12, db.openHelper.readableDatabase.version)
 
             // User data survives whole.
             val eggs = db.priceItemDao().getById("eggs")!!

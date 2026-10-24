@@ -40,6 +40,7 @@ import com.battlesbudz.dinnerbot.core.model.NutritionCalculator
 import com.battlesbudz.dinnerbot.core.model.NutritionField
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Recipe
+import com.battlesbudz.dinnerbot.core.model.RecipeIngredient
 import com.battlesbudz.dinnerbot.core.model.RecipePhoto
 import com.battlesbudz.dinnerbot.core.model.RecipePhotos
 import com.battlesbudz.dinnerbot.core.model.RecipeRating
@@ -129,9 +130,24 @@ fun RecipeDetailScreen(
     onPhotoPicked: (Uri) -> Unit = {},
     onPhotoRemoved: () -> Unit = {},
     onPhotoCreditChange: (String) -> Unit = {},
+    /**
+     * The saved recipe (household override applied, won't-eat adaptation
+     * NOT applied) whose ingredient list the editor opens with (Phase
+     * RI-1): an edit is made against the saved list, so a removable
+     * ingredient the adaptation currently strips is still hers to see
+     * and change in the editor. Defaults to the displayed recipe.
+     */
+    savedRecipe: Recipe? = null,
+    /** True when the household has a saved edit for this recipe (Phase RI-1). */
+    hasHouseholdEdits: Boolean = false,
+    /** The editor's finished list, saved as the recipe's household version. */
+    onSaveIngredients: (List<RecipeIngredient>) -> Unit = {},
+    /** Restore-original: the household edit is cleared and the seed version stands again. */
+    onRestoreOriginal: () -> Unit = {},
 ) {
     val itemsById = remember(priceItems) { priceItems.associateBy { it.id } }
     var servings by remember(recipe.id) { mutableStateOf(recipe.servings) }
+    var editingIngredients by remember(recipe.id) { mutableStateOf(false) }
     val total = RecipeCostCalculator.ingredientCostCents(recipe, servings, itemsById)
     val perServing = RecipeCostCalculator.costPerServingCents(recipe, servings, itemsById)
 
@@ -289,6 +305,37 @@ fun RecipeDetailScreen(
         }
 
         Text("Ingredients", style = MaterialTheme.typography.titleMedium)
+        // Household editing (Phase RI-1): Andrea can correct any recipe,
+        // built-in library included, and the correction is saved as the
+        // recipe's household version, surviving every app update.
+        if (hasHouseholdEdits) {
+            Text(
+                "This recipe has your edits. Your ingredient list is the one Dinner Bot " +
+                    "cooks, plans, and shops, and it stays yours through app updates.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("recipe-has-edits"),
+            )
+            TextButton(
+                onClick = onRestoreOriginal,
+                modifier = Modifier.testTag("restore-original"),
+            ) { Text("Restore the original recipe") }
+        }
+        OutlinedButton(
+            onClick = { editingIngredients = true },
+            modifier = Modifier.testTag("edit-ingredients"),
+        ) { Text("Edit ingredients") }
+        if (editingIngredients) {
+            IngredientEditorDialog(
+                recipeTitle = recipe.title,
+                initialIngredients = (savedRecipe ?: recipe).ingredients,
+                priceItems = priceItems,
+                onDismiss = { editingIngredients = false },
+                onSave = { edited ->
+                    editingIngredients = false
+                    onSaveIngredients(edited)
+                },
+            )
+        }
         recipe.scaledIngredients(servings).forEach { ingredient ->
             val name = when {
                 ingredient.pantryItem != null -> "${ingredient.pantryItem} (pantry)"
