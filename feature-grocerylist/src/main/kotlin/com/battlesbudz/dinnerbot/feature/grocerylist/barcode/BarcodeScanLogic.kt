@@ -219,6 +219,28 @@ object BarcodeScanLogic {
     fun substituteLine(original: GroceryLine, substitute: PriceItem, shelfPriceCents: Int): GroceryLine {
         require(shelfPriceCents > 0) { "price must be positive" }
         require(substitute.id != original.itemId) { "a substitution names a different item" }
+        if (original.needed.unit.dimension != substitute.packQuantity.unit.dimension) {
+            // Cross-dimension swap (Codex, PR #24): the recipe measures
+            // in cups, the product sells by weight. There is no honest
+            // conversion without a product-specific equivalence, and
+            // Costing.amountInPackUnit's cross-dimension fallback only
+            // compares base scalars, so nothing is derived from it.
+            // The swap is defined the way a shopper treats it: ONE
+            // pack, at the typed price, the whole pack the dinner's
+            // cost this week.
+            return GroceryLine(
+                itemId = substitute.id,
+                displayName = substitute.name,
+                store = original.store,
+                needed = substitute.packQuantity,
+                packsToBuy = 1,
+                estimatedPackPriceCents = shelfPriceCents,
+                portionCostCents = shelfPriceCents,
+                checkedOff = original.checkedOff,
+                reconciliationAdded = original.reconciliationAdded,
+                substitutedForItemId = original.substitutedForItemId ?: original.itemId,
+            )
+        }
         val perUnitCents = shelfPriceCents.toDouble() / substitute.packQuantity.amount
         val needInPackUnit = Costing.amountInPackUnit(original.needed, substitute)
         val packs = ceil(needInPackUnit / substitute.packQuantity.amount - PACK_EPSILON)

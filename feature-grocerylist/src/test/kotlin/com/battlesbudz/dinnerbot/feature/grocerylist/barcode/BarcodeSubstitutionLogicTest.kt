@@ -158,6 +158,21 @@ class BarcodeSubstitutionLogicTest {
         assertFalse(BarcodeScanLogic.substituteLine(line(breast), drumsticks, 499).checkedOff)
     }
 
+    @Test fun crossDimensionSwapIsOnePackAtTheTypedPrice() {
+        // Codex, PR #24: the recipe measures in cups, the substitute
+        // sells by weight. No pack count may be derived from a
+        // conversion that does not exist; the swap is one pack at the
+        // typed price, the whole pack the dinner's cost.
+        val byWeight = item("user-shredded-cheese", "Shredded cheese", 349)
+        val cupNeed = line(breast).copy(needed = Quantity(2.0, MeasureUnit.CUP))
+        val swapped = BarcodeScanLogic.substituteLine(cupNeed, byWeight, 349)
+        assertEquals(byWeight.packQuantity, swapped.needed)
+        assertEquals(1, swapped.packsToBuy)
+        assertEquals(349, swapped.estimatedPackPriceCents)
+        assertEquals(349, swapped.portionCostCents)
+        assertEquals("chicken-breast", swapped.substitutedForItemId)
+    }
+
     @Test fun swapPreservesTheTopUpFlag() {
         // Codex, PR #24: a Week 2 line added by reconciliation keeps
         // its flag on the replacement line, or the purchase moves from
