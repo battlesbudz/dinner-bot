@@ -177,13 +177,15 @@ class MainActivity : ComponentActivity() {
         // multitask bar. The app now opts in and every surface pads for
         // the bars it draws under (Scaffold insets for the main shell,
         // windowInsetsPadding on the walkthrough and loading states).
-        // Light bar styles: the redesign's surfaces are white, so the
-        // system icons draw dark.
+        // Auto bar styles (v0.6.1 dark mode): the system icons follow
+        // the phone's own dark setting, dark icons on the light scheme
+        // and light icons on the dark one, instead of the light style
+        // the redesign originally forced.
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.light(
+            statusBarStyle = SystemBarStyle.auto(
                 android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT,
             ),
-            navigationBarStyle = SystemBarStyle.light(
+            navigationBarStyle = SystemBarStyle.auto(
                 android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT,
             ),
         )
