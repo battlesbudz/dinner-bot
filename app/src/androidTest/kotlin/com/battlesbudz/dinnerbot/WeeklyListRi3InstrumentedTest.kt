@@ -228,6 +228,13 @@ class WeeklyListRi3InstrumentedTest {
                 }
             }
             assertTrue("rows after uncross: $rowsDump", bought)
+            // The buy line carries the uncross flag, so a later reprice
+            // of the week keeps it bought.
+            withDb { db ->
+                val row = db.groceryDao().getForPlan("plan-ri3")
+                    .single { it.itemId == "russet-potatoes" }
+                assertTrue(row.uncrossed)
+            }
             // Uncrossing is a list action only: the pantry still owns potatoes.
             withDb { db ->
                 assertTrue(db.pantryDao().getAll().single { it.name == "Potatoes" }.owned)
