@@ -64,12 +64,17 @@ class GroceryListBuilderTest {
         val built = GroceryListBuilder.build(
             planOf("spaghetti-night", "egg-night"), recipesById, book, emptyMap(), servings = 4,
         )
-        // Aldi: spaghetti 32 oz total = 1 pack 209, sauce 185, eggs 185 -> 579.
-        assertEquals(579, built.cashByStoreCents[Store.ALDI])
+        // The spaghetti dinner's as-written Salt line has no book item
+        // in this fixture and no pantry cover was passed, so Phase RI-3
+        // keeps it on the list as a guess line: the whole-book median
+        // of 185, 185, 198, 209, 2168 is 198, shelved at Aldi.
+        val salt = built.lines.single { it.displayName.contains("Salt") }
+        assertEquals(198, salt.priceGuessCents)
+        // Aldi: spaghetti 32 oz total = 1 pack 209, sauce 185, eggs 185 -> 579, plus the salt guess.
+        assertEquals(579 + 198, built.cashByStoreCents[Store.ALDI])
         // Walmart: turkey 1 lb = 198.
         assertEquals(198, built.cashByStoreCents[Store.WALMART])
-        assertEquals(579 + 198, built.totalCashCents)
-        assertTrue(built.lines.none { it.displayName.contains("Salt") })
+        assertEquals(579 + 198 + 198, built.totalCashCents)
     }
 
     @Test fun scalingDoublesPackCounts() {
@@ -94,7 +99,9 @@ class GroceryListBuilderTest {
     // ---- Pantry-owned priced items (hotfix, Battles 2026-10-22) ------------
     // The reported bug: "Potatoes" added to the pantry, and the list still
     // said to buy russet potatoes. An owned pantry entry matching a priced
-    // item means the item is already home: off the list, $0 cash.
+    // item means the item is already home: $0 cash. Phase RI-3 changed
+    // only the presentation: the item now stays ON the list as a covered
+    // line (crossed out), instead of leaving it.
 
     private val russetPotatoes = PriceItem(
         id = "russet-potatoes", name = "Russet potatoes", category = "Produce",
@@ -110,16 +117,19 @@ class GroceryListBuilderTest {
     private val bookWithPotatoes = book + russetPotatoes
     private val recipesWithPotatoes = recipesById + ("potato-night" to potatoNight)
 
-    @Test fun ownedPotatoesStayOffTheList() {
+    @Test fun ownedPotatoesStayOnTheListCrossedOut() {
         val built = GroceryListBuilder.build(
             planOf("potato-night"), recipesWithPotatoes, bookWithPotatoes, emptyMap(),
             servings = 4, pantryOwnedNames = setOf("Potatoes"),
         )
-        assertTrue(built.lines.none { it.itemId == "russet-potatoes" })
+        val covered = built.lines.single { it.itemId == "russet-potatoes" }
+        assertEquals("Potatoes", covered.coveredByPantryName)
+        assertEquals(0, covered.packsToBuy)
+        assertEquals(0, GroceryListBuilder.lineCashCents(covered))
         // The eggs are unaffected: one pack at 185, all of the cash.
         assertEquals(185, built.totalCashCents)
         assertEquals(185, built.cashByStoreCents[Store.ALDI])
-        assertEquals(listOf("eggs"), built.lines.map { it.itemId })
+        assertEquals(setOf("eggs", "russet-potatoes"), built.lines.map { it.itemId }.toSet())
     }
 
     @Test fun singularPotatoEntryAlsoCovers() {
@@ -127,7 +137,8 @@ class GroceryListBuilderTest {
             planOf("potato-night"), recipesWithPotatoes, bookWithPotatoes, emptyMap(),
             servings = 4, pantryOwnedNames = setOf("Potato"),
         )
-        assertTrue(built.lines.none { it.itemId == "russet-potatoes" })
+        val covered = built.lines.single { it.itemId == "russet-potatoes" }
+        assertEquals("Potato", covered.coveredByPantryName)
         assertEquals(185, built.totalCashCents)
     }
 

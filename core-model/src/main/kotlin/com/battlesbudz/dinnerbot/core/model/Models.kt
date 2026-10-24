@@ -185,6 +185,33 @@ data class GroceryLine(
      * regenerating it away. The recipe and future weeks never see it.
      */
     val substitutedForItemId: String? = null,
+    /**
+     * The owned pantry entry covering this line (Phase RI-3, Battles's
+     * weekly-list ruling): the line is on the list because a planned
+     * dinner needs the item, but the pantry already has it, so it renders
+     * grayed and crossed through at $0 with the pantry entry's name shown
+     * beneath the item's name. A covered line always has packsToBuy 0.
+     * Null on every ordinary buy line.
+     */
+    val coveredByPantryName: String? = null,
+    /**
+     * True when this buy line exists because Andrea uncrossed a covered
+     * line for this week (Phase RI-3): the item is in her pantry AND on
+     * this week's list at its book price, because the pantry's version is
+     * the wrong kind or she wants more. The flag rides the plan's rows so
+     * repricing keeps the line a buy line; the pantry row itself is never
+     * touched by uncrossing.
+     */
+    val uncrossed: Boolean = false,
+    /**
+     * The placeholder price guess for a line whose ingredient has no real
+     * price yet (Phase RI-3, Battles's third-round ruling): computed from
+     * equivalent price book items, counted in the week's cash, labeled as
+     * a guess wherever it shows, and never written to the price book.
+     * When set, this IS the line's cash (the line has no pack price);
+     * [estimatedPackPriceCents] stays 0. Null on every priced line.
+     */
+    val priceGuessCents: Int? = null,
 )
 
 /**

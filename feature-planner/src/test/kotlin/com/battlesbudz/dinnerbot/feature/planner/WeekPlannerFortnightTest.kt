@@ -197,7 +197,7 @@ class WeekPlannerFortnightTest {
         assertTrue(plan.notes.any { it.contains("top-up") })
     }
 
-    @Test fun pantryOwnedItemsAreSuppressedInBothWeeks() {
+    @Test fun pantryOwnedItemsAreCoveredLinesInBothWeeks() {
         val recipes = (1..10).map {
             recipe(
                 "d$it",
@@ -206,9 +206,21 @@ class WeekPlannerFortnightTest {
             )
         }
         val plan = fortnight(recipes, pantry = setOf("Potatoes"))
-        assertTrue(plan.week1.lines.none { it.itemId == "russet-potatoes" })
-        assertTrue(plan.week2.lines.none { it.itemId == "russet-potatoes" })
-        assertTrue(plan.bigTripLines.none { it.itemId == "russet-potatoes" })
+        // Phase RI-3: covered in both weeks means a crossed-out $0
+        // line in both weeks (and on the big trip), never a buy line.
+        assertEquals(
+            "Potatoes",
+            plan.week1.lines.single { it.itemId == "russet-potatoes" }.coveredByPantryName,
+        )
+        assertEquals(
+            "Potatoes",
+            plan.week2.lines.single { it.itemId == "russet-potatoes" }.coveredByPantryName,
+        )
+        assertTrue(
+            plan.bigTripLines.filter { it.itemId == "russet-potatoes" }
+                .all { it.coveredByPantryName != null && it.packsToBuy == 0 },
+        )
+        assertTrue(plan.bigTripLines.any { it.itemId == "russet-potatoes" })
         assertEquals(2, plan.bigTripLines.count { it.itemId == "spaghetti" })
     }
 

@@ -54,6 +54,7 @@ import androidx.lifecycle.lifecycleScope
 import com.battlesbudz.dinnerbot.core.data.BarcodeLinkEntity
 import com.battlesbudz.dinnerbot.core.data.CookCheckoffEntity
 import com.battlesbudz.dinnerbot.core.data.DinnerBotDatabase
+import com.battlesbudz.dinnerbot.core.data.KeepPromptEntity
 import com.battlesbudz.dinnerbot.core.data.PlanMapper
 import com.battlesbudz.dinnerbot.core.data.RecipeRatingEntity
 import com.battlesbudz.dinnerbot.core.data.ReconciliationMapper
@@ -74,9 +75,11 @@ import com.battlesbudz.dinnerbot.core.model.PantryItem
 import com.battlesbudz.dinnerbot.core.model.PossibleOut
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.RanOutEvent
+import com.battlesbudz.dinnerbot.core.model.RanOutKeys
 import com.battlesbudz.dinnerbot.core.model.RanOutSource
 import com.battlesbudz.dinnerbot.core.model.RanOutState
 import com.battlesbudz.dinnerbot.core.model.Recipe
+import com.battlesbudz.dinnerbot.core.model.RecipePricing
 import com.battlesbudz.dinnerbot.core.model.RecipeAdaptation
 import com.battlesbudz.dinnerbot.core.model.RecipeIngredient
 import com.battlesbudz.dinnerbot.core.model.RecipeOrigin
@@ -237,6 +240,15 @@ private fun DinnerBotApp(
     // the load path) so screens can show a recipe's source link and
     // the import flow can check for a duplicate source.
     var importedRecipes by remember { mutableStateOf<List<ImportedRecipe>>(emptyList()) }
+    // First-cook keep prompt state (Phase RI-3): the recipe ids already
+    // asked about (persisted; the prompt fires once per recipe, ever),
+    // and the recipe the prompt is currently up for, if any.
+    var keepPromptAskedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var keepPromptRecipeId by remember { mutableStateOf<String?>(null) }
+    // The generation disclaimer (Phase RI-3): titles of the
+    // not-yet-priced dinners in the week just generated; non-empty
+    // shows the pop-up once for that generation.
+    var unpricedDisclaimerTitles by remember { mutableStateOf<List<String>>(emptyList()) }
     // A recipe import in progress (Phase RI-2); the flow takes the
     // screen while it runs, like the Sunday gate does.
     var importStart by remember { mutableStateOf<ImportStart?>(null) }
@@ -359,11 +371,14 @@ private fun DinnerBotApp(
                 .map { with(ReconciliationMapper) { it.toModel() } }
             val loadedSubstitutions = database.scanSubstitutionDao().getAll()
                 .map { with(SeedMapper) { it.toModel() } }
+            val loadedKeepPromptAsked = database.keepPromptDao().getAll()
+                .map { it.recipeId }.toSet()
             LoadedState(
                 s, r, p, pantry, stocks, plan, rows, plan2, rows2,
                 loadedRatings, loadedPresets, loadedLinks, loadedNutrition,
                 loadedRanOut, loadedCheckoffs, loadedPhotoById, loadedPhotoFiles,
                 addedStaples, loadedSubstitutions, loadedOverrides, loadedImported,
+                loadedKeepPromptAsked,
             )
         }
         settings = loaded.settings
@@ -386,6 +401,7 @@ private fun DinnerBotApp(
         scanSubstitutions = loaded.scanSubstitutions
         recipeOverrides = loaded.recipeOverrides
         importedRecipes = loaded.importedRecipes
+        keepPromptAskedIds = loaded.keepPromptAsked
         staplesAddedAtLoad = loaded.staplesAdded
         loading = false
     }
@@ -497,6 +513,21 @@ private fun DinnerBotApp(
             DietPresets.selected(forSettings, presets),
         )
 
+    /**
+     * The generation disclaimer (Phase RI-3, ruling 5): when a week
+     * just generated contains a not-yet-priced dinner of Andrea's, the
+     * pop-up fires once for that generation, naming the dinner. The
+     * dinner's own card carries the standing note from there.
+     */
+    fun noteUnpricedDisclaimer(plans: List<WeekPlanner.WeekPlan>) {
+        val titles = plans.flatMap { it.unpricedImportedRecipeIds }
+            .mapNotNull { id -> recipes.firstOrNull { it.id == id }?.title }
+            .distinct()
+        if (titles.isNotEmpty()) {
+            unpricedDisclaimerTitles = titles
+        }
+    }
+
     fun generatePlan(forSettings: HouseholdSettings) {
         variation += 1
         val plan = WeekPlanner.generate(
@@ -509,6 +540,7 @@ private fun DinnerBotApp(
             variation = variation,
             ratings = ratings,
         )
+        noteUnpricedDisclaimer(listOf(plan))
         persistPlan(plan, keepId = null, forSettings = forSettings)
         tab = Tab.PLANNER
     }
@@ -579,6 +611,7 @@ private fun DinnerBotApp(
             variation = variation,
             ratings = ratings,
         )
+        noteUnpricedDisclaimer(listOf(fortnight.week1, fortnight.week2))
         persistFortnight(fortnight, keepIds = null, forSettings = forSettings)
         tab = Tab.PLANNER
     }
@@ -708,6 +741,7 @@ private fun DinnerBotApp(
             variation = variation,
             ratings = ratings,
         )
+        noteUnpricedDisclaimer(listOf(plan))
         persistPlan(mergeResolvedIntoWeek(plan, resolvedOuts, forSettings), keepId = null, forSettings = forSettings)
         tab = Tab.PLANNER
     }
@@ -733,6 +767,7 @@ private fun DinnerBotApp(
             ratings = ratings,
         )
         val mergedWeek1 = mergeResolvedIntoWeek(fortnight.week1, resolvedOuts, forSettings)
+        noteUnpricedDisclaimer(listOf(mergedWeek1, fortnight.week2))
         persistFortnight(
             WeekPlanner.composeFortnight(mergedWeek1, fortnight.week2, priceItems),
             keepIds = null,
@@ -1337,6 +1372,22 @@ private fun DinnerBotApp(
                     null
                 }
             }
+            // The stored plans' not-yet-priced dinners of Andrea's
+            // (Phase RI-3): computed live from the price book as it
+            // stands, so a dinner's not-accurate note and the cash
+            // card's guess label clear themselves the day its last
+            // ingredient prices for real. Priced-ness is never stored.
+            val unpricedDisplayIds = remember(recipes, priceItems, storedPlan, storedPlan2) {
+                val itemsById = priceItems.associateBy { it.id }
+                val plannedIds = (storedPlan?.nights.orEmpty() + storedPlan2?.nights.orEmpty())
+                    .filterNot { it.notCooking }.map { it.recipeId }.toSet()
+                recipes
+                    .filter {
+                        it.id in plannedIds &&
+                            RecipePricing.isUnpricedUserRecipe(it, itemsById)
+                    }
+                    .map { it.id }.toSet()
+            }
             /**
              * A recost rebuilds a week's lines from costing alone, which
              * would drop the lines Sunday reconciliation merged into the
@@ -1572,6 +1623,91 @@ private fun DinnerBotApp(
                 persistPlan(repriced, keepId = sp.id, forSettings = currentSettings)
             }
 
+            /**
+             * Uncross one pantry-covered line (Phase RI-3, Battles's
+             * weekly-list ruling): the item becomes a buy line for this
+             * week at its book price. The pantry itself is never
+             * written — the week's recost simply runs with the item in
+             * its uncrossed set, and the buy line it produces carries
+             * the uncrossed flag, so every later reprice of the week
+             * keeps it bought. The reconciliation-merged and
+             * scan-substituted folds run exactly as a tonight-only
+             * edit's reprice runs them.
+             */
+            fun applyUncross(planId: String, itemId: String) {
+                fun uncrossedFor(view: WeekPlanner.WeekPlan, target: Boolean): Set<String> =
+                    view.lines.filter { it.uncrossed }.map { it.itemId }.toSet() +
+                        (if (target) setOf(itemId) else emptySet())
+                val sp = storedPlan ?: return
+                val view = weekPlanView ?: return
+                val sp2 = storedPlan2
+                val view2 = weekPlanView2
+                if (sp2 != null && view2 != null && fortnightView != null) {
+                    val owned = PantryLogic.ownedNames(pantryItems)
+                    val stock = PantryLogic.stockMap(bulkStocks)
+                    val dinners = EffectiveRecipes.resolveDinners(
+                        view.nights + view2.nights, recipesById,
+                    )
+                    val gate = WeekPlanner.fortnightGateForDinners(currentSettings, dinners, priceItems)
+                    val repriced1 = WeekPlanner.recost(
+                        settings = currentSettings,
+                        current = view,
+                        recipes = adaptation.recipes,
+                        priceItems = priceItems,
+                        stockOnHand = stock,
+                        pantryOwnedNames = owned,
+                        gateOverride = gate,
+                        uncrossedItemIds = uncrossedFor(view, sp.id == planId),
+                    )
+                    val kept1 = keepSubstitutedLines(
+                        view, keepMergedLines(view, repriced1),
+                    )
+                    val stock1 = WeekPlanner.projectedStockAfter(
+                        currentSettings, repriced1, adaptation.recipes, priceItems, stock, owned, gate,
+                    )
+                    val stockForWeek2 = WeekPlanner.stockWithMergedPacks(
+                        stock1, kept1.lines, repriced1.lines, priceItems,
+                        stockOnHand = stock,
+                    )
+                    val repriced2 = WeekPlanner.recost(
+                        settings = currentSettings,
+                        current = view2,
+                        recipes = adaptation.recipes,
+                        priceItems = priceItems,
+                        stockOnHand = stockForWeek2,
+                        pantryOwnedNames = owned,
+                        gateOverride = gate,
+                        uncrossedItemIds = uncrossedFor(view2, sp2.id == planId),
+                    )
+                    val kept2 = keepSubstitutedLines(
+                        view2, keepMergedLines(view2, repriced2),
+                    )
+                    persistFortnight(
+                        WeekPlanner.composeFortnight(kept1, kept2, priceItems),
+                        keepIds = sp.id to sp2.id,
+                        forSettings = currentSettings,
+                    )
+                    return
+                }
+                if (sp.id != planId) return
+                val repriced = keepSubstitutedLines(
+                    view,
+                    keepMergedLines(
+                        view,
+                        WeekPlanner.recost(
+                            settings = currentSettings,
+                            current = view,
+                            recipes = adaptation.recipes,
+                            priceItems = priceItems,
+                            stockOnHand = PantryLogic.stockMap(bulkStocks),
+                            pantryOwnedNames = PantryLogic.ownedNames(pantryItems),
+                            uncrossedItemIds = uncrossedFor(view, true),
+                        ),
+                    ),
+                )
+                persistPlan(repriced, keepId = sp.id, forSettings = currentSettings)
+            }
+
             // v0.4.3 upgrade (Codex review, PR #23): when this load added
             // the newly priced staples to the book, reprice the stored
             // week once so the active plan reflects them immediately —
@@ -1582,6 +1718,72 @@ private fun DinnerBotApp(
                 if (staplesAddedAtLoad > 0 && storedPlan != null) {
                     repriceStoredPlan(pantryItems)
                 }
+            }
+            // The generation disclaimer (Phase RI-3): shown once when
+            // a week just generated contains a not-yet-priced dinner.
+            if (unpricedDisclaimerTitles.isNotEmpty()) {
+                AlertDialog(
+                    onDismissRequest = { unpricedDisclaimerTitles = emptyList() },
+                    modifier = Modifier.testTag("unpriced-disclaimer"),
+                    title = { Text("One dinner is not priced yet") },
+                    text = {
+                        Text(
+                            "This week includes " +
+                                unpricedDisclaimerTitles.joinToString(", ") +
+                                ", whose ingredients do not all have prices yet. " +
+                                "Its cost in this week's total is a guess from similar " +
+                                "items, marked as a guess wherever it shows. After the " +
+                                "first shop, when those items are scanned or their " +
+                                "prices are corrected, the dinner is priced for real.",
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { unpricedDisclaimerTitles = emptyList() }) {
+                            Text("Got it")
+                        }
+                    },
+                )
+            }
+            // The first-cook keep prompt (Phase RI-3): asked once per
+            // recipe of Andrea's, right after its first cook completes.
+            // A thumbs up keeps it in rotation (the UP rating); a
+            // thumbs down takes it out through the same rating; closing
+            // the prompt records nothing and it never asks again.
+            val promptRecipe = keepPromptRecipeId?.let { id ->
+                recipes.firstOrNull { it.id == id }
+            }
+            if (promptRecipe != null) {
+                AlertDialog(
+                    onDismissRequest = { keepPromptRecipeId = null },
+                    modifier = Modifier.testTag("keep-prompt"),
+                    title = { Text("Did you like ${promptRecipe.title}?") },
+                    text = {
+                        Text(
+                            "You cooked ${promptRecipe.title} for the first time. " +
+                                "A thumbs up keeps it in your dinner rotations. " +
+                                "A thumbs down takes it out of generated weeks; " +
+                                "it stays in your recipes either way.",
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                rateRecipe(promptRecipe.id, RecipeRating.UP)
+                                keepPromptRecipeId = null
+                            },
+                            modifier = Modifier.testTag("keep-prompt-up"),
+                        ) { Text("👍 Keep it") }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                rateRecipe(promptRecipe.id, RecipeRating.DOWN)
+                                keepPromptRecipeId = null
+                            },
+                            modifier = Modifier.testTag("keep-prompt-down"),
+                        ) { Text("👎 Not for us") }
+                    },
+                )
             }
             Column(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.weight(1f)) {
@@ -1685,6 +1887,47 @@ private fun DinnerBotApp(
                                                     CookCheckoffEntity(target.planId, target.day, key, checked),
                                                 )
                                             }
+                                            // The first-cook keep prompt
+                                            // (Phase RI-3, ruling 7): when
+                                            // this toggle completes the
+                                            // dinner — every ingredient
+                                            // checked off — and the dinner
+                                            // is one of Andrea's own
+                                            // recipes, never rated and
+                                            // never asked about, ask once
+                                            // whether it stays in rotation.
+                                            // The asked record is written
+                                            // as the prompt fires, so a
+                                            // dismissal records nothing
+                                            // more and never repeats.
+                                            if (checked) {
+                                                val allKeys = targetRecipe.ingredients
+                                                    .map { RanOutKeys.forIngredient(it) }.toSet()
+                                                val nowChecked = cookCheckoffs
+                                                    .filter {
+                                                        it.planId == target.planId &&
+                                                            it.day == target.day && it.checked
+                                                    }
+                                                    .map { it.itemKey }.toSet() + key
+                                                if (allKeys.isNotEmpty() &&
+                                                    allKeys.all { it in nowChecked } &&
+                                                    targetRecipe.origin != RecipeOrigin.LIBRARY &&
+                                                    targetRecipe.id !in ratings &&
+                                                    targetRecipe.id !in keepPromptAskedIds
+                                                ) {
+                                                    keepPromptAskedIds =
+                                                        keepPromptAskedIds + targetRecipe.id
+                                                    keepPromptRecipeId = targetRecipe.id
+                                                    withContext(Dispatchers.IO) {
+                                                        database.keepPromptDao().upsert(
+                                                            KeepPromptEntity(
+                                                                targetRecipe.id,
+                                                                System.currentTimeMillis(),
+                                                            ),
+                                                        )
+                                                    }
+                                                }
+                                            }
                                             refresh()
                                         }
                                     },
@@ -1783,6 +2026,7 @@ private fun DinnerBotApp(
                                     { reconFlow = ReconFlow(session, ReconTarget.TOP_UP) }
                                 },
                                 photoFiles = photoFiles,
+                                unpricedRecipeIds = unpricedDisplayIds,
                             )
                             } else PlannerScreen(
                             plan = weekPlanView,
@@ -1835,6 +2079,7 @@ private fun DinnerBotApp(
                                 storedPlan?.let { cookTarget = CookTarget(it.id, day) }
                             },
                             photoFiles = photoFiles,
+                            unpricedRecipeIds = unpricedDisplayIds,
                         )
                         }
                         Tab.LIST -> {
@@ -1866,6 +2111,7 @@ private fun DinnerBotApp(
                             rows = bigTripRows,
                             topUpRows = topUpRows,
                             twoWeekTrip = isFortnightList,
+                            onUncross = { row -> applyUncross(row.planId, row.line.itemId) },
                             onToggleChecked = { row, checked ->
                                 scope.launch {
                                     withContext(Dispatchers.IO) {
@@ -2238,6 +2484,8 @@ private data class LoadedState(
     val recipeOverrides: Map<String, RecipeOverride>,
     /** Andrea's own imported and hand-made recipes (Phase RI-2), also merged into the recipes above. */
     val importedRecipes: List<ImportedRecipe>,
+    /** Recipe ids whose first-cook keep prompt has already fired (Phase RI-3); it never fires twice. */
+    val keepPromptAsked: Set<String>,
 )
 
 /** The Sunday gate's inputs, re-read from the store at request time. */

@@ -91,8 +91,16 @@ class WeekPlannerStaplesTest {
 
     @Test fun ownedStaplesAreCoveredOnHand() {
         val plan = generate(setOf("Salt", "Long grain white rice"))
-        assertTrue(plan.lines.none { it.itemId == "salt" })
-        assertTrue(plan.lines.none { it.itemId == "long-grain-white-rice" })
+        // Phase RI-3: the owned staples stay on the list as covered
+        // lines naming their pantry entries.
+        assertEquals(
+            "Salt",
+            plan.lines.single { it.itemId == "salt" }.coveredByPantryName,
+        )
+        assertEquals(
+            "Long grain white rice",
+            plan.lines.single { it.itemId == "long-grain-white-rice" }.coveredByPantryName,
+        )
         // Only the eggs cost cash; the staples contribute $0.
         assertEquals(185, plan.cashNeededCents)
     }

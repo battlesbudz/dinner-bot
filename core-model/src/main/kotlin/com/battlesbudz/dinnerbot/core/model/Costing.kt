@@ -118,6 +118,14 @@ object Costing {
      * [forServings], into per-item needs. Pantry ingredients (the
      * pre-v0.4.3 unpriced form; no shipped recipe uses it anymore) are
      * returned separately by name.
+     *
+     * An as-written ingredient (an imported recipe's unmatched line)
+     * whose text exactly names a price book item — normalized whole-name
+     * equality, the priced-ness rule of [RecipePricing] — aggregates as
+     * that item: priced-ness is computed from the book as it stands, so
+     * the day the item enters the book the ingredient prices for real
+     * everywhere, with no stored state to update. As-written ingredients
+     * naming no book item stay in the returned names, unpriced.
      */
     fun aggregateNeeds(
         recipes: List<Recipe>,
@@ -130,7 +138,13 @@ object Costing {
             for (ingredient in recipe.scaledIngredients(forServings)) {
                 val pantry = ingredient.pantryItem
                 if (pantry != null) {
-                    pantryNames += pantry
+                    val named = RecipePricing.resolvedItem(ingredient, itemsById)
+                    if (named == null) {
+                        pantryNames += pantry
+                    } else {
+                        baseByItem[named.id] =
+                            (baseByItem[named.id] ?: 0.0) + ingredient.quantity.toBase()
+                    }
                     continue
                 }
                 val rawId = ingredient.priceItemId ?: continue
@@ -196,6 +210,13 @@ object Costing {
         val stockCoveredItemIds: Set<String>,
         /** Priced items whose need was covered by a matching owned pantry entry. */
         val pantryCoveredItemIds: Set<String> = emptySet(),
+        /**
+         * The placeholder guesses inside [cashNeededCents] (Phase RI-3):
+         * the part of the week's cash that is a labeled guess for
+         * ingredients with no real price yet, not a saved price. Zero
+         * whenever every ingredient is priced.
+         */
+        val guessTotalCents: Int = 0,
     )
 
     /**
@@ -214,15 +235,28 @@ object Costing {
      *   weeks' costings, so a week's Sam's routing never depends on which
      *   week of the pair is being priced). Null keeps the original behavior:
      *   the gate is evaluated from [needs] themselves.
+     * @param pantryOwnedNames the owned pantry entry names, passed when the
+     *   caller is building a shopping list (Phase RI-3): a covered item then
+     *   stays ON the list as a covered line (packsToBuy 0, $0 cash, the
+     *   covering entry named on the line) instead of silently leaving it,
+     *   per Battles's weekly-list ruling. Callers that only need the money
+     *   (stock projections, food-cost reads) pass no names and get no
+     *   covered lines, exactly as before.
+     * @param uncrossedItemIds covered items Andrea uncrossed for this week
+     *   (Phase RI-3): they cost as ordinary buy lines, flagged
+     *   [GroceryLine.uncrossed], and the pantry itself is never written.
      */
     fun costNeeds(
         needs: List<ItemNeed>,
         stockOnHand: Map<String, Quantity>,
         pantryCoveredItemIds: Set<String> = emptySet(),
         gateOverride: SamsGateResult? = null,
+        pantryOwnedNames: Set<String> = emptySet(),
+        uncrossedItemIds: Set<String> = emptySet(),
     ): CostedWeek {
         val gate = gateOverride ?: evaluateSamsGate(needs)
         val lines = mutableListOf<GroceryLine>()
+        val coveredLines = mutableListOf<GroceryLine>()
         val stockCovered = mutableSetOf<String>()
         val pantryCovered = mutableSetOf<String>()
         var cash = 0
@@ -232,9 +266,35 @@ object Costing {
             val item = need.item
             val portionCost = (need.neededInPackUnit * item.perUnitCents).roundToInt()
             foodCost += portionCost
+            // A covered item she uncrossed is a buy line with a memory:
+            // the flag is how a later reprice keeps it bought (RI-3).
+            val wasUncrossed = item.id in pantryCoveredItemIds && item.id in uncrossedItemIds
 
-            if (item.id in pantryCoveredItemIds) {
+            if (item.id in pantryCoveredItemIds && item.id !in uncrossedItemIds) {
                 pantryCovered += item.id
+                // The weekly list shows everything (Phase RI-3): a
+                // covered item stays visible as a crossed-out $0 line
+                // naming the pantry entry that covers it, when the
+                // caller is building a list. The money is unchanged:
+                // covered costs no cash either way.
+                if (pantryOwnedNames.isNotEmpty()) {
+                    val coveringName = pantryNamesCoveringItem(item, pantryOwnedNames).firstOrNull()
+                    if (coveringName != null) {
+                        coveredLines += GroceryLine(
+                            itemId = item.id,
+                            displayName = item.name,
+                            store = item.homeStore,
+                            needed = Quantity(
+                                need.neededBase / item.packQuantity.unit.toBaseFactor,
+                                item.packQuantity.unit,
+                            ),
+                            packsToBuy = 0,
+                            estimatedPackPriceCents = item.packPriceCents,
+                            portionCostCents = portionCost,
+                            coveredByPantryName = coveringName,
+                        )
+                    }
+                }
                 continue
             }
 
@@ -263,6 +323,7 @@ object Costing {
                         packsToBuy = packs,
                         estimatedPackPriceCents = item.packPriceCents,
                         portionCostCents = portionCost,
+                        uncrossed = wasUncrossed,
                     )
                 }
                 item.homeStore == Store.SAMS_CLUB -> {
@@ -282,6 +343,7 @@ object Costing {
                             packsToBuy = packs,
                             estimatedPackPriceCents = item.packPriceCents,
                             portionCostCents = portionCost,
+                            uncrossed = wasUncrossed,
                         )
                     } else {
                         val remainingInPackUnit = remainingBase / item.packQuantity.unit.toBaseFactor
@@ -295,6 +357,7 @@ object Costing {
                             packsToBuy = 1,
                             estimatedPackPriceCents = lineCash,
                             portionCostCents = (remainingInPackUnit * alternate.pricePerUnitCents).roundToInt(),
+                            uncrossed = wasUncrossed,
                         )
                     }
                 }
@@ -310,12 +373,13 @@ object Costing {
                         packsToBuy = packs,
                         estimatedPackPriceCents = item.packPriceCents,
                         portionCostCents = portionCost,
+                        uncrossed = wasUncrossed,
                     )
                 }
             }
         }
         return CostedWeek(
-            lines = lines,
+            lines = lines + coveredLines,
             cashNeededCents = cash,
             foodCostCents = foodCost,
             gate = gate,
@@ -342,7 +406,23 @@ object Costing {
         return Quantity(leftoverBase / item.packQuantity.unit.toBaseFactor, item.packQuantity.unit)
     }
 
-    /** Price a full set of recipes for one week. Convenience over [aggregateNeeds] + [costNeeds]. */
+    /**
+     * Price a full set of recipes for one week. Convenience over
+     * [aggregateNeeds] + [costNeeds], plus the as-written pass
+     * (Phase RI-3): an ingredient no book item prices — an imported
+     * recipe's unmatched line — stays on the list, as Battles ruled.
+     * Pantry-covered by name, it is a covered line like any other;
+     * otherwise it is a buy line carrying a [PriceGuess] in place of a
+     * price, and the guess counts in the week's cash. As-written
+     * ingredients a book item names exactly were already aggregated as
+     * that item's need by [aggregateNeeds], so they never reach here.
+     *
+     * The as-written pass runs only for [forList] callers — the ones
+     * building a week's shopping list (the planner's week costing, the
+     * grocery list builder). Money-only callers (food-cost reads, gate
+     * projections) leave it off and see exactly the priced lines, as
+     * before.
+     */
     fun costRecipes(
         recipes: List<Recipe>,
         forServings: Int,
@@ -350,8 +430,86 @@ object Costing {
         stockOnHand: Map<String, Quantity>,
         pantryCoveredItemIds: Set<String> = emptySet(),
         gateOverride: SamsGateResult? = null,
+        pantryOwnedNames: Set<String> = emptySet(),
+        uncrossedItemIds: Set<String> = emptySet(),
+        forList: Boolean = false,
     ): CostedWeek {
         val (needs, _) = aggregateNeeds(recipes, forServings, itemsById)
-        return costNeeds(needs, stockOnHand, pantryCoveredItemIds, gateOverride)
+        val costed = costNeeds(
+            needs, stockOnHand, pantryCoveredItemIds, gateOverride,
+            pantryOwnedNames = pantryOwnedNames,
+            uncrossedItemIds = uncrossedItemIds,
+        )
+        if (!forList) return costed
+
+        // Aggregate the still-unpriced as-written ingredients across the
+        // dinners, scaled like every other need: one line per distinct
+        // name, quantities summed in the first quantity's unit when the
+        // units convert, else the first quantity stands.
+        data class AsWrittenNeed(val displayName: String, var needed: Quantity)
+        val asWritten = linkedMapOf<String, AsWrittenNeed>()
+        for (recipe in recipes) {
+            for (ingredient in recipe.scaledIngredients(forServings)) {
+                val name = ingredient.pantryItem ?: continue
+                if (RecipePricing.resolvedItem(ingredient, itemsById) != null) continue
+                val id = RecipePricing.asWrittenItemId(name)
+                val existing = asWritten[id]
+                if (existing == null) {
+                    asWritten[id] = AsWrittenNeed(name, ingredient.quantity)
+                } else if (ingredient.quantity.unit.dimension ==
+                    existing.needed.unit.dimension
+                ) {
+                    existing.needed = Quantity(
+                        existing.needed.amount +
+                            ingredient.quantity.convertTo(existing.needed.unit).amount,
+                        existing.needed.unit,
+                    )
+                }
+            }
+        }
+        if (asWritten.isEmpty()) return costed
+
+        val extraLines = mutableListOf<GroceryLine>()
+        var guessCash = 0
+        for ((id, need) in asWritten) {
+            val coveringName = pantryOwnedNames.firstOrNull { owned ->
+                val ownedWords = NameWords.of(owned)
+                val words = NameWords.of(need.displayName)
+                ownedWords.isNotEmpty() && NameWords.endsWithWords(words, ownedWords)
+            }
+            val uncrossed = id in uncrossedItemIds
+            if (coveringName != null && !uncrossed) {
+                extraLines += GroceryLine(
+                    itemId = id,
+                    displayName = need.displayName,
+                    store = RecipePricing.guessStore(need.displayName, itemsById.values),
+                    needed = need.needed,
+                    packsToBuy = 0,
+                    estimatedPackPriceCents = 0,
+                    portionCostCents = null,
+                    coveredByPantryName = coveringName,
+                )
+            } else {
+                val guess = RecipePricing.guessFor(need.displayName, itemsById.values)
+                val guessCents = guess?.cents ?: 0
+                guessCash += guessCents
+                extraLines += GroceryLine(
+                    itemId = id,
+                    displayName = need.displayName,
+                    store = RecipePricing.guessStore(need.displayName, itemsById.values),
+                    needed = need.needed,
+                    packsToBuy = 1,
+                    estimatedPackPriceCents = 0,
+                    portionCostCents = null,
+                    uncrossed = uncrossed,
+                    priceGuessCents = guessCents,
+                )
+            }
+        }
+        return costed.copy(
+            lines = costed.lines + extraLines,
+            cashNeededCents = costed.cashNeededCents + guessCash,
+            guessTotalCents = guessCash,
+        )
     }
 }

@@ -341,6 +341,18 @@ interface CookCheckoffDao {
 }
 
 @Dao
+interface KeepPromptDao {
+    @Query("SELECT * FROM keep_prompt_asked")
+    suspend fun getAll(): List<KeepPromptEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(record: KeepPromptEntity)
+
+    @Query("DELETE FROM keep_prompt_asked")
+    suspend fun deleteAll()
+}
+
+@Dao
 interface SettingsDao {
     @Query("SELECT * FROM settings WHERE id = 1")
     suspend fun get(): SettingsEntity?
