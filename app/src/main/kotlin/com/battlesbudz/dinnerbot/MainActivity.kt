@@ -1981,17 +1981,28 @@ private fun DinnerBotApp(
             // step, in the order a person would unwind them; only a tab's
             // root screen lets back do Android's usual thing and leave.
             // The top bar's back arrow runs the same steps.
+            //
+            // Sub-screen state survives tab switches on purpose (go look
+            // at the list, come back, the recipe is still open), so each
+            // flag counts as "open" only on the tab that shows it: back
+            // on another tab's root screen must behave like root back,
+            // never clear a hidden screen's state (Codex review, PR #33).
+            // The import flow and the Sunday check take over the whole
+            // screen whatever the tab, so those two always count.
+            val recipeDetailOpen = tab == Tab.RECIPES && openRecipeId != null
+            val cookOpen = tab == Tab.PLANNER && cookTarget != null
+            val howItWorksOpen = tab == Tab.SETTINGS && showHowItWorks
+            val priceBookOpen = tab == Tab.PANTRY && pantryShowPrices
             val subScreenOpen = importStart != null || reconFlow != null ||
-                showHowItWorks || cookTarget != null || openRecipeId != null ||
-                pantryShowPrices
+                recipeDetailOpen || cookOpen || howItWorksOpen || priceBookOpen
             fun goBackOneStep() {
                 when {
                     importStart != null -> importStart = null
                     reconFlow != null -> skipReconciliation(reconFlow!!)
-                    showHowItWorks -> showHowItWorks = false
-                    cookTarget != null -> cookTarget = null
-                    openRecipeId != null -> openRecipeId = null
-                    pantryShowPrices -> pantryShowPrices = false
+                    howItWorksOpen -> showHowItWorks = false
+                    cookOpen -> cookTarget = null
+                    recipeDetailOpen -> openRecipeId = null
+                    priceBookOpen -> pantryShowPrices = false
                 }
             }
             BackHandler(enabled = subScreenOpen) { goBackOneStep() }
