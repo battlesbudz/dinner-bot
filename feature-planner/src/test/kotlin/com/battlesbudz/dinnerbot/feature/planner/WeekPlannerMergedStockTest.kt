@@ -31,7 +31,13 @@ class WeekPlannerMergedStockTest {
         pricePerUnitCents = 3.4, checkedDate = "2026-10-23", source = "test",
         staple = true,
     )
-    private val book = listOf(tenderloin, salt)
+    private val samsChicken = PriceItem(
+        id = "sams-chicken", name = "Sam's chicken", category = "Meat",
+        homeStore = Store.SAMS_CLUB, packDescription = "10 lb pack",
+        packQuantity = Quantity(10.0, MeasureUnit.POUND), packPriceCents = 1800,
+        pricePerUnitCents = 180.0, checkedDate = "2026-10-23", source = "test",
+    )
+    private val book = listOf(tenderloin, salt, samsChicken)
 
     private fun line(item: PriceItem, packs: Int, merged: Boolean) = GroceryLine(
         itemId = item.id, displayName = item.name, store = item.homeStore,
@@ -70,6 +76,56 @@ class WeekPlannerMergedStockTest {
             priceItems = book,
         )
         assertSame(stock, result)
+    }
+
+    @Test fun swappedWeekOnePurchaseReplacesTheDisplacedStock() {
+        // PR v0.4.4 (Codex): week 1's tenderloin was swapped for the
+        // Sam's chicken. The recipe-derived projection credited the
+        // tenderloin's pack (6 lb left after a 3 lb need); in reality
+        // it was never bought, and the chicken's 10 lb pack, 4 lb
+        // used, leaves 6 lb. Week 2 must start from the chicken.
+        val swapLine = GroceryLine(
+            itemId = samsChicken.id, displayName = samsChicken.name,
+            store = Store.SAMS_CLUB, needed = Quantity(4.0, MeasureUnit.POUND),
+            packsToBuy = 1, estimatedPackPriceCents = 1800,
+            substitutedForItemId = "pork-tenderloin",
+        )
+        val result = WeekPlanner.stockWithMergedPacks(
+            stock = mapOf("pork-tenderloin" to Quantity(6.0, MeasureUnit.POUND)),
+            weekLines = listOf(swapLine),
+            costedLines = listOf(line(tenderloin, packs = 1, merged = false)),
+            priceItems = book,
+            stockOnHand = emptyMap(),
+        )
+        assertEquals(null, result["pork-tenderloin"])
+        assertEquals(6.0, result.getValue("sams-chicken").amount, 0.001)
+    }
+
+    @Test fun mergedSwapLeftoverAdjustsTheProjectedStock() {
+        // The substitute was also cooked by another week 1 dinner, so
+        // the projection already holds its costed leftover (a 10 lb
+        // pack, 4 lb costed need, 6 lb projected). The merged swap
+        // line covers 8 lb of need from that same pack: the real
+        // leftover is 2 lb, and the projection moves by the delta.
+        val mergedSwap = GroceryLine(
+            itemId = samsChicken.id, displayName = samsChicken.name,
+            store = Store.SAMS_CLUB, needed = Quantity(8.0, MeasureUnit.POUND),
+            packsToBuy = 1, estimatedPackPriceCents = 1800,
+            substitutedForItemId = "pork-tenderloin",
+        )
+        val costed = GroceryLine(
+            itemId = samsChicken.id, displayName = samsChicken.name,
+            store = Store.SAMS_CLUB, needed = Quantity(4.0, MeasureUnit.POUND),
+            packsToBuy = 1, estimatedPackPriceCents = 1800,
+        )
+        val result = WeekPlanner.stockWithMergedPacks(
+            stock = mapOf("sams-chicken" to Quantity(6.0, MeasureUnit.POUND)),
+            weekLines = listOf(mergedSwap),
+            costedLines = listOf(costed),
+            priceItems = book,
+            stockOnHand = emptyMap(),
+        )
+        assertEquals(2.0, result.getValue("sams-chicken").amount, 0.001)
     }
 
     @Test fun plainAndNonSamsLinesChangeNothing() {

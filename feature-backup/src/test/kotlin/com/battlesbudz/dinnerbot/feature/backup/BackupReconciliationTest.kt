@@ -70,7 +70,7 @@ class BackupReconciliationTest {
     @Test fun reconciliationStateRoundTripsThroughExportImport() {
         val original = data()
         val restored = BackupEngine.import(BackupEngine.export(original))
-        assertEquals(4, restored.version)
+        assertEquals(5, restored.version)
         assertEquals(original.ranOutEvents, restored.ranOutEvents)
         assertEquals(original.cookCheckoffs, restored.cookCheckoffs)
         assertEquals(listOf("plan-0"), restored.settings.reconciledPlanIds)

@@ -139,4 +139,59 @@ class SeedRefreshInstrumentedTest {
             db.close()
         }
     }
+
+    /**
+     * PR v0.4.4: an item Andrea added from a barcode scan (a "user-" id,
+     * a typed price, a learned barcode link) is user data, exactly like
+     * a corrected price: every seed refresh leaves it whole. The
+     * refreshes only ever touch seed ids — addMissing inserts seed ids
+     * that are absent, refreshSeedPriceNotes rewrites notes for seed
+     * ids the bundle carries, refreshSeedRecipes replaces recipes only.
+     */
+    @Test fun userAddedItemAndItsLinkSurviveEverySeedRefresh() = runBlocking {
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val db = Room.inMemoryDatabaseBuilder(
+            ApplicationProvider.getApplicationContext(),
+            DinnerBotDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val priceJson = appContext.assets.open("pricebook.json").bufferedReader().use { it.readText() }
+            val recipesJson = appContext.assets.open("recipes.json").bufferedReader().use { it.readText() }
+            val loader = SeedLoader(db)
+            loader.seedIfEmpty(priceJson, recipesJson)
+            assertEquals(42, db.priceItemDao().getAll().size)
+
+            // The scan-created item and its link, as the write path saves them.
+            db.priceItemDao().upsert(
+                com.battlesbudz.dinnerbot.core.data.PriceItemEntity(
+                    id = "user-granulated-sugar", name = "Granulated sugar",
+                    category = "Dry and canned", homeStore = "WALMART",
+                    packDescription = "Bag, 4 lb", packAmount = 4.0, packUnit = "POUND",
+                    packPriceCents = 342, pricePerUnitCents = 85.5,
+                    checkedDate = "2026-10-23", source = "Added by barcode scan",
+                    userCorrected = true,
+                ),
+            )
+            db.barcodeLinkDao().upsert(
+                com.battlesbudz.dinnerbot.core.data.BarcodeLinkEntity(
+                    "036800123456", "user-granulated-sugar", 123L,
+                ),
+            )
+
+            assertEquals(0, loader.addMissingSeedPriceItems(priceJson))
+            loader.refreshSeedPriceNotes(priceJson)
+            loader.refreshSeedRecipes(recipesJson)
+
+            val sugar = db.priceItemDao().getById("user-granulated-sugar")!!
+            assertEquals("Granulated sugar", sugar.name)
+            assertEquals(342, sugar.packPriceCents)
+            assertEquals("WALMART", sugar.homeStore)
+            assertTrue(sugar.userCorrected)
+            assertEquals(43, db.priceItemDao().getAll().size)
+            val link = db.barcodeLinkDao().getByBarcode("036800123456")!!
+            assertEquals("user-granulated-sugar", link.itemId)
+        } finally {
+            db.close()
+        }
+    }
 }

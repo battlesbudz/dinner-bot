@@ -113,6 +113,23 @@ interface GroceryDao {
     @Query("UPDATE grocery_items SET packPriceCents = :packPriceCents WHERE rowId = :rowId")
     suspend fun updatePackPrice(rowId: Long, packPriceCents: Int)
 
+    /**
+     * A price correction on a scan-swapped row (PR v0.4.4): the swap
+     * line is carried whole at reprice, so its food portion must move
+     * with its price or the week's food cost keeps the old rate.
+     */
+    @Query(
+        "UPDATE grocery_items SET packPriceCents = :packPriceCents, " +
+            "portionCostCents = :portionCostCents WHERE rowId = :rowId",
+    )
+    suspend fun updatePackPriceAndPortion(rowId: Long, packPriceCents: Int, portionCostCents: Int)
+
+    @Query("DELETE FROM grocery_items WHERE rowId = :rowId")
+    suspend fun deleteRow(rowId: Long)
+
+    @Insert
+    suspend fun insert(item: GroceryItemEntity): Long
+
     @Query("DELETE FROM grocery_items WHERE planId = :planId")
     suspend fun deleteForPlan(planId: String)
 
@@ -186,6 +203,18 @@ interface BarcodeLinkDao {
     suspend fun delete(barcode: String)
 
     @Query("DELETE FROM barcode_links")
+    suspend fun deleteAll()
+}
+
+@Dao
+interface ScanSubstitutionDao {
+    @Query("SELECT * FROM scan_substitutions ORDER BY createdAtMillis")
+    suspend fun getAll(): List<ScanSubstitutionEntity>
+
+    @Insert
+    suspend fun insert(record: ScanSubstitutionEntity): Long
+
+    @Query("DELETE FROM scan_substitutions")
     suspend fun deleteAll()
 }
 

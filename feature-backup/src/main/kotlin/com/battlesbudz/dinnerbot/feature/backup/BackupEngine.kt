@@ -25,6 +25,21 @@ data class BackupBarcodeLink(
 )
 
 /**
+ * One remembered scan substitution inside a backup file (PR v0.4.4).
+ * The plan the swap happened in is deliberately not carried: the
+ * pairing and its recipe context are the memory, and a restored record
+ * must not point at a plan the restore does not have.
+ */
+@Serializable
+data class BackupScanSubstitution(
+    val originalItemId: String,
+    val substituteItemId: String,
+    val recipeId: String? = null,
+    val substitutePriceCents: Int,
+    val createdAtMillis: Long,
+)
+
+/**
  * One JSON file carrying the user's own data: settings, the full price book
  * (including Andrea's corrections), the pantry checklist, Sam's bulk stock,
  * recipe thumbs ratings, learned barcode links, and the Sunday
@@ -41,6 +56,12 @@ data class BackupBarcodeLink(
  *
  * Format version 4 (v0.4.0) adds ranOutEvents and cookCheckoffs. Older
  * files import with both empty.
+ *
+ * Format version 5 (v0.4.4) adds scanSubstitutions, the remembered
+ * barcode-scan swaps. The price book section already carries items
+ * Andrea added from scans wholesale (they are ordinary book items), so
+ * their links and swaps keep resolving after a restore. Older files
+ * import with substitutions empty.
  */
 @Serializable
 data class BackupData(
@@ -53,9 +74,10 @@ data class BackupData(
     val barcodeLinks: List<BackupBarcodeLink> = emptyList(),
     val ranOutEvents: List<RanOutEvent> = emptyList(),
     val cookCheckoffs: List<CookCheckoff> = emptyList(),
+    val scanSubstitutions: List<BackupScanSubstitution> = emptyList(),
 ) {
     companion object {
-        const val CURRENT_VERSION: Int = 4
+        const val CURRENT_VERSION: Int = 5
     }
 }
 
@@ -107,6 +129,20 @@ object BackupEngine {
         val checkoffKeys = data.cookCheckoffs.map { Triple(it.planId, it.day, it.itemKey) }
         require(checkoffKeys.size == checkoffKeys.toSet().size) {
             "That backup has duplicate cook check-offs."
+        }
+        val substitutionKeys = data.scanSubstitutions.map {
+            Triple(it.originalItemId, it.substituteItemId, it.createdAtMillis)
+        }
+        require(substitutionKeys.size == substitutionKeys.toSet().size) {
+            "That backup has duplicate scan substitutions."
+        }
+        for (swap in data.scanSubstitutions) {
+            require(swap.originalItemId in itemIds && swap.substituteItemId in itemIds) {
+                "That backup remembers a scan swap for an item that is not in its price book."
+            }
+            require(swap.substitutePriceCents > 0) {
+                "That backup remembers a scan swap with a broken price."
+            }
         }
         return data
     }

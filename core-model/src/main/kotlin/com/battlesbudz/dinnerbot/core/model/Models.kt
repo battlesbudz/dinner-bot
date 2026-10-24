@@ -155,7 +155,29 @@ data class GroceryLine(
      * the top-up shop, never to the big trip that already happened.
      */
     val reconciliationAdded: Boolean = false,
+    /**
+     * Set when this line is on the list because a barcode scan swapped it
+     * in for a planned item (PR v0.4.4): the value names the planned
+     * item(s) whose lines this one replaced for THIS week only — usually
+     * one price book id; a comma-joined list of ids when a write-time
+     * merged line that also stood for the substitute's own planned use
+     * was itself swapped (see BarcodeScanLogic.displacedOriginsOf). The
+     * marker is how repricing the week keeps the swap (the planned lines
+     * stay off, this line stays on at its scanned price) instead of
+     * regenerating it away. The recipe and future weeks never see it.
+     */
+    val substitutedForItemId: String? = null,
 )
+
+/**
+ * The planned items a swap marker names, in order (see
+ * [GroceryLine.substitutedForItemId]): every origin a reprice must
+ * keep off the fresh list. Item ids are slugs and never contain a
+ * comma. Lives in the core model because the planner's stock
+ * projection reconciles against the same origins.
+ */
+fun displacedOriginsOf(marker: String?): List<String> =
+    marker?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
 
 @Serializable
 data class PantryItem(

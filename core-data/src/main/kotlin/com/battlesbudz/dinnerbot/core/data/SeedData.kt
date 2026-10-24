@@ -1,6 +1,7 @@
 package com.battlesbudz.dinnerbot.core.data
 
 import com.battlesbudz.dinnerbot.core.model.BarcodeLink
+import com.battlesbudz.dinnerbot.core.model.ScanSubstitution
 import com.battlesbudz.dinnerbot.core.model.BulkStock
 import com.battlesbudz.dinnerbot.core.model.DietPreset
 import com.battlesbudz.dinnerbot.core.model.DietPresetsFile
@@ -146,6 +147,26 @@ object SeedMapper {
     fun BarcodeLinkEntity.toModel(): BarcodeLink = BarcodeLink(
         barcode = barcode,
         itemId = itemId,
+        createdAtMillis = createdAtMillis,
+    )
+
+    fun ScanSubstitution.toEntity(): ScanSubstitutionEntity = ScanSubstitutionEntity(
+        id = id,
+        planId = planId,
+        originalItemId = originalItemId,
+        substituteItemId = substituteItemId,
+        recipeId = recipeId,
+        substitutePriceCents = substitutePriceCents,
+        createdAtMillis = createdAtMillis,
+    )
+
+    fun ScanSubstitutionEntity.toModel(): ScanSubstitution = ScanSubstitution(
+        id = id,
+        planId = planId,
+        originalItemId = originalItemId,
+        substituteItemId = substituteItemId,
+        recipeId = recipeId,
+        substitutePriceCents = substitutePriceCents,
         createdAtMillis = createdAtMillis,
     )
 

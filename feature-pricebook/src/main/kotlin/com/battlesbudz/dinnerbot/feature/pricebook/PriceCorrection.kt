@@ -44,12 +44,18 @@ object PriceCorrection {
     /**
      * Record what an item actually cost per unit at a non-home store (the
      * shopping-list correction for a rerouted Sam's item). Replaces any
-     * existing alternate for that store.
+     * existing alternate for that store. [source] records which door the
+     * correction came through, exactly as on [applyPackPrice].
      */
-    fun applyAlternatePrice(item: PriceItem, store: Store, pricePerUnitCents: Double): PriceItem {
+    fun applyAlternatePrice(
+        item: PriceItem,
+        store: Store,
+        pricePerUnitCents: Double,
+        source: String = "Corrected in app",
+    ): PriceItem {
         require(pricePerUnitCents > 0.0) { "price must be positive" }
         val updated = item.alternates.filter { it.store != store } +
             com.battlesbudz.dinnerbot.core.model.StorePrice(store, pricePerUnitCents)
-        return item.copy(alternates = updated, source = "Corrected in app", userCorrected = true)
+        return item.copy(alternates = updated, source = source, userCorrected = true)
     }
 }

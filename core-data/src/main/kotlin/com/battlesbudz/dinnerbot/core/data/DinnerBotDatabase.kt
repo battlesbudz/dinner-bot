@@ -75,6 +75,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * untouched, which the instrumented migration test proves from a
  * populated v9 database.
  *
+ * Version 11 (PR v0.4.4) adds the barcode rework state through
+ * [MIGRATION_10_11]: the scan_substitutions table (remembered scan
+ * swaps, created empty; they accumulate from the upgrade on) and
+ * grocery_items.substitutedForItemId (the planned item a line was
+ * swapped in for, null on every stored row). Every v10 table and row
+ * carries over untouched, which the instrumented migration test
+ * proves from a populated v10 database.
+ *
  * fallbackToDestructiveMigration remains only as a pre-1.0 safety net for
  * development installs; with a real migration registered for every version
  * step it never triggers on a real upgrade path.
@@ -94,8 +102,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         IngredientNutritionEntity::class,
         RanOutEventEntity::class,
         CookCheckoffEntity::class,
+        ScanSubstitutionEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = false,
 )
 abstract class DinnerBotDatabase : RoomDatabase() {
@@ -112,6 +121,7 @@ abstract class DinnerBotDatabase : RoomDatabase() {
     abstract fun ingredientNutritionDao(): IngredientNutritionDao
     abstract fun ranOutDao(): RanOutDao
     abstract fun cookCheckoffDao(): CookCheckoffDao
+    abstract fun scanSubstitutionDao(): ScanSubstitutionDao
 
     companion object {
         /** v2 to v3: create the recipe_ratings table. Nothing else changes. */
@@ -219,11 +229,32 @@ abstract class DinnerBotDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v10 to v11: the barcode rework state (PR v0.4.4). Create the
+         * scan_substitutions table and add the nullable marker column to
+         * grocery_items. Additive only; no stored row is rewritten.
+         */
+        val MIGRATION_10_11: Migration = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `scan_substitutions` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `planId` TEXT, " +
+                        "`originalItemId` TEXT NOT NULL, `substituteItemId` TEXT NOT NULL, " +
+                        "`recipeId` TEXT, `substitutePriceCents` INTEGER NOT NULL, " +
+                        "`createdAtMillis` INTEGER NOT NULL)",
+                )
+                db.execSQL(
+                    "ALTER TABLE `grocery_items` ADD COLUMN `substitutedForItemId` TEXT",
+                )
+            }
+        }
+
         fun create(context: Context): DinnerBotDatabase =
             Room.databaseBuilder(context.applicationContext, DinnerBotDatabase::class.java, "dinner-bot.db")
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
                     MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
+                    MIGRATION_10_11,
                 )
                 .fallbackToDestructiveMigration()
                 .build()
