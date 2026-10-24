@@ -290,10 +290,10 @@ object BarcodeScanLogic {
      * second line would budget a second purchase the week may not
      * need. The combined line carries both dinners' need (packs
      * recomputed by the planner's pack math, never fewer than the
-     * line already bought), both dinners' food portions, the swap's
-     * marker, and the typed per-pack price, at any store. It reads as
-     * checked off only when both source lines were: any unchecked
-     * part is still to buy.
+     * line already bought), the swap's marker, and the typed per-pack
+     * price, at any store; its food portion is the combined need at
+     * that scanned rate. It reads as checked off only when both
+     * source lines were: any unchecked part is still to buy.
      */
     fun mergeSwapIntoLine(existing: GroceryLine, swap: GroceryLine, item: PriceItem): GroceryLine {
         require(existing.itemId == item.id && swap.itemId == item.id) {
@@ -321,11 +321,16 @@ object BarcodeScanLogic {
         // time, and the two forms price the same correction
         // differently. The cash is the same either way (the combined
         // need at the scanned rate); only the representation changes.
+        // The portion is likewise the whole combined need at the
+        // scanned rate: keeping the existing line's old portion would
+        // leave the week's food cost priced at a rate the scan just
+        // replaced (Codex, PR #24).
         return existing.copy(
             needed = Quantity(combinedNeedInPackUnit, item.packQuantity.unit),
             packsToBuy = max(existing.packsToBuy, packsForCombined),
             estimatedPackPriceCents = swap.estimatedPackPriceCents,
-            portionCostCents = (existing.portionCostCents ?: 0) + (swap.portionCostCents ?: 0),
+            portionCostCents = (combinedNeedInPackUnit * swap.estimatedPackPriceCents /
+                item.packQuantity.amount).roundToInt(),
             checkedOff = existing.checkedOff && swap.checkedOff,
             substitutedForItemId = swap.substitutedForItemId,
         )

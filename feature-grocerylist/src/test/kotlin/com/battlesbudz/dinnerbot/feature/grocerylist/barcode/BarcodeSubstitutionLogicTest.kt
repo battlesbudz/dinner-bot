@@ -201,9 +201,10 @@ class BarcodeSubstitutionLogicTest {
         assertEquals(Quantity(4.0, MeasureUnit.POUND), merged.needed)
         assertEquals(2, merged.packsToBuy)
         assertEquals(499, merged.estimatedPackPriceCents)
-        // Portions add: the existing dinner's 350 plus the swapped
-        // dinner's 2 lb at the typed $4.99 for a 3 lb pack (333).
-        assertEquals(350 + 333, merged.portionCostCents)
+        // The portion is the whole combined need at the scanned
+        // rate (Codex, PR #24): 4 lb at $4.99 for a 3 lb pack = 665,
+        // not the old portion at the replaced rate plus the swap's.
+        assertEquals(665, merged.portionCostCents)
         assertEquals("chicken-breast", merged.substitutedForItemId)
         // Checked off only when both halves were.
         assertFalse(merged.checkedOff)
