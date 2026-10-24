@@ -214,11 +214,14 @@ class WeeklyListRi3InstrumentedTest {
                 if (!bought) {
                     withDb { db ->
                         val rows = db.groceryDao().getForPlan("plan-ri3")
-                        rowsDump = rows.joinToString {
-                            "${it.itemId} packs=${it.packsToBuy} " +
-                                "covered=${it.coveredByPantryName} " +
-                                "uncrossed=${it.uncrossed} price=${it.packPriceCents}"
-                        }
+                        val planNow = db.planDao().getLatest()
+                        rowsDump = "plan=${planNow?.id} cash=${planNow?.cashNeededCents} " +
+                            "nights=${planNow?.nightsJson} rows=[" +
+                            rows.joinToString {
+                                "${it.itemId} packs=${it.packsToBuy} " +
+                                    "covered=${it.coveredByPantryName} " +
+                                    "uncrossed=${it.uncrossed} price=${it.packPriceCents}"
+                            } + "]" 
                         bought = rows.any {
                             it.itemId == "russet-potatoes" && it.packsToBuy == 1 &&
                                 it.coveredByPantryName == null
