@@ -1850,7 +1850,7 @@ private suspend fun correctLinePrice(database: DinnerBotDatabase, row: GroceryRo
             )
             newPackPrice = perPack
         } else {
-            val neededInPackUnit = row.line.needed.convertTo(item.packQuantity.unit).amount
+            val neededInPackUnit = Costing.amountInPackUnit(row.line.needed, item)
             if (neededInPackUnit > 0.0) {
                 val perUnit = totalCents.toDouble() / neededInPackUnit
                 database.priceItemDao().upsert(

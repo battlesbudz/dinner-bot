@@ -1,5 +1,6 @@
 package com.battlesbudz.dinnerbot.feature.recipes
 
+import com.battlesbudz.dinnerbot.core.model.Costing
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import kotlin.math.roundToInt
@@ -20,7 +21,10 @@ object RecipeCostCalculator {
             if (item == null || perUnit == null) {
                 0
             } else {
-                val inPackUnit = ingredient.quantity.convertTo(item.packQuantity.unit).amount
+                // Costing.amountInPackUnit, not a raw convertTo: the
+                // staples are measured in spoons and cups but sold by
+                // weight, and convertTo throws across dimensions.
+                val inPackUnit = Costing.amountInPackUnit(ingredient.quantity, item)
                 (inPackUnit * perUnit).roundToInt()
             }
         }
