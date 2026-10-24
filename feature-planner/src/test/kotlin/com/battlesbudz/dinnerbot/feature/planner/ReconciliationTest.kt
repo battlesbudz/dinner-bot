@@ -547,12 +547,14 @@ class ReconciliationTest {
         // One dinner in the pool, so the planned night is the potato
         // dinner itself and the assertions are about its lines.
         val dinners = listOf(potatoDinner)
-        // While "Potatoes" reads owned, russet potatoes are already home
-        // and the potato dinner's week carries no line for them.
+        // While "Potatoes" reads owned, russet potatoes are already home:
+        // the week carries them as a covered line, not a buy line (RI-3).
         val covered = WeekPlanner.generate(
             settings, dinners, book, emptyMap(), setOf("Potatoes"), "2026-10-19",
         )
-        assertTrue(covered.lines.none { it.itemId == "russet-potatoes" })
+        val coveredLine = covered.lines.single { it.itemId == "russet-potatoes" }
+        assertEquals("Potatoes", coveredLine.coveredByPantryName)
+        assertEquals(0, coveredLine.packsToBuy)
         // After write-back flips the staple to not owned, the same
         // planner input buys them.
         val flipped = WeekPlanner.generate(

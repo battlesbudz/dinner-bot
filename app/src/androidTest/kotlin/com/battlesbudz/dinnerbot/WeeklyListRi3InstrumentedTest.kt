@@ -196,6 +196,7 @@ class WeeklyListRi3InstrumentedTest {
             )
         }
         ActivityScenario.launch(MainActivity::class.java).use {
+            waitForText("Dinner Bot recipes")
             composeRule.onNodeWithTag("tab-List").performClick()
             waitForTag("covered-row-russet-potatoes")
             waitForText("Potatoes — from your pantry")
@@ -240,6 +241,7 @@ class WeeklyListRi3InstrumentedTest {
             )
         }
         ActivityScenario.launch(MainActivity::class.java).use {
+            waitForText("Dinner Bot recipes")
             composeRule.onNodeWithTag("tab-Plan").performClick()
             waitForText("Plan my week")
             composeRule.onNodeWithText("Plan my week").performClick()
@@ -292,6 +294,7 @@ class WeeklyListRi3InstrumentedTest {
 
     /** Open the planned egg bowl's cook view and check its only ingredient off. */
     private fun cookEggBowlToPrompt() {
+        waitForText("Dinner Bot recipes")
         composeRule.onNodeWithTag("tab-Plan").performClick()
         waitForText("Start cooking")
         composeRule.onNodeWithText("Start cooking").performScrollTo().performClick()

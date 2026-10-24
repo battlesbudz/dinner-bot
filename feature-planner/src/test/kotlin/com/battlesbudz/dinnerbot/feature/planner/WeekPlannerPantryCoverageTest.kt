@@ -69,9 +69,13 @@ class WeekPlannerPantryCoverageTest {
     private fun linesCash(plan: WeekPlanner.WeekPlan): Int =
         plan.lines.sumOf { it.packsToBuy * it.estimatedPackPriceCents }
 
-    @Test fun generatedWeekLeavesOwnedPantryItemsOffTheList() {
+    @Test fun generatedWeekShowsOwnedPantryItemsAsCoveredLines() {
         val plan = generate(setOf("Potatoes"))
-        assertTrue(plan.lines.none { it.itemId == "russet-potatoes" })
+        // Phase RI-3: the covered item stays on the list as a $0
+        // covered line naming the pantry entry; the money is unchanged.
+        val covered = plan.lines.single { it.itemId == "russet-potatoes" }
+        assertEquals("Potatoes", covered.coveredByPantryName)
+        assertEquals(0, covered.packsToBuy)
         // Both dinners together need 12 eggs: exactly one pack, all the cash.
         assertEquals(185, plan.cashNeededCents)
         // Plan total and list are the same computation: they cannot disagree.
@@ -89,11 +93,14 @@ class WeekPlannerPantryCoverageTest {
         val bought = generate(emptySet())
         assertEquals(349 + 185, bought.cashNeededCents)
 
-        // Mark "Potatoes" owned: the current week reprices in place.
+        // Mark "Potatoes" owned: the current week reprices in place —
+        // the buy line becomes a covered line (Phase RI-3).
         val owned = WeekPlanner.recost(
             settings, bought, pool, book, emptyMap(), setOf("Potatoes"),
         )
-        assertTrue(owned.lines.none { it.itemId == "russet-potatoes" })
+        val coveredLine = owned.lines.single { it.itemId == "russet-potatoes" }
+        assertEquals("Potatoes", coveredLine.coveredByPantryName)
+        assertEquals(0, coveredLine.packsToBuy)
         assertEquals(185, owned.cashNeededCents)
         assertEquals(owned.cashNeededCents, linesCash(owned))
         assertEquals(bought.nights, owned.nights)
@@ -119,6 +126,10 @@ class WeekPlannerPantryCoverageTest {
         )
         val eggsLine = owned.lines.single { it.itemId == "eggs" }
         assertTrue(eggsLine.checkedOff)
-        assertFalse(owned.lines.any { it.itemId == "russet-potatoes" })
+        // The potatoes line survives too, as the covered line (RI-3).
+        assertEquals(
+            "Potatoes",
+            owned.lines.single { it.itemId == "russet-potatoes" }.coveredByPantryName,
+        )
     }
 }
