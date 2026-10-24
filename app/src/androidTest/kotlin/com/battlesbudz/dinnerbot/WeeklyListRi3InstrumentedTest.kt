@@ -317,7 +317,9 @@ class WeeklyListRi3InstrumentedTest {
     @Test fun dismissingTheKeepPromptRecordsNothingAndNeverRepeats() {
         ActivityScenario.launch(MainActivity::class.java).use {
             cookImportedEggBowlToPrompt()
-            androidx.test.espresso.Espresso.pressBack()
+            androidx.test.uiautomator.UiDevice
+                .getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation())
+                .pressBack()
             awaitStep("prompt dismissed") { tagCount("keep-prompt") == 0 }
             withDb { db ->
                 // No rating was recorded...

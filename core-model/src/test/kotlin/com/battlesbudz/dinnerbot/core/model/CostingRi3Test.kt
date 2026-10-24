@@ -120,9 +120,12 @@ class CostingRi3Test {
     }
 
     @Test fun asWrittenIngredientCoveredByPantryNameIsACoveredLine() {
+        // Battles's example shape: the recipe names a specific kind
+        // ("Baby potatoes") no book item carries, and the pantry's
+        // generic entry ("Potatoes") covers it.
         val imported = recipe(
             "imported", RecipeOrigin.IMPORTED,
-            asWritten("Russet potatoes", 2.0, MeasureUnit.POUND),
+            asWritten("Baby potatoes", 2.0, MeasureUnit.POUND),
         )
         val costed = Costing.costRecipes(
             listOf(imported), 4, book, emptyMap(),
@@ -131,7 +134,7 @@ class CostingRi3Test {
         )
         val line = costed.lines.single()
         assertEquals("Potatoes", line.coveredByPantryName)
-        assertEquals("Russet potatoes", line.displayName)
+        assertEquals("Baby potatoes", line.displayName)
         assertNull(line.priceGuessCents)
         assertEquals(0, costed.cashNeededCents)
     }
