@@ -56,12 +56,14 @@ object RecipeTextParser {
             }
 
             // Serves / yield / time lines carry fields, not content.
-            readServings(line)?.let { value ->
-                servings = value
+            val servingsRead = readServings(line)
+            if (servingsRead != null) {
+                servings = servingsRead
                 continue
             }
-            readMinutes(line)?.let { value ->
-                if (minutes == null) minutes = value
+            val minutesRead = readMinutes(line)
+            if (minutesRead != null) {
+                if (minutes == null) minutes = minutesRead
                 continue
             }
 
