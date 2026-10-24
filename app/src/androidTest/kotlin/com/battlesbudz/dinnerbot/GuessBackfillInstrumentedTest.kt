@@ -9,8 +9,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.printToString
@@ -192,13 +190,19 @@ class GuessBackfillInstrumentedTest {
             // The item is visibly a guess in the book. It sits at the
             // end of the lazy list, so swipe until it is composed.
             var composed = false
-            repeat(25) {
+            val device = androidx.test.uiautomator.UiDevice
+                .getInstance(androidx.test.platform.app.InstrumentationRegistry.getInstrumentation())
+            repeat(30) {
                 if (!composed) {
                     composed = composeRule.onAllNodesWithText("spring onions")
                         .fetchSemanticsNodes().isNotEmpty()
                     if (!composed) {
-                        composeRule.onRoot().performTouchInput { swipeUp() }
-                        Thread.sleep(300)
+                        device.swipe(
+                            device.displayWidth / 2, (device.displayHeight * 0.75).toInt(),
+                            device.displayWidth / 2, (device.displayHeight * 0.25).toInt(),
+                            20,
+                        )
+                        Thread.sleep(400)
                     }
                 }
             }
