@@ -169,8 +169,9 @@ class IngredientCaptureInstrumentedTest {
             waitForNoTag("editor-save")
 
             // Back on the review the row is a priced book ingredient,
-            // and the recipe saves.
-            waitForText("Gochujang")
+            // and the recipe saves. (The row renders as one line —
+            // "1 ct Gochujang" — so the name matches as a substring.)
+            waitForText("Gochujang", substring = true)
             composeRule.onNodeWithTag("import-save").performScrollTo().performClick()
             awaitStep("import flow closed") { tagCount("import-save") == 0 }
             waitForText("Andrea's Gochujang Noodles")
