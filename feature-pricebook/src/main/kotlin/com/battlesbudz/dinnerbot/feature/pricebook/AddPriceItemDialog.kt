@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.MeasureUnit
 import com.battlesbudz.dinnerbot.core.model.NewBookItem
 import com.battlesbudz.dinnerbot.core.model.PriceItem
+import com.battlesbudz.dinnerbot.core.model.RecipePricing
 import com.battlesbudz.dinnerbot.core.model.Quantity
 import com.battlesbudz.dinnerbot.core.model.Store
 
@@ -64,9 +65,19 @@ fun AddPriceItemDialog(
     }
     var name by remember { mutableStateOf(initialName) }
     var store by remember { mutableStateOf(initialStore) }
-    var category by remember {
-        mutableStateOf(if ("Other" in categories) "Other" else categories.firstOrNull() ?: "Other")
+    var pickedCategory by remember { mutableStateOf<String?>(null) }
+    // The category the form will save: Andrea's own pick once she
+    // makes one. Before that, the category of a book item this name
+    // is equivalent to — a new kind of onion lands in Produce, not
+    // Other — so perishability and the fresh top-up trip treat the
+    // item right from the start; with no equivalent, the standing
+    // default. (NewBookItem only inherits an equivalent's category
+    // from a BLANK category, so the default has to be resolved here.)
+    val suggestedCategory = remember(name, book) {
+        RecipePricing.equivalentsFor(name.trim(), book).firstOrNull()?.category
     }
+    val category = pickedCategory ?: suggestedCategory
+        ?: if ("Other" in categories) "Other" else categories.firstOrNull() ?: "Other"
     var packDescription by remember { mutableStateOf("") }
     var packAmountText by remember { mutableStateOf("") }
     var unit by remember { mutableStateOf(MeasureUnit.COUNT) }
@@ -180,7 +191,7 @@ fun AddPriceItemDialog(
             title = "Category",
             options = categories.map { it to it },
             onPick = { picked ->
-                category = picked
+                pickedCategory = picked
                 picker = null
             },
             onDismiss = { picker = null },
