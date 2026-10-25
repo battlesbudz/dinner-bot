@@ -58,6 +58,8 @@ fun CookScreen(
     modifier: Modifier = Modifier,
     /** A tonight-only ingredient edit saved from this view (Phase RI-1): it lands on this night's plan only. */
     onSaveTonightOnly: (List<RecipeIngredient>) -> Unit = { _ -> },
+    /** A brand-new price book item created inside the ingredient editor (v0.6.2). */
+    onCreatePriceItem: (PriceItem) -> Unit = {},
     /** A from-now-on ingredient edit saved from this view (Phase RI-1): it becomes the recipe's household version. */
     onSaveFromNowOn: (List<RecipeIngredient>) -> Unit = { _ -> },
 ) {
@@ -99,6 +101,8 @@ fun CookScreen(
                     editingIngredients = false
                     pendingScope = edited
                 },
+                today = today,
+                onCreatePriceItem = onCreatePriceItem,
             )
         }
         pendingScope?.let { edited ->

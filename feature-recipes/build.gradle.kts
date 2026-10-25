@@ -24,6 +24,8 @@ android {
 
 dependencies {
     implementation(project(":core-model"))
+    // The shared add-an-ingredient form lives with the price book (v0.6.2).
+    implementation(project(":feature-pricebook"))
     // The recipe photo picker (Epic issue #10) launches from the detail screen.
     implementation(libs.activity.compose)
     implementation(platform(libs.compose.bom))

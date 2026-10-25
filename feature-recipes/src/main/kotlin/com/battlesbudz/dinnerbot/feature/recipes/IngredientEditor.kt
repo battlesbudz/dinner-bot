@@ -36,6 +36,8 @@ import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Quantity
 import com.battlesbudz.dinnerbot.core.model.RecipeEditing
 import com.battlesbudz.dinnerbot.core.model.RecipeIngredient
+import com.battlesbudz.dinnerbot.core.model.RecipePricing
+import com.battlesbudz.dinnerbot.feature.pricebook.AddPriceItemDialog
 
 /**
  * The ingredient editor (Phase RI-1): one component with three doors —
@@ -52,6 +54,16 @@ import com.battlesbudz.dinnerbot.core.model.RecipeIngredient
  * A list is never saved empty: a dinner with no ingredients cannot be
  * cooked or costed, so the last ingredient cannot be removed and Save
  * stays off until the draft differs from what was opened.
+ *
+ * An ingredient that is not in the price book yet is added right
+ * here (v0.6.2 hotfix): the picker's "New ingredient…" opens the
+ * shared add-an-ingredient form, [onCreatePriceItem] persists the new
+ * book item the moment it is confirmed, and the editor keeps it in
+ * its own session list so it is addable — and named in the draft —
+ * immediately, before the caller's refresh lands. A price left blank
+ * in the form creates the item guess-priced; there is no path in
+ * this editor where an unknown ingredient blocks saving (the dead
+ * end Andrea hit adding her own recipe, 2026-10-25).
  */
 @Composable
 fun IngredientEditorDialog(
@@ -61,11 +73,18 @@ fun IngredientEditorDialog(
     onDismiss: () -> Unit,
     onSave: (List<RecipeIngredient>) -> Unit,
     modifier: Modifier = Modifier,
+    today: String = java.time.LocalDate.now().toString(),
+    onCreatePriceItem: (PriceItem) -> Unit = {},
 ) {
-    val itemsById = remember(priceItems) { priceItems.associateBy { it.id } }
+    var sessionItems by remember { mutableStateOf<List<PriceItem>>(emptyList()) }
+    val allItems = remember(priceItems, sessionItems) {
+        (priceItems + sessionItems).distinctBy { it.id }
+    }
+    val itemsById = remember(allItems) { allItems.associateBy { it.id } }
     var draft by remember { mutableStateOf(initialIngredients) }
     var pickerFor by remember { mutableStateOf<PickerTarget?>(null) }
     var quantityFor by remember { mutableStateOf<QuantityTarget?>(null) }
+    var createFor by remember { mutableStateOf<CreateRequest?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -142,7 +161,7 @@ fun IngredientEditorDialog(
 
     pickerFor?.let { target ->
         ItemPickerDialog(
-            priceItems = priceItems,
+            priceItems = allItems,
             title = when (target) {
                 is PickerTarget.Replace -> "Replace with"
                 PickerTarget.Add -> "Add which item?"
@@ -155,7 +174,34 @@ fun IngredientEditorDialog(
                     PickerTarget.Add -> quantityFor = QuantityTarget.Add(item)
                 }
             },
+            onAddNew = { typedName ->
+                createFor = CreateRequest(target = target, prefilledName = typedName)
+            },
             onDismiss = { pickerFor = null },
+        )
+    }
+
+    createFor?.let { request ->
+        AddPriceItemDialog(
+            book = allItems,
+            today = today,
+            initialName = request.prefilledName,
+            initialStore = RecipePricing.guessStore(request.prefilledName, allItems),
+            onConfirm = { item ->
+                // The item joins the book immediately (the scan flow's
+                // precedent): it stays in the book even if this editor
+                // is cancelled afterwards — it was deliberately created.
+                onCreatePriceItem(item)
+                sessionItems = sessionItems + item
+                createFor = null
+                pickerFor = null
+                when (val target = request.target) {
+                    is PickerTarget.Replace ->
+                        draft = RecipeEditing.substitute(draft, target.index, item)
+                    PickerTarget.Add -> quantityFor = QuantityTarget.Add(item)
+                }
+            },
+            onDismiss = { createFor = null },
         )
     }
 
@@ -183,17 +229,27 @@ private sealed interface PickerTarget {
     data object Add : PickerTarget
 }
 
+/** An add-new-ingredient request out of the picker: which pick it completes, and the name Andrea typed. */
+private data class CreateRequest(val target: PickerTarget, val prefilledName: String)
+
 private sealed interface QuantityTarget {
     data class Edit(val index: Int) : QuantityTarget
     data class Add(val item: PriceItem) : QuantityTarget
 }
 
-/** Pick a price book item by name; the search filters the list as Andrea types. */
+/**
+ * Pick a price book item by name; the search filters the list as
+ * Andrea types. The list only ever held book items — which is why an
+ * ingredient the book did not have was a dead end (v0.6.2 hotfix).
+ * The "New ingredient…" entry is always on the list now and hands
+ * the typed search text to [onAddNew] as the new item's name.
+ */
 @Composable
 private fun ItemPickerDialog(
     priceItems: List<PriceItem>,
     title: String,
     onPick: (PriceItem) -> Unit,
+    onAddNew: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
@@ -219,6 +275,25 @@ private fun ItemPickerDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().testTag("picker-search"),
                 )
+                OutlinedButton(
+                    onClick = { onAddNew(query.trim()) },
+                    modifier = Modifier.fillMaxWidth().testTag("picker-add-new"),
+                ) { Text("New ingredient…") }
+                Text(
+                    "Not in the price book? Add it as a new ingredient — " +
+                        "a price if you know it, or Dinner Bot will guess.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                if (shown.isEmpty()) {
+                    Text(
+                        if (query.isBlank()) {
+                            "The price book has no items yet."
+                        } else {
+                            "Nothing in the price book matches “${query.trim()}”."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
                 LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
                     items(shown, key = { it.id }) { item ->
                         Column(

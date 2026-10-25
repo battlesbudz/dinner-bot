@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -22,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.PriceItem
@@ -35,16 +37,22 @@ fun storeDisplayName(store: Store): String = when (store) {
 
 /**
  * The price book: every priced item with its store and pack price. Tap a
- * price to correct it, tap the store to move the item's home store.
+ * price to correct it, tap the store to move the item's home store. New
+ * ingredients are added with the shared add-an-ingredient form
+ * ([AddPriceItemDialog]); a price left blank starts the item at a
+ * guessed price marked as a guess, never blocking the add (v0.6.2).
  */
 @Composable
 fun PriceBookScreen(
     priceItems: List<PriceItem>,
     onItemEdited: (PriceItem) -> Unit,
     modifier: Modifier = Modifier,
+    today: String = java.time.LocalDate.now().toString(),
+    onItemAdded: (PriceItem) -> Unit = {},
 ) {
     var editingPrice by remember { mutableStateOf<PriceItem?>(null) }
     var editingStore by remember { mutableStateOf<PriceItem?>(null) }
+    var addingItem by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize().padding(16.dp),
@@ -57,6 +65,10 @@ fun PriceBookScreen(
                     "something different; your number wins from then on.",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            Button(
+                onClick = { addingItem = true },
+                modifier = Modifier.padding(top = 8.dp).testTag("pricebook-add"),
+            ) { Text("Add an ingredient") }
         }
         items(priceItems, key = { it.id }) { item ->
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -80,7 +92,7 @@ fun PriceBookScreen(
                     }
                     if (item.guessPriced) {
                         Text(
-                            "Guessed price — from a recipe import, not shopped yet",
+                            "Guessed price — not shopped yet",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -141,6 +153,18 @@ fun PriceBookScreen(
             },
             confirmButton = {},
             dismissButton = { TextButton(onClick = { editingStore = null }) { Text("Cancel") } },
+        )
+    }
+
+    if (addingItem) {
+        AddPriceItemDialog(
+            book = priceItems,
+            today = today,
+            onConfirm = { item ->
+                onItemAdded(item)
+                addingItem = false
+            },
+            onDismiss = { addingItem = false },
         )
     }
 }

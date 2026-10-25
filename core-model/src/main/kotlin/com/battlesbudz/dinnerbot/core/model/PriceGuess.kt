@@ -254,7 +254,7 @@ object GuessPricer {
     }
 
     /** "user-<slug>" in the scan-added convention, suffixed until it is free. */
-    private fun uniqueUserId(name: String, book: List<PriceItem>): String {
+    internal fun uniqueUserId(name: String, book: List<PriceItem>): String {
         val slug = NameWords.of(name).joinToString("-").ifBlank { "item" }
         val taken = book.map { it.id }.toSet()
         var candidate = "user-$slug"
@@ -276,4 +276,112 @@ object GuessPricer {
     const val DEFAULT_CATEGORY: String = "Other"
 
     const val GUESS_SOURCE: String = "Recipe import — guessed price"
+}
+
+/**
+ * The single builder behind the shared add-an-ingredient form
+ * (v0.6.2 hotfix): every door that adds an ingredient to the price
+ * book by hand — the ingredient editor, the price book itself, and a
+ * barcode scan of a product the book does not have — builds its item
+ * here, so the record is identical wherever it was added.
+ *
+ * Two outcomes, by whether Andrea knows the price:
+ *
+ * - A typed price is her number: the item is priced, flagged
+ *   user-corrected like any price she enters, and carries the
+ *   caller's [pricedSource] note.
+ * - No price: the item is created anyway — a missing price must
+ *   never block adding an ingredient (Andrea's dead end, 2026-10-25)
+ *   — at the [RecipePricing] median guess for its name, flagged
+ *   [PriceItem.guessPriced] so every surface labels it a guess, and
+ *   the first scan or price correction replaces it with the real
+ *   shelf price and clears the mark, exactly as import guesses have
+ *   worked since v0.5.3.
+ *
+ * The id is the "user-" convention of the scan-added items
+ * ([GuessPricer.uniqueUserId]), so seed refreshes — which only ever
+ * touch seed ids — can never overwrite or drop a hand-added item,
+ * and backups carry it like any other user item.
+ */
+object NewBookItem {
+
+    /** Source note on an item added by hand at a price Andrea typed. */
+    const val HAND_PRICED_SOURCE: String = "Added by hand"
+
+    /** Source note on an item added by hand with no price; its price is a guess. */
+    const val HAND_GUESS_SOURCE: String = "Added by hand — guessed price"
+
+    /** Source note on an item added from a barcode scan at a typed price. */
+    const val SCAN_PRICED_SOURCE: String = "Added by barcode scan"
+
+    /** Source note on an item added from a barcode scan with no price typed. */
+    const val SCAN_GUESS_SOURCE: String = "Added by barcode scan — guessed price"
+
+    /**
+     * Build the book item for one hand-added ingredient. [priceCents]
+     * is the pack price Andrea typed, or null when she does not know
+     * it and the item starts guess-priced. [category] blank stands in
+     * with the category of an equivalent book item, else
+     * [GuessPricer.DEFAULT_CATEGORY]; [packDescription] blank stands
+     * in with the pack amount and unit.
+     */
+    fun build(
+        name: String,
+        category: String,
+        homeStore: Store,
+        packDescription: String,
+        packQuantity: Quantity,
+        priceCents: Int?,
+        book: List<PriceItem>,
+        checkedDate: String,
+        pricedSource: String = HAND_PRICED_SOURCE,
+        guessSource: String = HAND_GUESS_SOURCE,
+    ): PriceItem {
+        val trimmedName = name.trim()
+        require(trimmedName.isNotEmpty()) { "a new item needs a name" }
+        require(packQuantity.amount > 0.0) { "pack quantity must be positive" }
+        require(priceCents == null || priceCents > 0) { "price must be positive" }
+        val resolvedCategory = category.trim().ifEmpty {
+            RecipePricing.equivalentsFor(trimmedName, book).firstOrNull()?.category
+                ?: GuessPricer.DEFAULT_CATEGORY
+        }
+        val resolvedDescription = packDescription.trim().ifEmpty {
+            "${formatAmount(packQuantity.amount)} ${packQuantity.unit.label}"
+        }
+        return if (priceCents != null) {
+            PriceItem(
+                id = GuessPricer.uniqueUserId(trimmedName, book),
+                name = trimmedName,
+                category = resolvedCategory,
+                homeStore = homeStore,
+                packDescription = resolvedDescription,
+                packQuantity = packQuantity,
+                packPriceCents = priceCents,
+                pricePerUnitCents = priceCents.toDouble() / packQuantity.amount,
+                checkedDate = checkedDate,
+                source = pricedSource,
+                userCorrected = true,
+            )
+        } else {
+            val guess = RecipePricing.guessFor(trimmedName, book)
+            val guessCents = guess?.cents ?: GuessPricer.FALLBACK_GUESS_CENTS
+            PriceItem(
+                id = GuessPricer.uniqueUserId(trimmedName, book),
+                name = trimmedName,
+                category = resolvedCategory,
+                homeStore = homeStore,
+                packDescription = resolvedDescription,
+                packQuantity = packQuantity,
+                packPriceCents = guessCents,
+                pricePerUnitCents = guessCents.toDouble() / packQuantity.amount,
+                checkedDate = checkedDate,
+                source = guessSource,
+                guessPriced = true,
+            )
+        }
+    }
+
+    private fun formatAmount(amount: Double): String =
+        if (amount % 1.0 == 0.0) amount.toInt().toString()
+        else amount.toString().trimEnd('0').trimEnd('.')
 }

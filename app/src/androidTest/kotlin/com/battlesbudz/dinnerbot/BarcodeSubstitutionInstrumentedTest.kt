@@ -91,21 +91,20 @@ class BarcodeSubstitutionInstrumentedTest {
                 barcode = "036800123456",
                 suggestedName = "Granulated sugar",
                 initialStore = Store.ALDI,
-                categories = listOf("Dry and canned", "Meat", "Other"),
                 today = "2026-10-23",
-                existingIds = setOf("chicken-breast"),
+                book = listOf(breast),
                 onConfirm = { created = it },
                 onDismiss = {},
             )
         }
         // The name arrives prefilled from the lookup hint.
-        val prefilled = composeRule.onNodeWithTag("new-item-name")
+        val prefilled = composeRule.onNodeWithTag("add-item-name")
             .fetchSemanticsNode().config[SemanticsProperties.EditableText].text
         assertEquals("Granulated sugar", prefilled)
-        composeRule.onNodeWithTag("new-item-pack-description").performTextInput("Bag, 4 lb")
-        composeRule.onNodeWithTag("new-item-pack-amount").performTextInput("4")
-        composeRule.onNodeWithTag("new-item-price").performTextInput("3.42")
-        composeRule.onNodeWithTag("new-item-confirm").performClick()
+        composeRule.onNodeWithTag("add-item-pack-description").performTextInput("Bag, 4 lb")
+        composeRule.onNodeWithTag("add-item-pack-amount").performTextInput("4")
+        composeRule.onNodeWithTag("add-item-price").performTextInput("3.42")
+        composeRule.onNodeWithTag("add-item-confirm").performClick()
         assertNotNull("confirming the form must build the item", created)
         val built = created!!
         assertEquals("user-granulated-sugar", built.id)
@@ -117,6 +116,34 @@ class BarcodeSubstitutionInstrumentedTest {
         assertEquals("2026-10-23", built.checkedDate)
         assertEquals("Added by barcode scan", built.source)
         assertTrue(built.userCorrected)
+    }
+
+    @Test fun newItemFormWithoutAPriceStillBuildsAGuessPricedItem() {
+        // v0.6.2: the price is optional at the scan door too. A product
+        // whose price she cannot read still joins the book — guessed
+        // and marked — and its barcode still links.
+        var created: PriceItem? = null
+        composeRule.setContent {
+            NewItemFormDialog(
+                barcode = "036800123456",
+                suggestedName = "Granulated sugar",
+                initialStore = Store.ALDI,
+                today = "2026-10-23",
+                book = listOf(breast),
+                onConfirm = { created = it },
+                onDismiss = {},
+            )
+        }
+        composeRule.onNodeWithTag("add-item-pack-amount").performTextInput("4")
+        composeRule.onNodeWithTag("add-item-confirm").performClick()
+        assertNotNull("confirming without a price must still build the item", created)
+        val built = created!!
+        assertEquals("user-granulated-sugar", built.id)
+        assertTrue("no typed price means the item starts guess-priced", built.guessPriced)
+        assertEquals("Added by barcode scan — guessed price", built.source)
+        // No equivalent shares the head noun, so the whole-book median
+        // of the one-item book (836) is the guess.
+        assertEquals(836, built.packPriceCents)
     }
 
     @Test fun substituteChoiceShowsTheRememberedSwapAndBuysInstead() {

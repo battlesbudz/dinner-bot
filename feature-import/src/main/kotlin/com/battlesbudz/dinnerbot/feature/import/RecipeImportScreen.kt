@@ -64,6 +64,10 @@ fun RecipeImportFlow(
     onSave: (recipe: Recipe, sourceLink: String?, updateExistingId: String?) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Today (ISO), stamped on price book items the review's editor adds (v0.6.2). */
+    editorToday: String = java.time.LocalDate.now().toString(),
+    /** A brand-new price book item created inside the review's ingredient editor (v0.6.2). */
+    onCreatePriceItem: (PriceItem) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     var stage by remember { mutableStateOf<Stage>(Stage.Intake(error = null, link = "", text = "")) }
@@ -158,6 +162,8 @@ fun RecipeImportFlow(
             onSave = onSave,
             onCancel = onCancel,
             modifier = modifier,
+            editorToday = editorToday,
+            onCreatePriceItem = onCreatePriceItem,
         )
     }
 }
@@ -247,6 +253,8 @@ private fun ImportReviewScreen(
     onSave: (recipe: Recipe, sourceLink: String?, updateExistingId: String?) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
+    editorToday: String = java.time.LocalDate.now().toString(),
+    onCreatePriceItem: (PriceItem) -> Unit = {},
 ) {
     val draft = stage.draft
     val itemsById = remember(priceItems) { priceItems.associateBy { it.id } }
@@ -359,6 +367,13 @@ private fun ImportReviewScreen(
         )
 
         Text("Ingredients", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "An ingredient with no match below still saves — it joins the price book " +
+                "at a guessed price. To add one that is not listed at all, or to price " +
+                "a new one yourself, use Edit ingredients.",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.testTag("import-ingredients-note"),
+        )
         rows.forEachIndexed { index, row ->
             ReviewRow(
                 row = row,
@@ -401,6 +416,8 @@ private fun ImportReviewScreen(
                         rows, edited, priceItems, pantryOwnedNames,
                     )
                 },
+                today = editorToday,
+                onCreatePriceItem = onCreatePriceItem,
             )
         }
 
