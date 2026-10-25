@@ -165,9 +165,6 @@ fun GroceryListScreen(
     var formPrefillName by remember { mutableStateOf<String?>(null) }
     var pendingNewItem by remember { mutableStateOf<PriceItem?>(null) }
     val todayIso = remember { LocalDate.now().toString() }
-    val itemCategories = remember(priceItems) {
-        (priceItems.map { it.category }.distinct().sorted() + "Other").distinct()
-    }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -230,9 +227,8 @@ fun GroceryListScreen(
                 barcode = activeCode,
                 suggestedName = formPrefillName,
                 initialStore = scanRow?.line?.store ?: Store.ALDI,
-                categories = itemCategories,
                 today = todayIso,
-                existingIds = priceItemsById.keys,
+                book = priceItems,
                 onConfirm = { item ->
                     showNewItemForm = false
                     if (scanRow != null) {

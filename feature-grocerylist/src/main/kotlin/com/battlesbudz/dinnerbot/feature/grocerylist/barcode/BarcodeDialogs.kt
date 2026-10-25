@@ -8,10 +8,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -26,14 +23,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.battlesbudz.dinnerbot.core.model.MeasureUnit
 import com.battlesbudz.dinnerbot.core.model.Money
+import com.battlesbudz.dinnerbot.core.model.NewBookItem
 import com.battlesbudz.dinnerbot.core.model.PriceItem
-import com.battlesbudz.dinnerbot.core.model.Quantity
 import com.battlesbudz.dinnerbot.core.model.ScanSubstitution
 import com.battlesbudz.dinnerbot.core.model.Store
+import com.battlesbudz.dinnerbot.feature.pricebook.AddPriceItemDialog
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceCorrection
-import com.battlesbudz.dinnerbot.feature.pricebook.storeDisplayName
 
 /**
  * A scanned code resolved to [item]: show the price currently held and
@@ -147,8 +143,9 @@ fun LinkBarcodeDialog(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        "For a product the price book does not have yet. You name it, " +
-                            "pick its store and pack, and type the shelf price.",
+                        "For a product the price book does not have yet. You name it " +
+                            "and pick its store and pack; the shelf price can be typed " +
+                            "now or left blank to be guessed.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -175,172 +172,45 @@ fun LinkBarcodeDialog(
     )
 }
 
-/** A tiny single-choice picker used by the new-item form's tap-to-change rows. */
-@Composable
-private fun OptionPickerDialog(
-    title: String,
-    options: List<String>,
-    onPick: (Int) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column {
-                options.forEachIndexed { index, label ->
-                    DropdownMenuItem(
-                        text = { Text(label) },
-                        onClick = { onPick(index) },
-                    )
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
-}
-
 /**
- * The add-a-new-item form (PR v0.4.4): a scanned product the price book
- * does not have yet becomes a book item right here, in the aisle. The
- * name is prefilled from the Open Food Facts hint when there is one and
- * stays editable; the home store starts at the store the scan belongs
- * to; the pack and the shelf price are typed from the package in hand.
- * Confirming builds the item through [BarcodeScanLogic.buildUserItem]
- * and hands it to the caller, which saves it and links the barcode.
+ * The add-a-new-item form (PR v0.4.4), now the shared add-an-ingredient
+ * form (v0.6.2): a scanned product the price book does not have yet
+ * becomes a book item right here, in the aisle, through the same form
+ * the recipe editor and the price book use, so the record is identical
+ * wherever it was added. The name is prefilled from the Open Food
+ * Facts hint when there is one and stays editable; the home store
+ * starts at the store the scan belongs to; the pack is typed from the
+ * package in hand. The shelf price is OPTIONAL now: left blank, the
+ * item is saved guess-priced and marked as a guess (its barcode still
+ * links), and the first real price clears the mark — a missing price
+ * no longer blocks adding the product. The caller saves the item and
+ * links the barcode.
  */
 @Composable
 fun NewItemFormDialog(
     barcode: String,
     suggestedName: String?,
     initialStore: Store,
-    categories: List<String>,
     today: String,
-    existingIds: Set<String>,
+    book: List<PriceItem>,
     onConfirm: (PriceItem) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var name by remember(barcode) { mutableStateOf(suggestedName ?: "") }
-    var category by remember(barcode) {
-        mutableStateOf(categories.firstOrNull { it == "Other" } ?: categories.firstOrNull() ?: "Other")
-    }
-    var store by remember(barcode) { mutableStateOf(initialStore) }
-    var packDescription by remember(barcode) { mutableStateOf("") }
-    var packAmountText by remember(barcode) { mutableStateOf("") }
-    var packUnit by remember(barcode) { mutableStateOf(MeasureUnit.COUNT) }
-    var priceText by remember(barcode) { mutableStateOf("") }
-    var picker by remember(barcode) { mutableStateOf<String?>(null) }
-
-    val priceCents = PriceCorrection.parseToCents(priceText)
-    val packAmount = packAmountText.toDoubleOrNull()
-    val canSave = name.isNotBlank() && priceCents != null && priceCents > 0 &&
-        packAmount != null && packAmount > 0.0
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = Modifier.testTag("new-item-dialog"),
-        title = { Text("Add a new price book item") },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-            ) {
-                Text(
-                    "Barcode $barcode is a product the price book does not have. " +
-                        "Fill this in from the package in your hand; the item is saved " +
-                        "to the book and the barcode is linked to it.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().testTag("new-item-name"),
-                )
-                TextButton(
-                    onClick = { picker = "store" },
-                    modifier = Modifier.testTag("new-item-store"),
-                ) { Text("Home store: ${storeDisplayName(store)} — tap to change") }
-                TextButton(
-                    onClick = { picker = "category" },
-                    modifier = Modifier.testTag("new-item-category"),
-                ) { Text("Category: $category — tap to change") }
-                OutlinedTextField(
-                    value = packDescription,
-                    onValueChange = { packDescription = it },
-                    label = { Text("Pack (e.g. Bag, 4 lb)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().testTag("new-item-pack-description"),
-                )
-                OutlinedTextField(
-                    value = packAmountText,
-                    onValueChange = { packAmountText = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                    label = { Text("Pack amount") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().testTag("new-item-pack-amount"),
-                )
-                TextButton(
-                    onClick = { picker = "unit" },
-                    modifier = Modifier.testTag("new-item-unit"),
-                ) { Text("Pack unit: ${packUnit.label} — tap to change") }
-                OutlinedTextField(
-                    value = priceText,
-                    onValueChange = { priceText = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                    label = { Text("Shelf price") },
-                    prefix = { Text("$") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().testTag("new-item-price"),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = canSave,
-                modifier = Modifier.testTag("new-item-confirm"),
-                onClick = {
-                    val item = runCatching {
-                        BarcodeScanLogic.buildUserItem(
-                            name = name,
-                            category = category,
-                            homeStore = store,
-                            packDescription = packDescription.ifBlank {
-                                "${packAmountText.trim()} ${packUnit.label}"
-                            },
-                            packQuantity = Quantity(packAmount!!, packUnit),
-                            shelfPriceCents = priceCents!!,
-                            checkedDate = today,
-                            existingIds = existingIds,
-                        )
-                    }.getOrNull()
-                    if (item != null) onConfirm(item)
-                },
-            ) { Text("Save to the price book") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    AddPriceItemDialog(
+        book = book,
+        today = today,
+        initialName = suggestedName ?: "",
+        initialStore = initialStore,
+        title = "Add a new price book item",
+        intro = "Barcode $barcode is a product the price book does not have. " +
+            "Fill this in from the package in your hand; the item is saved " +
+            "to the book and the barcode is linked to it.",
+        confirmLabel = "Save to the price book",
+        pricedSource = NewBookItem.SCAN_PRICED_SOURCE,
+        guessSource = NewBookItem.SCAN_GUESS_SOURCE,
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
     )
-
-    when (picker) {
-        "store" -> OptionPickerDialog(
-            title = "Home store",
-            options = Store.entries.map { storeDisplayName(it) },
-            onPick = { index -> store = Store.entries[index]; picker = null },
-            onDismiss = { picker = null },
-        )
-        "category" -> OptionPickerDialog(
-            title = "Category",
-            options = categories,
-            onPick = { index -> category = categories[index]; picker = null },
-            onDismiss = { picker = null },
-        )
-        "unit" -> OptionPickerDialog(
-            title = "Pack unit",
-            options = MeasureUnit.entries.map { it.label },
-            onPick = { index -> packUnit = MeasureUnit.entries[index]; picker = null },
-            onDismiss = { picker = null },
-        )
-    }
 }
 
 /**

@@ -1141,27 +1141,6 @@ private fun DinnerBotApp(
     }
 
     /**
-     * Save a from-now-on ingredient edit (Phase RI-1): the edited list
-     * becomes the recipe's household version, stored as its override row
-     * and merged over the seed recipe on every load from now on. A stored
-     * plan keeps the lines it was priced with; the week picks the edit up
-     * when it is next built or repriced, the way price corrections
-     * already behave (plan section 5.2).
-     */
-    fun saveRecipeOverride(recipeId: String, ingredients: List<RecipeIngredient>) {
-        scope.launch {
-            withContext(Dispatchers.IO) {
-                database.recipeOverrideDao().upsert(
-                    with(SeedMapper) {
-                        RecipeOverride(recipeId, ingredients, System.currentTimeMillis()).toEntity()
-                    },
-                )
-            }
-            refresh()
-        }
-    }
-
-    /**
      * Restore-original (Phase RI-1): the household edit is deleted and
      * the current seed version stands again whole. The recipe's rating
      * and photo are separate rows and are not touched.
@@ -1185,32 +1164,65 @@ private fun DinnerBotApp(
      */
     fun saveFromNowOn(recipeId: String, ingredients: List<RecipeIngredient>) {
         val recipe = recipes.firstOrNull { it.id == recipeId } ?: return
-        if (recipe.origin == RecipeOrigin.LIBRARY) {
-            saveRecipeOverride(recipeId, ingredients)
-            return
-        }
         scope.launch {
             withContext(Dispatchers.IO) {
-                val stored = database.importedRecipeDao().getById(recipeId)
-                    ?.let { with(SeedMapper) { it.toModel() } }
-                if (stored != null) {
-                    // A from-now-on edit can name an ingredient the book
-                    // has never seen; it joins the book guess-priced,
-                    // exactly as at import (Battles's correction,
-                    // 2026-10-24) — everything is in the pricing book.
-                    val book = database.priceItemDao().getAll()
-                        .map { with(SeedMapper) { it.toModel() } }
-                    val (linked, created) = GuessPricer.linkRecipe(
-                        stored.recipe.copy(ingredients = ingredients),
-                        book, LocalDate.now().toString(),
-                    )
-                    created.forEach {
-                        database.priceItemDao().upsert(with(SeedMapper) { it.toEntity() })
-                    }
-                    database.importedRecipeDao().upsert(
-                        with(SeedMapper) { stored.copy(recipe = linked).toEntity() },
-                    )
+                // A from-now-on edit can name an ingredient the book
+                // has never seen; it joins the book guess-priced,
+                // exactly as at import (Battles's correction,
+                // 2026-10-24) — everything is in the pricing book.
+                // Library recipes link too since v0.6.2: before, their
+                // override path skipped linking entirely, so an
+                // override could point at nothing priceable.
+                val book = database.priceItemDao().getAll()
+                    .map { with(SeedMapper) { it.toModel() } }
+                val (linked, created) = GuessPricer.linkRecipe(
+                    recipe.copy(ingredients = ingredients),
+                    book, LocalDate.now().toString(),
+                )
+                created.forEach {
+                    database.priceItemDao().upsert(with(SeedMapper) { it.toEntity() })
                 }
+                if (recipe.origin == RecipeOrigin.LIBRARY) {
+                    database.recipeOverrideDao().upsert(
+                        with(SeedMapper) {
+                            RecipeOverride(
+                                recipeId, linked.ingredients, System.currentTimeMillis(),
+                            ).toEntity()
+                        },
+                    )
+                } else {
+                    val stored = database.importedRecipeDao().getById(recipeId)
+                        ?.let { with(SeedMapper) { it.toModel() } }
+                    if (stored != null) {
+                        database.importedRecipeDao().upsert(
+                            with(SeedMapper) {
+                                stored.copy(
+                                    recipe = stored.recipe.copy(
+                                        ingredients = linked.ingredients,
+                                    ),
+                                ).toEntity()
+                            },
+                        )
+                    }
+                }
+            }
+            refresh()
+        }
+    }
+
+    /**
+     * A brand-new price book item created by hand (v0.6.2): the shared
+     * add-an-ingredient form confirms into whatever door opened it —
+     * the ingredient editor in recipe creation, editing, the cook
+     * view, and import review, or the price book itself — and lands
+     * here. The item is written to the book immediately, the scan
+     * flow's precedent, so it exists (and rides in backups) even if
+     * the flow that created it is cancelled afterwards.
+     */
+    fun createPriceItem(item: PriceItem) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                database.priceItemDao().upsert(with(SeedMapper) { item.toEntity() })
             }
             refresh()
         }
@@ -2054,6 +2066,8 @@ private fun DinnerBotApp(
                                 saveImportedRecipe(recipe, sourceLink, updateExistingId)
                             },
                             onCancel = { importStart = null },
+                            editorToday = LocalDate.now().toString(),
+                            onCreatePriceItem = { item -> createPriceItem(item) },
                         )
                     } else if (activeFlow != null) {
                         // The Sunday gate (Phase V2-7) takes the screen:
@@ -2082,6 +2096,8 @@ private fun DinnerBotApp(
                                         saveFromNowOn(open.id, edited)
                                     },
                                     onRestoreOriginal = { restoreRecipeOriginal(open.id) },
+                                    editorToday = LocalDate.now().toString(),
+                                    onCreatePriceItem = { item -> createPriceItem(item) },
                                     nutritionByItemId = nutritionByItemId,
                                     nutritionByPantrySlug = nutritionByPantrySlug,
                                     sourceLink = importedRecipes
@@ -2214,6 +2230,7 @@ private fun DinnerBotApp(
                                     onSaveFromNowOn = { edited ->
                                         saveFromNowOn(targetNight.recipeId, edited)
                                     },
+                                    onCreatePriceItem = { item -> createPriceItem(item) },
                                 )
                             } else if (fortnightView != null && storedPlan != null && storedPlan2 != null) {
                             FortnightPlannerScreen(
@@ -2600,6 +2617,8 @@ private fun DinnerBotApp(
                                 } else {
                                     PriceBookScreen(
                                         priceItems = priceItems,
+                                        today = LocalDate.now().toString(),
+                                        onItemAdded = { item -> createPriceItem(item) },
                                         onItemEdited = { item ->
                                             scope.launch {
                                                 withContext(Dispatchers.IO) {

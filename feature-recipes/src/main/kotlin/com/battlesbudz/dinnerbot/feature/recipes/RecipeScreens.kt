@@ -208,6 +208,10 @@ fun RecipeDetailScreen(
     onSaveIngredients: (List<RecipeIngredient>) -> Unit = {},
     /** Restore-original: the household edit is cleared and the seed version stands again. */
     onRestoreOriginal: () -> Unit = {},
+    /** Today (ISO), stamped on price book items the editor adds (v0.6.2). */
+    editorToday: String = java.time.LocalDate.now().toString(),
+    /** A brand-new price book item created inside the ingredient editor (v0.6.2). */
+    onCreatePriceItem: (PriceItem) -> Unit = {},
     /**
      * Where an imported recipe came from (Phase RI-2), shown under its
      * title. Null for library and hand-made recipes.
@@ -446,6 +450,8 @@ fun RecipeDetailScreen(
                     editingIngredients = false
                     onSaveIngredients(edited)
                 },
+                today = editorToday,
+                onCreatePriceItem = onCreatePriceItem,
             )
         }
         recipe.scaledIngredients(servings).forEach { ingredient ->
