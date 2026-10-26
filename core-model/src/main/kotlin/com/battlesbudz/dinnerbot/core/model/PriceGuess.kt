@@ -197,6 +197,7 @@ object GuessPricer {
         recipe: Recipe,
         book: List<PriceItem>,
         checkedDate: String,
+        defaultStoreId: String? = null,
     ): Pair<Recipe, List<PriceItem>> {
         val working = book.toMutableList()
         val created = mutableListOf<PriceItem>()
@@ -208,7 +209,7 @@ object GuessPricer {
             if (match != null) {
                 ingredient.copy(priceItemId = match.id, pantryItem = null)
             } else {
-                val item = guessItemFor(ingredient, working, checkedDate)
+                val item = guessItemFor(ingredient, working, checkedDate, defaultStoreId)
                 working += item
                 created += item
                 ingredient.copy(priceItemId = item.id, pantryItem = null)
@@ -222,11 +223,12 @@ object GuessPricer {
         records: List<ImportedRecipe>,
         book: List<PriceItem>,
         checkedDate: String,
+        defaultStoreId: String? = null,
     ): LinkResult {
         val working = book.toMutableList()
         val created = mutableListOf<PriceItem>()
         val linked = records.map { record ->
-            val (recipe, made) = linkRecipe(record.recipe, working, checkedDate)
+            val (recipe, made) = linkRecipe(record.recipe, working, checkedDate, defaultStoreId)
             working += made
             created += made
             if (made.isEmpty() && recipe == record.recipe) record else record.copy(recipe = recipe)
@@ -244,6 +246,7 @@ object GuessPricer {
         ingredient: RecipeIngredient,
         book: List<PriceItem>,
         checkedDate: String,
+        defaultStoreId: String? = null,
     ): PriceItem {
         val name = ingredient.pantryItem?.trim().orEmpty()
         val guess = RecipePricing.guessFor(name, book)
@@ -255,7 +258,7 @@ object GuessPricer {
             name = name,
             category = RecipePricing.equivalentsFor(name, book).firstOrNull()?.category
                 ?: DEFAULT_CATEGORY,
-            homeStore = RecipePricing.guessStore(name, book),
+            homeStore = RecipePricing.guessStore(name, book, defaultStoreId),
             packDescription = "${formatAmount(amount)} ${pack.unit.label} (from a recipe)",
             packQuantity = pack,
             packPriceCents = priceCents,

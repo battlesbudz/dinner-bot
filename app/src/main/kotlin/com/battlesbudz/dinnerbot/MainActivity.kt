@@ -485,6 +485,7 @@ private fun DinnerBotApp(
             // resolves, the pass creates and rewrites nothing.
             val linkResult = GuessPricer.linkRecipes(
                 loadedImported, bookOnDisk, LocalDate.now().toString(),
+                defaultStoreId = s.firstStore?.id,
             )
             if (linkResult.itemsToAdd.isNotEmpty() || linkResult.recipes != loadedImported) {
                 linkResult.itemsToAdd.forEach {
@@ -1186,6 +1187,7 @@ private fun DinnerBotApp(
                 val (linked, created) = GuessPricer.linkRecipe(
                     recipe.copy(ingredients = ingredients),
                     book, LocalDate.now().toString(),
+                    defaultStoreId = database.storeDao().getAll().firstOrNull()?.id,
                 )
                 created.forEach {
                     database.priceItemDao().upsert(with(SeedMapper) { it.toEntity() })
@@ -1340,6 +1342,7 @@ private fun DinnerBotApp(
                 val book = database.priceItemDao().getAll().map { with(SeedMapper) { it.toModel() } }
                 val (linked, created) = GuessPricer.linkRecipe(
                     recipe, book, LocalDate.now().toString(),
+                    defaultStoreId = database.storeDao().getAll().firstOrNull()?.id,
                 )
                 created.forEach {
                     database.priceItemDao().upsert(with(SeedMapper) { it.toEntity() })
