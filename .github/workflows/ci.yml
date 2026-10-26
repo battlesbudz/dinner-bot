@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, commercial]
   pull_request:
-    branches: [main]
+    branches: [main, commercial]
   workflow_dispatch:
 
 # Engineering SOP: tests run per package, lint separately, instrumented tests
