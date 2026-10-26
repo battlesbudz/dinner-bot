@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.battlesbudz.dinnerbot.core.model.LabelNutrition
 import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Store
@@ -49,6 +50,12 @@ fun PriceBookScreen(
     modifier: Modifier = Modifier,
     today: String = java.time.LocalDate.now().toString(),
     onItemAdded: (PriceItem) -> Unit = {},
+    /** Resolves a barcode scanned in the add form to the item it already belongs to (v0.6.3). */
+    existingItemForBarcode: ((String) -> PriceItem?)? = null,
+    /** A barcode scanned in the add form, to link to the item it created. */
+    onBarcodeLinked: (barcode: String, itemId: String) -> Unit = { _, _ -> },
+    /** Label facts captured by a scan in the add form. */
+    onLabelFacts: (itemId: String, facts: LabelNutrition) -> Unit = { _, _ -> },
 ) {
     var editingPrice by remember { mutableStateOf<PriceItem?>(null) }
     var editingStore by remember { mutableStateOf<PriceItem?>(null) }
@@ -165,6 +172,10 @@ fun PriceBookScreen(
                 addingItem = false
             },
             onDismiss = { addingItem = false },
+            existingItemForBarcode = existingItemForBarcode,
+            onExistingItemScanned = { addingItem = false },
+            onBarcodeLinked = onBarcodeLinked,
+            onLabelFacts = onLabelFacts,
         )
     }
 }

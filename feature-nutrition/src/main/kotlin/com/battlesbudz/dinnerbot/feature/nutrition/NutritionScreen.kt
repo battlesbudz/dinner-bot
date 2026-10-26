@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
+import com.battlesbudz.dinnerbot.core.model.LabelNutrition
 import com.battlesbudz.dinnerbot.core.model.NutritionField
 import com.battlesbudz.dinnerbot.core.model.NutritionValues
 import com.battlesbudz.dinnerbot.core.model.Recipe
@@ -47,6 +48,8 @@ fun WeekNutritionCard(
     weeks: List<NutritionWeekInput>,
     householdSize: Int,
     modifier: Modifier = Modifier,
+    /** Scanned label facts by item id (v0.6.3): those ingredients read their labels, not USDA. */
+    labelByItemId: Map<String, LabelNutrition> = emptyMap(),
 ) {
     Card(modifier = modifier.fillMaxWidth().testTag("week-nutrition-card")) {
         Column(
@@ -55,6 +58,13 @@ fun WeekNutritionCard(
         ) {
             Text("Week nutrition (estimate)", style = MaterialTheme.typography.titleLarge)
             Text(NUTRITION_ESTIMATE_LABEL, style = MaterialTheme.typography.bodySmall)
+            if (labelByItemId.isNotEmpty()) {
+                Text(
+                    "Ingredients whose products were scanned into the price book " +
+                        "use their own label facts instead of the USDA entry.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             if (weeks.isEmpty()) {
                 Text(
                     "Plan a week and its dinners' nutrition will add up here.",
@@ -62,8 +72,10 @@ fun WeekNutritionCard(
                 )
             }
             weeks.forEach { week ->
-                val weekNutrition = remember(week, recipesById, householdSize, byItemId, byPantrySlug) {
-                    WeekNutrition.forWeek(week.nights, recipesById, householdSize, byItemId, byPantrySlug)
+                val weekNutrition = remember(week, recipesById, householdSize, byItemId, byPantrySlug, labelByItemId) {
+                    WeekNutrition.forWeek(
+                        week.nights, recipesById, householdSize, byItemId, byPantrySlug, labelByItemId,
+                    )
                 }
                 Text(week.label, style = MaterialTheme.typography.titleMedium)
                 if (weekNutrition == null) {
@@ -113,7 +125,13 @@ fun NutritionDetailLines(nutrition: RecipeNutrition, values: NutritionValues) {
 fun NutritionNotes(nutrition: RecipeNutrition) {
     if (nutrition.isPartial) {
         Text(
-            NutritionFormat.partialNote(nutrition.incompleteFields),
+            NutritionFormat.partialNote(nutrition.incompleteFields, nutrition.labelFactsUsed),
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+    if (nutrition.labelFactsUsed) {
+        Text(
+            "Includes nutrition from product labels, scanned from barcodes in the price book.",
             style = MaterialTheme.typography.bodySmall,
         )
     }

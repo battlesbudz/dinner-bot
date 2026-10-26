@@ -1,4 +1,4 @@
-package com.battlesbudz.dinnerbot.feature.grocerylist.barcode
+package com.battlesbudz.dinnerbot.feature.barcode
 
 import android.annotation.SuppressLint
 import androidx.camera.core.CameraSelector
@@ -38,11 +38,13 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * The camera surface of the scan flow (Phase V2-5). ML Kit's bundled
- * barcode model decodes on the device: decoding needs no connection,
- * and no photo is ever stored or sent anywhere; frames are read for a
- * code and dropped. The first code decoded is handed to [onBarcode]
- * exactly once. This composable is the only place the camera opens.
+ * The camera surface of every scan flow (Phase V2-5; shared module
+ * since v0.6.3, when the add-ingredient form gained its own scan
+ * button). ML Kit's bundled barcode model decodes on the device:
+ * decoding needs no connection, and no photo is ever stored or sent
+ * anywhere; frames are read for a code and dropped. The first code
+ * decoded is handed to [onBarcode] exactly once. This composable is
+ * the only place the camera opens.
  */
 @Composable
 fun BarcodeScannerDialog(

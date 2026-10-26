@@ -25,6 +25,7 @@ android {
 dependencies {
     implementation(project(":core-model"))
     implementation(project(":feature-pricebook"))
+    implementation(project(":feature-barcode"))
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)

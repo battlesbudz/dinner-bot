@@ -4,18 +4,27 @@ import kotlinx.serialization.Serializable
 
 /**
  * Nutrition for Dinner Bot (Phase V2-6), scoped by SCOPE_PLAN_V2 section B2:
- * figures are USDA FoodData Central values, computed from each recipe's
- * structured ingredients and shown as information only. Nutrition never
- * enters the planner, costing, or any goal or budget logic, and the app
- * makes no health claims.
+ * figures are computed from each recipe's structured ingredients and
+ * shown as information only. Nutrition never enters the planner,
+ * costing, or any goal or budget logic, and the app makes no health
+ * claims.
+ *
+ * Sources, in the order they are preferred (v0.6.3): an ingredient
+ * whose price book item carries nutrition facts scanned from the
+ * product's own label ([LabelNutrition], captured from Open Food Facts
+ * by barcode) is computed from those facts; every other ingredient
+ * reads the shipped USDA FoodData Central entry, exactly as before.
  *
  * Honesty rules, enforced here and in every display:
- * - A value FoodData Central does not publish for an entry is null in the
- *   seed and stays null through the math; it is never estimated or filled.
- * - Any ingredient with no entry, no gram weight for its unit, or a null
- *   field makes the affected recipe figures INCOMPLETE for that field.
- *   Displays render an incomplete total as partial, in words, instead of
- *   printing a number that pretends to be whole.
+ * - A value the source does not publish for an entry is null in the
+ *   seed and stays null through the math; it is never estimated or
+ *   filled.
+ * - Any ingredient with no entry, no gram weight for its unit, or a
+ *   null field makes the affected recipe figures INCOMPLETE for that
+ *   field. A label line whose quantity cannot be converted honestly
+ *   falls back to the USDA entry for that line rather than fabricate.
+ *   Displays render an incomplete total as partial, in words, instead
+ *   of printing a number that pretends to be whole.
  */
 
 /** The label fields Dinner Bot carries, in display order. */
@@ -144,6 +153,8 @@ data class RecipeNutrition(
     val incompleteFields: Set<NutritionField>,
     /** True when any included ingredient's entry is a closest match for a packaged product. */
     val closestMatchUsed: Boolean,
+    /** True when any included ingredient was computed from its own scanned label facts (v0.6.3). */
+    val labelFactsUsed: Boolean = false,
 ) {
     val isPartial: Boolean get() = incompleteFields.isNotEmpty()
 }
@@ -181,22 +192,83 @@ object NutritionCalculator {
     }
 
     /**
+     * The scanned label facts an ingredient reads, when its price book
+     * item has any (v0.6.3): priced items after the household
+     * substitution, like [entryFor]. Pantry staples carry no barcode,
+     * so they never have label facts.
+     */
+    fun labelFor(
+        ingredient: RecipeIngredient,
+        labelByItemId: Map<String, LabelNutrition>,
+    ): LabelNutrition? {
+        if (ingredient.pantryItem != null) return null
+        val rawId = ingredient.priceItemId ?: return null
+        return labelByItemId[Costing.substituteItemId(rawId)] ?: labelByItemId[rawId]
+    }
+
+    /**
+     * One ingredient's contribution from its scanned label facts, or
+     * null when the line cannot be converted honestly (the caller then
+     * falls back to the USDA entry for that line rather than fabricate
+     * a number): a weight line converts through the per-100 g facts; a
+     * count line reads the label's per-serving facts, or the per-100 g
+     * facts through the serving's gram weight when no per-serving set
+     * was published; every other unit has no honest bridge from a
+     * label.
+     */
+    fun labelContribution(
+        ingredient: RecipeIngredient,
+        label: LabelNutrition,
+    ): NutritionValues? {
+        val quantity = ingredient.quantity
+        if (quantity.unit.dimension == Dimension.WEIGHT) {
+            val grams = quantity.convertTo(MeasureUnit.GRAM).amount
+            return label.per100g.scaled(grams / 100.0)
+        }
+        if (quantity.unit == MeasureUnit.COUNT || quantity.unit == MeasureUnit.EACH) {
+            label.perServing?.let { return it.scaled(quantity.amount) }
+            val servingGrams = label.servingGrams ?: return null
+            return label.per100g.scaled(servingGrams * quantity.amount / 100.0)
+        }
+        return null
+    }
+
+    /**
      * Nutrition for [recipe] cooked at [forServings]. The recipe passed in
      * is the one the household actually cooks: callers pass the won't-eat
      * adapted recipe, so a removed removable ingredient is out of the
-     * figures exactly as it is out of the dish.
+     * figures exactly as it is out of the dish. An ingredient whose item
+     * carries scanned label facts is computed from the label (see
+     * [labelContribution]); a label line that cannot be converted falls
+     * back to the USDA entry for that line, unchanged.
      */
     fun recipeNutrition(
         recipe: Recipe,
         forServings: Int,
         byItemId: Map<String, IngredientNutrition>,
         byPantrySlug: Map<String, IngredientNutrition>,
+        labelByItemId: Map<String, LabelNutrition> = emptyMap(),
     ): RecipeNutrition {
         require(forServings > 0) { "servings must be positive" }
         val sums = mutableMapOf<NutritionField, Double>()
         val incomplete = mutableSetOf<NutritionField>()
         var closest = false
+        var labelUsed = false
         for (ingredient in recipe.scaledIngredients(forServings)) {
+            val label = labelFor(ingredient, labelByItemId)
+            val fromLabel = label?.let { labelContribution(ingredient, it) }
+            if (label != null && fromLabel != null) {
+                labelUsed = true
+                for (field in NutritionField.entries) {
+                    val value = fromLabel.value(field)
+                    if (value == null) {
+                        incomplete += field
+                    } else {
+                        sums[field] = (sums[field] ?: 0.0) + value
+                    }
+                }
+                continue
+            }
             val entry = entryFor(ingredient, byItemId, byPantrySlug)
             if (entry == null) {
                 incomplete += NutritionField.entries
@@ -233,6 +305,7 @@ object NutritionCalculator {
             perServing = totals.scaled(1.0 / forServings),
             incompleteFields = incomplete,
             closestMatchUsed = closest,
+            labelFactsUsed = labelUsed,
         )
     }
 
@@ -269,6 +342,7 @@ object NutritionCalculator {
             perServing = combine { it.perServing },
             incompleteFields = parts.flatMap { it.incompleteFields }.toSet(),
             closestMatchUsed = parts.any { it.closestMatchUsed },
+            labelFactsUsed = parts.any { it.labelFactsUsed },
         )
     }
 }

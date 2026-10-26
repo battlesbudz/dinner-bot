@@ -80,4 +80,35 @@ class WeekNutritionTest {
         assertTrue(note.contains("sugars"))
         assertTrue(note.contains("Partial data"))
     }
+
+    @Test fun weekUsesScannedLabelFactsWhenTheItemCarriesThem() {
+        // v0.6.3: the turkey item carries label facts (160 kcal/100 g
+        // against the USDA entry's 150), so the week totals read the
+        // label and the result is flagged as label-based.
+        val label = com.battlesbudz.dinnerbot.core.model.LabelNutrition(
+            itemId = "ground-turkey",
+            barcode = "0021234500000",
+            per100g = NutritionValues(caloriesKcal = 160.0, proteinG = 21.0),
+        )
+        val recipes = mapOf("a" to dinner("a"))
+        val nights = listOf(PlannedNight(day = "MON", recipeId = "a"))
+        val week = WeekNutrition.forWeek(
+            nights, recipes, householdSize = 4, byItemId, emptyMap(),
+            labelByItemId = mapOf("ground-turkey" to label),
+        )!!
+        val usdaOnly = WeekNutrition.forWeek(nights, recipes, 4, byItemId, emptyMap())!!
+        // 1 lb = 453.59 g: label 725.75 kcal vs USDA 680.39 kcal.
+        assertEquals(725.75, week.totals.caloriesKcal!!, 0.5)
+        assertEquals(680.39, usdaOnly.totals.caloriesKcal!!, 0.5)
+        assertTrue(week.labelFactsUsed)
+        assertTrue(!usdaOnly.labelFactsUsed)
+    }
+
+    @Test fun partialNoteStaysNeutralWhenALabelContributed() {
+        val note = NutritionFormat.partialNote(
+            setOf(NutritionField.FIBER), labelFactsUsed = true,
+        )
+        assertTrue(note.contains("Partial data"))
+        assertTrue(!note.contains("USDA"))
+    }
 }

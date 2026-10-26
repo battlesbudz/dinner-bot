@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.battlesbudz.dinnerbot.core.model.LabelNutrition
 import com.battlesbudz.dinnerbot.core.model.MeasureUnit
 import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.PriceItem
@@ -56,14 +57,18 @@ import com.battlesbudz.dinnerbot.feature.pricebook.AddPriceItemDialog
  * stays off until the draft differs from what was opened.
  *
  * An ingredient that is not in the price book yet is added right
- * here (v0.6.2 hotfix): the picker's "New ingredient…" opens the
- * shared add-an-ingredient form, [onCreatePriceItem] persists the new
- * book item the moment it is confirmed, and the editor keeps it in
- * its own session list so it is addable — and named in the draft —
+ * here (v0.6.2 hotfix): the picker's "+ New ingredient" button opens
+ * the shared add-an-ingredient form, [onCreatePriceItem] persists the
+ * new book item the moment it is confirmed, and the editor keeps it
+ * in its own session list so it is addable — and named in the draft —
  * immediately, before the caller's refresh lands. A price left blank
  * in the form creates the item guess-priced; there is no path in
  * this editor where an unknown ingredient blocks saving (the dead
- * end Andrea hit adding her own recipe, 2026-10-25).
+ * end Andrea hit adding her own recipe, 2026-10-25). The form's own
+ * scan button rides along (v0.6.3): a barcode scanned there links to
+ * the created item through [onBarcodeLinked], its label facts land
+ * through [onLabelFacts], and a scan of an already-known barcode
+ * completes this pick with that item instead of a duplicate.
  */
 @Composable
 fun IngredientEditorDialog(
@@ -75,6 +80,12 @@ fun IngredientEditorDialog(
     modifier: Modifier = Modifier,
     today: String = java.time.LocalDate.now().toString(),
     onCreatePriceItem: (PriceItem) -> Unit = {},
+    /** Resolves a barcode scanned in the add form to the book item it already belongs to (v0.6.3). */
+    existingItemForBarcode: ((String) -> PriceItem?)? = null,
+    /** A barcode scanned in the add form, to link to the item it created. */
+    onBarcodeLinked: (barcode: String, itemId: String) -> Unit = { _, _ -> },
+    /** Label facts captured by a scan in the add form. */
+    onLabelFacts: (itemId: String, facts: LabelNutrition) -> Unit = { _, _ -> },
 ) {
     var sessionItems by remember { mutableStateOf<List<PriceItem>>(emptyList()) }
     val allItems = remember(priceItems, sessionItems) {
@@ -187,6 +198,21 @@ fun IngredientEditorDialog(
             today = today,
             initialName = request.prefilledName,
             initialStore = RecipePricing.guessStore(request.prefilledName, allItems),
+            existingItemForBarcode = existingItemForBarcode,
+            onExistingItemScanned = { item ->
+                // The scan named an item the book already has: this
+                // pick completes with that item, exactly like tapping
+                // it in the picker — no duplicate is created.
+                createFor = null
+                pickerFor = null
+                when (val target = request.target) {
+                    is PickerTarget.Replace ->
+                        draft = RecipeEditing.substitute(draft, target.index, item)
+                    PickerTarget.Add -> quantityFor = QuantityTarget.Add(item)
+                }
+            },
+            onBarcodeLinked = onBarcodeLinked,
+            onLabelFacts = onLabelFacts,
             onConfirm = { item ->
                 // The item joins the book immediately (the scan flow's
                 // precedent): it stays in the book even if this editor
@@ -241,7 +267,7 @@ private sealed interface QuantityTarget {
  * Pick a price book item by name; the search filters the list as
  * Andrea types. The list only ever held book items — which is why an
  * ingredient the book did not have was a dead end (v0.6.2 hotfix).
- * The "New ingredient…" entry is always on the list now and hands
+ * The "+ New ingredient" button is always on the list now and hands
  * the typed search text to [onAddNew] as the new item's name.
  */
 @Composable
@@ -275,15 +301,14 @@ private fun ItemPickerDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().testTag("picker-search"),
                 )
-                OutlinedButton(
+                // A real filled button (v0.6.3, Battles's field
+                // report): the outlined entry read like a warning
+                // line, not something to tap. The form it opens
+                // explains prices and guesses itself.
+                Button(
                     onClick = { onAddNew(query.trim()) },
                     modifier = Modifier.fillMaxWidth().testTag("picker-add-new"),
-                ) { Text("New ingredient…") }
-                Text(
-                    "Not in the price book? Add it as a new ingredient — " +
-                        "a price if you know it, or Dinner Bot will guess.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                ) { Text("+ New ingredient") }
                 if (shown.isEmpty()) {
                     Text(
                         if (query.isBlank()) {

@@ -204,18 +204,45 @@ data class RecipePhotoEntity(
 )
 
 /**
- * Andrea's saved household version of one library recipe's ingredient
- * list (Phase RI-1): the full list as she last saved it, JSON-encoded.
+ * Andrea's saved household version of one library recipe (Phase RI-1,
+ * steps column added v0.6.3): the full ingredient list as she last saved
+ * it, JSON-encoded, plus her edited steps once she has saved a steps
+ * edit ([stepsJson] stays null until then, so the seed steps stand).
  * One row per edited recipe; absence of a row means the seed version
  * stands, and restore-original deletes the row. Household data in every
  * sense: the seed refresh never writes here, and the rows ride in
- * backups (format v6).
+ * backups (format v6, steps from format v9).
  */
 @Entity(tableName = "recipe_overrides")
 data class RecipeOverrideEntity(
     @PrimaryKey val recipeId: String,
     /** JSON-encoded List<RecipeIngredient>: the household ingredient list. */
     val ingredientsJson: String,
+    val updatedAtMillis: Long,
+    /** JSON-encoded List<String>: her household steps; null = seed steps stand. */
+    val stepsJson: String? = null,
+)
+
+/**
+ * Nutrition facts scanned from one price book item's own product label
+ * (v0.6.3): the Open Food Facts nutriments captured when its barcode
+ * was looked up, refreshed on every rescan. Household data: the seed
+ * refresh never writes here (the USDA seed lives in
+ * ingredient_nutrition), and the rows ride in backups (format v9).
+ */
+@Entity(tableName = "label_nutrition")
+data class LabelNutritionEntity(
+    @PrimaryKey val itemId: String,
+    /** The barcode these facts were read from. */
+    val barcode: String,
+    /** JSON-encoded NutritionValues: the label's per-100 g facts. */
+    val per100gJson: String,
+    /** JSON-encoded NutritionValues: the label's per-serving facts, when published. */
+    val perServingJson: String?,
+    /** The serving as the label words it, display only. */
+    val servingSizeText: String?,
+    /** Grams in one label serving, when the serving is stated in a weight unit. */
+    val servingGrams: Double?,
     val updatedAtMillis: Long,
 )
 

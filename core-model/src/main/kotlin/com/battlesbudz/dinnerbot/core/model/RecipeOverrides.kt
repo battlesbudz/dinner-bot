@@ -12,19 +12,26 @@ import kotlinx.serialization.Serializable
 enum class RecipeOrigin { LIBRARY, IMPORTED, MANUAL }
 
 /**
- * Andrea's saved household version of one library recipe's ingredient
- * list (Phase RI-1). The override stores the recipe's FULL list as she
- * last saved it; title, steps, servings, and tags stay the seed's.
- * Absence of a row means the seed version stands, and restore-original
- * is deleting the row. Overrides are household data: they ride in
- * backups and no seed refresh ever writes to them (Battles's rule:
- * changed recipes are never refreshed; refresh delivers additions only).
+ * Andrea's saved household version of one library recipe (Phase RI-1,
+ * steps added v0.6.3). The override stores the recipe's FULL ingredient
+ * list as she last saved it, and, once she edits the steps, her steps
+ * too: [steps] is null while she has never edited the steps, which
+ * means the seed steps stand (an ingredients-only save must never wipe
+ * a steps edit, and a steps-only save must never wipe her ingredient
+ * list, so the two halves are saved independently and merged here).
+ * Title, servings, and tags always stay the seed's. Absence of a row
+ * means the seed version stands, and restore-original is deleting the
+ * row. Overrides are household data: they ride in backups and no seed
+ * refresh ever writes to them (Battles's rule: changed recipes are
+ * never refreshed; refresh delivers additions only).
  */
 @Serializable
 data class RecipeOverride(
     val recipeId: String,
     val ingredients: List<RecipeIngredient>,
     val updatedAtMillis: Long,
+    /** Her household steps for this recipe; null = seed steps stand. */
+    val steps: List<String>? = null,
 )
 
 /**
@@ -119,16 +126,19 @@ object RecipeEditing {
  * household data become the recipes every surface consumes (Phase RI-1,
  * plan section 5.1). The merge is pure: stored seed recipes plus the
  * household override rows in, effective recipes out. A recipe with an
- * override cooks her ingredient list; title, steps, servings, and tags
- * stay the seed's. There is no second path that can leak the seed
- * version of a corrected dish.
+ * override cooks her ingredient list and, once she has edited them,
+ * her steps; title, servings, and tags stay the seed's. There is no
+ * second path that can leak the seed version of a corrected dish.
  */
 object EffectiveRecipes {
 
-    /** [recipe] with [override]'s ingredient list standing in for its own, when the override names this recipe. */
+    /** [recipe] with [override]'s ingredient list (and steps, once edited) standing in for its own, when the override names this recipe. */
     fun applyOverride(recipe: Recipe, override: RecipeOverride?): Recipe {
         if (override == null || override.recipeId != recipe.id) return recipe
-        return recipe.copy(ingredients = override.ingredients)
+        return recipe.copy(
+            ingredients = override.ingredients,
+            steps = override.steps ?: recipe.steps,
+        )
     }
 
     /** Every recipe with its household override applied; overrides naming no known recipe are ignored. */

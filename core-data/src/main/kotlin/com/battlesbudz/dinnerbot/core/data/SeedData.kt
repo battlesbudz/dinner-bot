@@ -8,6 +8,7 @@ import com.battlesbudz.dinnerbot.core.model.DietPresetsFile
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
 import com.battlesbudz.dinnerbot.core.model.ImportedRecipe
 import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
+import com.battlesbudz.dinnerbot.core.model.LabelNutrition
 import com.battlesbudz.dinnerbot.core.model.MeasureUnit
 import com.battlesbudz.dinnerbot.core.model.NutritionFile
 import com.battlesbudz.dinnerbot.core.model.NutritionValues
@@ -179,11 +180,35 @@ object SeedMapper {
         recipeId = recipeId,
         ingredientsJson = json.encodeToString(ingredientList, ingredients),
         updatedAtMillis = updatedAtMillis,
+        stepsJson = steps?.let { json.encodeToString(stringList, it) },
     )
 
     fun RecipeOverrideEntity.toModel(): RecipeOverride = RecipeOverride(
         recipeId = recipeId,
         ingredients = json.decodeFromString(ingredientList, ingredientsJson),
+        updatedAtMillis = updatedAtMillis,
+        steps = stepsJson?.let { json.decodeFromString(stringList, it) },
+    )
+
+    fun LabelNutrition.toEntity(): LabelNutritionEntity = LabelNutritionEntity(
+        itemId = itemId,
+        barcode = barcode,
+        per100gJson = json.encodeToString(NutritionValues.serializer(), per100g),
+        perServingJson = perServing?.let { json.encodeToString(NutritionValues.serializer(), it) },
+        servingSizeText = servingSizeText,
+        servingGrams = servingGrams,
+        updatedAtMillis = updatedAtMillis,
+    )
+
+    fun LabelNutritionEntity.toModel(): LabelNutrition = LabelNutrition(
+        itemId = itemId,
+        barcode = barcode,
+        per100g = json.decodeFromString(NutritionValues.serializer(), per100gJson),
+        perServing = perServingJson?.let {
+            json.decodeFromString(NutritionValues.serializer(), it)
+        },
+        servingSizeText = servingSizeText,
+        servingGrams = servingGrams,
         updatedAtMillis = updatedAtMillis,
     )
 

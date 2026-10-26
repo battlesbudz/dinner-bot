@@ -24,6 +24,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,13 +38,16 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.battlesbudz.dinnerbot.core.model.BarcodeLink
 import com.battlesbudz.dinnerbot.core.model.Costing
+import com.battlesbudz.dinnerbot.core.model.LabelNutrition
 import com.battlesbudz.dinnerbot.core.model.GroceryLine
 import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.ScanSubstitution
 import com.battlesbudz.dinnerbot.core.model.Store
 import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.BarcodeScanLogic
-import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.BarcodeScannerDialog
+import com.battlesbudz.dinnerbot.feature.barcode.BarcodeScannerDialog
+import com.battlesbudz.dinnerbot.feature.barcode.OffProduct
+import com.battlesbudz.dinnerbot.feature.barcode.OpenFoodFactsLookup
 import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.LinkBarcodeDialog
 import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.NewItemFormDialog
 import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.ScanPriceDialog
@@ -122,6 +126,13 @@ fun GroceryListScreen(
      */
     onScanNewItem: (PriceItem, String) -> Unit = { _, _ -> },
     /**
+     * Label facts captured for an item (v0.6.3): from the link picker's
+     * lookup, from the new-item form once its item actually saves, or
+     * refreshed when a known item's barcode is scanned again. The
+     * caller stores them on the item.
+     */
+    onLabelFactsSeen: (itemId: String, facts: LabelNutrition) -> Unit = { _, _ -> },
+    /**
      * A this-week-only substitution (PR v0.4.4): the row's planned line
      * comes off this week's list, the scanned item goes on at the typed
      * price, the item joins the book first when it is new, and the swap
@@ -163,7 +174,19 @@ fun GroceryListScreen(
     // scan saves it immediately instead).
     var showNewItemForm by remember { mutableStateOf(false) }
     var formPrefillName by remember { mutableStateOf<String?>(null) }
+    // The product the link picker's lookup returned for this scan
+    // (v0.6.3): handed to the new-item form so it never fetches twice.
+    var formPrefillProduct by remember { mutableStateOf<OffProduct?>(null) }
     var pendingNewItem by remember { mutableStateOf<PriceItem?>(null) }
+    // Label facts the new-item form captured (v0.6.3): held until the
+    // item they belong to actually saves, so an abandoned substitute
+    // choice never leaves facts behind for an item that does not exist.
+    var pendingLabelFacts by remember { mutableStateOf<LabelNutrition?>(null) }
+
+    fun flushPendingFacts(itemId: String) {
+        pendingLabelFacts?.let { facts -> onLabelFactsSeen(itemId, facts) }
+        pendingLabelFacts = null
+    }
     val todayIso = remember { LocalDate.now().toString() }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -184,7 +207,9 @@ fun GroceryListScreen(
         relinking = false
         showNewItemForm = false
         formPrefillName = null
+        formPrefillProduct = null
         pendingNewItem = null
+        pendingLabelFacts = null
         if (cameraGranted) {
             scanning = true
         } else {
@@ -201,6 +226,7 @@ fun GroceryListScreen(
         showNewItemForm = false
         formPrefillName = null
         pendingNewItem = null
+        pendingLabelFacts = null
     }
 
     val priceItemsById = remember(priceItems) { priceItems.associateBy { it.id } }
@@ -229,6 +255,8 @@ fun GroceryListScreen(
                 initialStore = scanRow?.line?.store ?: Store.ALDI,
                 today = todayIso,
                 book = priceItems,
+                initialProduct = formPrefillProduct,
+                onLabelFacts = { _, facts -> pendingLabelFacts = facts },
                 onConfirm = { item ->
                     showNewItemForm = false
                     if (scanRow != null) {
@@ -237,10 +265,14 @@ fun GroceryListScreen(
                         pendingNewItem = item
                     } else {
                         onScanNewItem(item, activeCode)
+                        flushPendingFacts(item.id)
                         clearScan()
                     }
                 },
-                onDismiss = { showNewItemForm = false },
+                onDismiss = {
+                    showNewItemForm = false
+                    pendingLabelFacts = null
+                },
             )
             relinking || displayItem == null -> LinkBarcodeDialog(
                 barcode = activeCode,
@@ -249,6 +281,8 @@ fun GroceryListScreen(
                     listItemIds = (rows + topUpRows).map { it.line.itemId },
                     preferredItemId = scanPreferredItemId,
                 ),
+                onLabelFacts = onLabelFactsSeen,
+                onProductKnown = { formPrefillProduct = it },
                 onPick = { item ->
                     onBarcodeLinkLearned(
                         BarcodeLink(activeCode, item.id, System.currentTimeMillis()),
@@ -264,6 +298,22 @@ fun GroceryListScreen(
                 onSkip = { clearScan() },
             )
             else -> {
+                // A known barcode scanned again refreshes the item's
+                // stored label facts from the new lookup (v0.6.3):
+                // labels change, and the freshest scan is the truest.
+                val linkedItem = (resolved as? BarcodeScanLogic.Resolution.Linked)?.item
+                if (linkedItem != null && pickedItem == null && pendingNewItem == null) {
+                    LaunchedEffect(activeCode, linkedItem.id) {
+                        val product = runCatching {
+                            OpenFoodFactsLookup.lookupProduct(activeCode)
+                        }.getOrNull()
+                        product
+                            ?.labelNutrition(
+                                linkedItem.id, activeCode, System.currentTimeMillis(),
+                            )
+                            ?.let { facts -> onLabelFactsSeen(linkedItem.id, facts) }
+                    }
+                }
                 // A scan launched from a line, naming that line's own
                 // item, corrects the line itself: the row's store
                 // governs the write, like a tap on the line's price. A
@@ -311,6 +361,7 @@ fun GroceryListScreen(
                         },
                         onSubstitute = { cents ->
                             onSubstitute(fromRow, displayItem, activeCode, cents)
+                            if (pendingNewItem != null) flushPendingFacts(displayItem.id)
                             clearScan()
                         },
                         onSavePriceOnly = { cents ->
@@ -319,6 +370,7 @@ fun GroceryListScreen(
                                     BarcodeScanLogic.scanCorrection(displayItem, cents),
                                     activeCode,
                                 )
+                                flushPendingFacts(displayItem.id)
                             } else {
                                 onScanPriceCorrected(
                                     BarcodeScanLogic.scanCorrection(displayItem, cents),

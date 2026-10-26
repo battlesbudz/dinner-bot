@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.ImportedRecipe
 import com.battlesbudz.dinnerbot.core.model.ImportedRecipeIds
+import com.battlesbudz.dinnerbot.core.model.LabelNutrition
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.RecipeOrigin
@@ -68,6 +69,12 @@ fun RecipeImportFlow(
     editorToday: String = java.time.LocalDate.now().toString(),
     /** A brand-new price book item created inside the review's ingredient editor (v0.6.2). */
     onCreatePriceItem: (PriceItem) -> Unit = {},
+    /** Resolves a barcode scanned in the review editor's add form to the item it belongs to (v0.6.3). */
+    existingItemForBarcode: ((String) -> PriceItem?)? = null,
+    /** A barcode scanned in the review editor's add form, to link to the item it created. */
+    onBarcodeLinked: (barcode: String, itemId: String) -> Unit = { _, _ -> },
+    /** Label facts captured by a scan in the review editor's add form. */
+    onLabelFacts: (itemId: String, facts: LabelNutrition) -> Unit = { _, _ -> },
 ) {
     val scope = rememberCoroutineScope()
     var stage by remember { mutableStateOf<Stage>(Stage.Intake(error = null, link = "", text = "")) }
@@ -164,6 +171,9 @@ fun RecipeImportFlow(
             modifier = modifier,
             editorToday = editorToday,
             onCreatePriceItem = onCreatePriceItem,
+            existingItemForBarcode = existingItemForBarcode,
+            onBarcodeLinked = onBarcodeLinked,
+            onLabelFacts = onLabelFacts,
         )
     }
 }
@@ -255,6 +265,9 @@ private fun ImportReviewScreen(
     modifier: Modifier = Modifier,
     editorToday: String = java.time.LocalDate.now().toString(),
     onCreatePriceItem: (PriceItem) -> Unit = {},
+    existingItemForBarcode: ((String) -> PriceItem?)? = null,
+    onBarcodeLinked: (barcode: String, itemId: String) -> Unit = { _, _ -> },
+    onLabelFacts: (itemId: String, facts: LabelNutrition) -> Unit = { _, _ -> },
 ) {
     val draft = stage.draft
     val itemsById = remember(priceItems) { priceItems.associateBy { it.id } }
@@ -418,6 +431,9 @@ private fun ImportReviewScreen(
                 },
                 today = editorToday,
                 onCreatePriceItem = onCreatePriceItem,
+                existingItemForBarcode = existingItemForBarcode,
+                onBarcodeLinked = onBarcodeLinked,
+                onLabelFacts = onLabelFacts,
             )
         }
 

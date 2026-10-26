@@ -270,6 +270,25 @@ interface IngredientNutritionDao {
     suspend fun deleteAll()
 }
 
+/**
+ * Scanned label facts (v0.6.3): household data written only by barcode
+ * captures and backup restores, never by the seed refresh.
+ */
+@Dao
+interface LabelNutritionDao {
+    @Query("SELECT * FROM label_nutrition ORDER BY itemId")
+    suspend fun getAll(): List<LabelNutritionEntity>
+
+    @Query("SELECT * FROM label_nutrition WHERE itemId = :itemId")
+    suspend fun getByItemId(itemId: String): LabelNutritionEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(facts: LabelNutritionEntity)
+
+    @Query("DELETE FROM label_nutrition")
+    suspend fun deleteAll()
+}
+
 @Dao
 interface RanOutDao {
     @Query("SELECT * FROM ran_out_events ORDER BY dateMarked, id")

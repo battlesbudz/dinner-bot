@@ -210,10 +210,11 @@ class Migration1011Test {
                 DinnerBotDatabase.MIGRATION_12_13,
                 DinnerBotDatabase.MIGRATION_13_14,
                 DinnerBotDatabase.MIGRATION_14_15,
+                DinnerBotDatabase.MIGRATION_15_16,
             )
             .build()
         try {
-            assertEquals(15, db.openHelper.readableDatabase.version)
+            assertEquals(16, db.openHelper.readableDatabase.version)
 
             // User data survives whole, corrected price and staple flag included.
             val breast = db.priceItemDao().getById("chicken-breast")!!

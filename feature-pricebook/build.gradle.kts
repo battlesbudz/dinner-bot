@@ -24,9 +24,13 @@ android {
 
 dependencies {
     implementation(project(":core-model"))
+    implementation(project(":feature-barcode"))
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.material3)
+    implementation(libs.core.ktx)
+    implementation(libs.activity.compose)
+    implementation(libs.coroutines.android)
     testImplementation(libs.junit)
 }

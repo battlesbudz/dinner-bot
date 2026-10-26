@@ -1,6 +1,7 @@
 package com.battlesbudz.dinnerbot.feature.nutrition
 
 import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
+import com.battlesbudz.dinnerbot.core.model.LabelNutrition
 import com.battlesbudz.dinnerbot.core.model.NutritionCalculator
 import com.battlesbudz.dinnerbot.core.model.NutritionField
 import com.battlesbudz.dinnerbot.core.model.PlannedNight
@@ -30,10 +31,13 @@ object WeekNutrition {
         householdSize: Int,
         byItemId: Map<String, IngredientNutrition>,
         byPantrySlug: Map<String, IngredientNutrition>,
+        labelByItemId: Map<String, LabelNutrition> = emptyMap(),
     ): RecipeNutrition? {
         val parts = nights.filterNot { it.notCooking }.mapNotNull { night ->
             recipesById[night.recipeId]?.let { recipe ->
-                NutritionCalculator.recipeNutrition(recipe, householdSize, byItemId, byPantrySlug)
+                NutritionCalculator.recipeNutrition(
+                    recipe, householdSize, byItemId, byPantrySlug, labelByItemId,
+                )
             }
         }
         return if (parts.isEmpty()) null else NutritionCalculator.sum(parts)
@@ -51,11 +55,24 @@ object NutritionFormat {
         }
     }
 
-    /** The honest partial-data wording, naming the fields USDA has no value for. */
-    fun partialNote(incompleteFields: Set<NutritionField>): String {
+    /**
+     * The honest partial-data wording, naming the fields with no
+     * sourced value. When a scanned label contributed, the gap may be
+     * the label's rather than USDA's, so the wording stays neutral
+     * about which source is missing the field.
+     */
+    fun partialNote(
+        incompleteFields: Set<NutritionField>,
+        labelFactsUsed: Boolean = false,
+    ): String {
         val names = incompleteFields.sortedBy { it.ordinal }.joinToString(", ") { it.label.lowercase() }
-        return "Partial data: USDA FoodData Central has no $names value for one or more " +
-            "ingredients here, so the $names total is incomplete."
+        return if (labelFactsUsed) {
+            "Partial data: no $names value for one or more ingredients here, " +
+                "so the $names total is incomplete."
+        } else {
+            "Partial data: USDA FoodData Central has no $names value for one or more " +
+                "ingredients here, so the $names total is incomplete."
+        }
     }
 
     private fun trimDecimal(value: Double): String {

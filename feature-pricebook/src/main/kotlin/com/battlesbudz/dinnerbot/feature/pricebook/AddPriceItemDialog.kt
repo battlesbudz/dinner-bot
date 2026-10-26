@@ -1,5 +1,9 @@
 package com.battlesbudz.dinnerbot.feature.pricebook
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,25 +11,36 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import com.battlesbudz.dinnerbot.core.model.LabelNutrition
 import com.battlesbudz.dinnerbot.core.model.MeasureUnit
 import com.battlesbudz.dinnerbot.core.model.NewBookItem
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.RecipePricing
 import com.battlesbudz.dinnerbot.core.model.Quantity
 import com.battlesbudz.dinnerbot.core.model.Store
+import com.battlesbudz.dinnerbot.feature.barcode.BarcodeScannerDialog
+import com.battlesbudz.dinnerbot.feature.barcode.OffPackParser
+import com.battlesbudz.dinnerbot.feature.barcode.OffProduct
+import com.battlesbudz.dinnerbot.feature.barcode.OpenFoodFactsLookup
+import kotlinx.coroutines.launch
 
 /**
  * The one add-an-ingredient form (v0.6.2 hotfix), shared by every door
@@ -43,6 +58,24 @@ import com.battlesbudz.dinnerbot.core.model.Store
  *
  * [pricedSource]/[guessSource] name the door on the saved item, the
  * way scans have always recorded "Added by barcode scan".
+ *
+ * Scanning (v0.6.3): the form carries its own "Scan barcode" button,
+ * so building the book no longer means detouring through the shopping
+ * list. A scan looks the code up in Open Food Facts and PREFILLS what
+ * it finds — product name, pack size parsed from the OFF quantity
+ * data, the serving folded into the pack description — as suggestions
+ * she can edit, exactly like the name hint before it; an unparseable
+ * pack or a missing product simply leaves the fields to her and never
+ * blocks. The scanned barcode stays linked to the item she saves
+ * ([onBarcodeLinked]), and the label's nutrition facts are captured
+ * onto the item ([onLabelFacts]) so recipes costed from it read the
+ * label instead of the USDA generic. When the scanned code already
+ * belongs to a book item ([existingItemForBarcode] finds it), the
+ * form hands that item back through [onExistingItemScanned] instead
+ * of creating a duplicate, and its stored facts refresh from the new
+ * scan. [initialBarcode] runs the same lookup for a form that opens
+ * with the barcode already known (the shopping list's new-item form),
+ * which is also why that door hides the scan button.
  */
 @Composable
 fun AddPriceItemDialog(
@@ -59,6 +92,25 @@ fun AddPriceItemDialog(
     confirmLabel: String = "Add to the price book",
     pricedSource: String = NewBookItem.HAND_PRICED_SOURCE,
     guessSource: String = NewBookItem.HAND_GUESS_SOURCE,
+    /** Show the Scan barcode button; the shopping list's form opens with the code already scanned. */
+    showScanButton: Boolean = true,
+    /** A barcode known before the form opened: its lookup (facts + pack prefill) runs on open. */
+    initialBarcode: String? = null,
+    /** The lookup a door already ran for [initialBarcode] (the link picker): applied directly, never refetched. */
+    initialProduct: OffProduct? = null,
+    /** Resolves a scanned barcode to the book item it already belongs to, when the door knows the links. */
+    existingItemForBarcode: ((String) -> PriceItem?)? = null,
+    /** A scan matched this existing item: the door uses it instead of a new item, and the form closes. */
+    onExistingItemScanned: (PriceItem) -> Unit = {},
+    /** The barcode to link to the item this form saves. */
+    onBarcodeLinked: (barcode: String, itemId: String) -> Unit = { _, _ -> },
+    /** Label nutrition facts captured for an item id, from a scan in (or before) this form. */
+    onLabelFacts: (itemId: String, facts: LabelNutrition) -> Unit = { _, _ -> },
+    /** The Open Food Facts lookup, injectable so tests can fixture it. */
+    productLookup: suspend (String) -> OffProduct? = { OpenFoodFactsLookup.lookupProduct(it) },
+    /** The camera surface, injectable so tests can fixture a scan without a camera. */
+    scannerContent: @Composable (onScanned: (String) -> Unit, onDismissScanner: () -> Unit) -> Unit =
+        { onScanned, onDismissScanner -> BarcodeScannerDialog(onScanned, onDismissScanner) },
 ) {
     val categories = remember(book) {
         (book.map { it.category }.distinct().sorted() + "Other").distinct()
@@ -85,6 +137,103 @@ fun AddPriceItemDialog(
     // Which option picker is showing: "store", "category", "unit", or none.
     var picker by remember { mutableStateOf<String?>(null) }
 
+    // Scan state (v0.6.3): the barcode this form is bound to once one
+    // is scanned (or was handed in), the product the lookup returned,
+    // and whether the camera is open.
+    val scope = rememberCoroutineScope()
+    var scannedBarcode by remember { mutableStateOf(initialBarcode) }
+    var scannedProduct by remember { mutableStateOf<OffProduct?>(null) }
+    var scanning by remember { mutableStateOf(false) }
+    var scanNote by remember { mutableStateOf<String?>(null) }
+    var cameraDenied by remember { mutableStateOf(false) }
+
+    fun applyPrefill(product: OffProduct) {
+        if (name.isBlank() && !product.name.isNullOrBlank()) {
+            name = product.name
+        }
+        val pack = OffPackParser.parse(
+            quantityText = product.quantityText,
+            productQuantity = product.productQuantity,
+            productQuantityUnit = product.productQuantityUnit,
+            servingSizeText = product.servingSizeText,
+        )
+        if (packDescription.isBlank() && !pack.description.isNullOrBlank()) {
+            packDescription = pack.description
+        }
+        if (packAmountText.isBlank() && pack.amount != null && pack.unit != null) {
+            packAmountText = formatPackAmount(pack.amount)
+            unit = pack.unit
+        }
+        scanNote = "Filled in from the barcode lookup — check it over; " +
+            "everything here can be edited."
+    }
+
+    fun handleBarcode(code: String) {
+        scanning = false
+        val existing = existingItemForBarcode?.invoke(code)
+        if (existing != null) {
+            // Already in the book: refresh its label facts from this
+            // scan, hand the item back, and close — no duplicate.
+            scope.launch {
+                val product = runCatching { productLookup(code) }.getOrNull()
+                product?.labelNutrition(existing.id, code, System.currentTimeMillis())
+                    ?.let { facts -> onLabelFacts(existing.id, facts) }
+            }
+            onExistingItemScanned(existing)
+            onDismiss()
+            return
+        }
+        scannedBarcode = code
+        scope.launch {
+            val product = runCatching { productLookup(code) }.getOrNull()
+            if (product == null) {
+                scanNote = "That barcode is not in Open Food Facts. Fill the form " +
+                    "in from the package — the barcode still links to the item you save."
+            } else {
+                scannedProduct = product
+                applyPrefill(product)
+            }
+        }
+    }
+
+    LaunchedEffect(initialBarcode) {
+        val code = initialBarcode ?: return@LaunchedEffect
+        if (initialProduct != null && existingItemForBarcode?.invoke(code) == null) {
+            // The door already paid for this lookup: apply it as-is.
+            scannedBarcode = code
+            scannedProduct = initialProduct
+            applyPrefill(initialProduct)
+        } else {
+            handleBarcode(code)
+        }
+    }
+
+    val context = LocalContext.current
+    var cameraGranted by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        cameraGranted = granted
+        if (granted) {
+            scanning = true
+        } else {
+            cameraDenied = true
+        }
+    }
+    fun startScan() {
+        cameraDenied = false
+        if (cameraGranted) {
+            scanning = true
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
     val packAmount = packAmountText.toDoubleOrNull()
     val priceCents = if (priceText.isBlank()) null else PriceCorrection.parseToCents(priceText)
     val canSave = name.isNotBlank() &&
@@ -100,6 +249,27 @@ fun AddPriceItemDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(intro, style = MaterialTheme.typography.bodyMedium)
+                if (showScanButton) {
+                    Button(
+                        onClick = { startScan() },
+                        modifier = Modifier.fillMaxWidth().testTag("add-item-scan"),
+                    ) { Text("Scan barcode") }
+                }
+                if (cameraDenied) {
+                    Text(
+                        "Camera permission is off, so the barcode cannot be scanned. " +
+                            "The form still works — type the ingredient in by hand.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.testTag("add-item-camera-denied"),
+                    )
+                }
+                scanNote?.let { note ->
+                    Text(
+                        note,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.testTag("add-item-scan-note"),
+                    )
+                }
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -156,26 +326,39 @@ fun AddPriceItemDialog(
             TextButton(
                 enabled = canSave,
                 onClick = {
-                    onConfirm(
-                        NewBookItem.build(
-                            name = name,
-                            category = category,
-                            homeStore = store,
-                            packDescription = packDescription,
-                            packQuantity = Quantity(packAmount!!, unit),
-                            priceCents = priceCents,
-                            book = book,
-                            checkedDate = today,
-                            pricedSource = pricedSource,
-                            guessSource = guessSource,
-                        ),
+                    val item = NewBookItem.build(
+                        name = name,
+                        category = category,
+                        homeStore = store,
+                        packDescription = packDescription,
+                        packQuantity = Quantity(packAmount!!, unit),
+                        priceCents = priceCents,
+                        book = book,
+                        checkedDate = today,
+                        pricedSource = pricedSource,
+                        guessSource = guessSource,
                     )
+                    val barcode = scannedBarcode
+                    if (barcode != null) {
+                        scannedProduct
+                            ?.labelNutrition(item.id, barcode, System.currentTimeMillis())
+                            ?.let { facts -> onLabelFacts(item.id, facts) }
+                        onBarcodeLinked(barcode, item.id)
+                    }
+                    onConfirm(item)
                 },
                 modifier = Modifier.testTag("add-item-confirm"),
             ) { Text(confirmLabel) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+
+    if (scanning) {
+        scannerContent(
+            { code -> handleBarcode(code) },
+            { scanning = false },
+        )
+    }
 
     when (picker) {
         "store" -> AddItemOptionPicker(
@@ -207,6 +390,14 @@ fun AddPriceItemDialog(
         )
     }
 }
+
+/** A scanned pack amount as the form's text: whole amounts without a decimal tail. */
+private fun formatPackAmount(amount: Double): String =
+    if (amount == amount.toLong().toDouble()) {
+        amount.toLong().toString()
+    } else {
+        amount.toString()
+    }
 
 /** A plain choose-one list dialog used by the add-item form's pickers. */
 @Composable

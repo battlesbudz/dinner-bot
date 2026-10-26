@@ -56,13 +56,14 @@ class Migration1415Test {
                 DinnerBotDatabase.MIGRATION_12_13,
                 DinnerBotDatabase.MIGRATION_13_14,
                 DinnerBotDatabase.MIGRATION_14_15,
+                DinnerBotDatabase.MIGRATION_15_16,
             )
             .build()
 
     @Test fun populatedV14OpensAtV15WithEveryRowIntact() {
         val db = openMigrated()
         try {
-            assertEquals(15, db.openHelper.writableDatabase.version)
+            assertEquals(16, db.openHelper.writableDatabase.version)
             runBlocking {
                 // The book's three fixture items (a corrected seed
                 // item, a flagged staple, her scan-added one), every

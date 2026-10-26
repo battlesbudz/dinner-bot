@@ -69,7 +69,7 @@ class BackupImportedRecipesTest {
     @Test fun importedRecipesRoundTripThroughExportImport() {
         val original = data(listOf(herImport))
         val restored = BackupEngine.import(BackupEngine.export(original))
-        assertEquals(8, restored.version)
+        assertEquals(9, restored.version)
         assertEquals(BackupData.CURRENT_VERSION, restored.version)
         assertEquals(original.importedRecipes, restored.importedRecipes)
     }
@@ -129,7 +129,7 @@ class BackupImportedRecipesTest {
             bulkStock = emptyList(),
         )
         val restored = BackupEngine.import(BackupEngine.export(withGuess))
-        assertEquals(8, restored.version)
+        assertEquals(9, restored.version)
         assertEquals(true, restored.priceItems.single().guessPriced)
     }
 }
