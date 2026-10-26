@@ -3,6 +3,7 @@ package com.battlesbudz.dinnerbot.feature.backup
 import com.battlesbudz.dinnerbot.core.model.BulkStock
 import com.battlesbudz.dinnerbot.core.model.CookCheckoff
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
+import com.battlesbudz.dinnerbot.core.model.NutritionValues
 import com.battlesbudz.dinnerbot.core.model.PantryItem
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.RanOutEvent
@@ -47,12 +48,32 @@ data class BackupScanSubstitution(
  * ingredient list Andrea saved over a library recipe. The recipe itself
  * is seed content and is not carried; the override names it by id and
  * applies on the phone that imports the file, whose seed library
- * carries the recipe.
+ * carries the recipe. [steps] rides from format v9 (v0.6.3): her
+ * household steps for the recipe, null in every older file and on any
+ * override whose steps she never edited.
  */
 @Serializable
 data class BackupRecipeOverride(
     val recipeId: String,
     val ingredients: List<RecipeIngredient>,
+    val steps: List<String>? = null,
+)
+
+/**
+ * One price book item's scanned label facts inside a backup file
+ * (format v9, v0.6.3): the Open Food Facts nutriments captured from
+ * the product's barcode, in the same per-100 g (and per-serving)
+ * shape they are stored in, so a restored phone computes recipe
+ * nutrition from the same labels the old phone did.
+ */
+@Serializable
+data class BackupLabelNutrition(
+    val itemId: String,
+    val barcode: String,
+    val per100g: NutritionValues,
+    val perServing: NutritionValues? = null,
+    val servingSizeText: String? = null,
+    val servingGrams: Double? = null,
 )
 
 /**
@@ -110,6 +131,12 @@ data class BackupImportedRecipe(
  * carries its guessed price and its guess mark, and the mark has to
  * survive a phone swap like the price does. The mark rides on the
  * price item itself; older files import with every mark clear.
+ *
+ * Format version 9 (v0.6.3) adds labelNutrition, the nutrition facts
+ * scanned from product labels onto price book items, and carries her
+ * household steps on recipeOverrides. Older files import with no
+ * label facts and with every override's steps unset (the seed steps
+ * stand), exactly as those phones behaved.
  */
 @Serializable
 data class BackupData(
@@ -125,9 +152,10 @@ data class BackupData(
     val scanSubstitutions: List<BackupScanSubstitution> = emptyList(),
     val recipeOverrides: List<BackupRecipeOverride> = emptyList(),
     val importedRecipes: List<BackupImportedRecipe> = emptyList(),
+    val labelNutrition: List<BackupLabelNutrition> = emptyList(),
 ) {
     companion object {
-        const val CURRENT_VERSION: Int = 8
+        const val CURRENT_VERSION: Int = 9
     }
 }
 
@@ -205,6 +233,9 @@ object BackupEngine {
             require(override.ingredients.isNotEmpty()) {
                 "That backup has a recipe edit with no ingredients."
             }
+            require(override.steps == null || override.steps.isNotEmpty()) {
+                "That backup has a recipe edit with empty steps."
+            }
             for (ingredient in override.ingredients) {
                 val itemId = ingredient.priceItemId
                 if (itemId != null) {
@@ -215,6 +246,18 @@ object BackupEngine {
                 require(ingredient.quantity.amount > 0.0) {
                     "That backup has a recipe edit with a broken amount."
                 }
+            }
+        }
+        val labelItemIds = data.labelNutrition.map { it.itemId }
+        require(labelItemIds.size == labelItemIds.toSet().size) {
+            "That backup has duplicate label facts."
+        }
+        for (facts in data.labelNutrition) {
+            require(facts.itemId in itemIds) {
+                "That backup has label facts for an item that is not in its price book."
+            }
+            require(facts.barcode.isNotBlank()) {
+                "That backup has label facts with no barcode."
             }
         }
         val importedIds = data.importedRecipes.map { it.recipe.id }

@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
+import com.battlesbudz.dinnerbot.core.model.LabelNutrition
 import com.battlesbudz.dinnerbot.core.model.NutritionField
 import com.battlesbudz.dinnerbot.core.model.NutritionValues
 import com.battlesbudz.dinnerbot.core.model.Recipe
@@ -47,6 +48,8 @@ fun WeekNutritionCard(
     weeks: List<NutritionWeekInput>,
     householdSize: Int,
     modifier: Modifier = Modifier,
+    /** Scanned label facts by item id (v0.6.3): those ingredients read their labels, not USDA. */
+    labelByItemId: Map<String, LabelNutrition> = emptyMap(),
 ) {
     Card(modifier = modifier.fillMaxWidth().testTag("week-nutrition-card")) {
         Column(
@@ -54,17 +57,35 @@ fun WeekNutritionCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("Week nutrition (estimate)", style = MaterialTheme.typography.titleLarge)
-            Text(NUTRITION_ESTIMATE_LABEL, style = MaterialTheme.typography.bodySmall)
+            // Provenance follows the computed weeks (Codex review, v0.6.3):
+            // the USDA header prints only when USDA numbers actually fed a
+            // total, and the label line only when a label did — a week fed
+            // entirely by scanned labels never claims USDA estimates.
+            val weekNutritions = remember(weeks, recipesById, householdSize, byItemId, byPantrySlug, labelByItemId) {
+                weeks.map { week ->
+                    WeekNutrition.forWeek(
+                        week.nights, recipesById, householdSize, byItemId, byPantrySlug, labelByItemId,
+                    )
+                }
+            }
+            if (weekNutritions.any { it?.usdaUsed == true }) {
+                Text(NUTRITION_ESTIMATE_LABEL, style = MaterialTheme.typography.bodySmall)
+            }
+            if (weekNutritions.any { it?.labelFactsUsed == true }) {
+                Text(
+                    "Ingredients whose products were scanned into the price book " +
+                        "use their own label facts instead of the USDA entry.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             if (weeks.isEmpty()) {
                 Text(
                     "Plan a week and its dinners' nutrition will add up here.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            weeks.forEach { week ->
-                val weekNutrition = remember(week, recipesById, householdSize, byItemId, byPantrySlug) {
-                    WeekNutrition.forWeek(week.nights, recipesById, householdSize, byItemId, byPantrySlug)
-                }
+            weeks.forEachIndexed { index, week ->
+                val weekNutrition = weekNutritions[index]
                 Text(week.label, style = MaterialTheme.typography.titleMedium)
                 if (weekNutrition == null) {
                     Text(
@@ -113,7 +134,13 @@ fun NutritionDetailLines(nutrition: RecipeNutrition, values: NutritionValues) {
 fun NutritionNotes(nutrition: RecipeNutrition) {
     if (nutrition.isPartial) {
         Text(
-            NutritionFormat.partialNote(nutrition.incompleteFields),
+            NutritionFormat.partialNote(nutrition.incompleteFields, nutrition.labelFactsUsed),
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+    if (nutrition.labelFactsUsed) {
+        Text(
+            "Includes nutrition from product labels, scanned from barcodes in the price book.",
             style = MaterialTheme.typography.bodySmall,
         )
     }

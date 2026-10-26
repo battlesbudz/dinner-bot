@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.battlesbudz.dinnerbot.core.model.LabelNutrition
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.RanOutEvent
 import com.battlesbudz.dinnerbot.core.model.RanOutKeys
@@ -60,6 +61,12 @@ fun CookScreen(
     onSaveTonightOnly: (List<RecipeIngredient>) -> Unit = { _ -> },
     /** A brand-new price book item created inside the ingredient editor (v0.6.2). */
     onCreatePriceItem: (PriceItem) -> Unit = {},
+    /** Resolves a barcode scanned in the editor's add form to the item it already belongs to (v0.6.3). */
+    existingItemForBarcode: ((String) -> PriceItem?)? = null,
+    /** A barcode scanned in the editor's add form, to link to the item it created. */
+    onBarcodeLinked: (barcode: String, itemId: String) -> Unit = { _, _ -> },
+    /** Label facts captured by a scan in the editor's add form. */
+    onLabelFacts: (itemId: String, facts: LabelNutrition) -> Unit = { _, _ -> },
     /** A from-now-on ingredient edit saved from this view (Phase RI-1): it becomes the recipe's household version. */
     onSaveFromNowOn: (List<RecipeIngredient>) -> Unit = { _ -> },
 ) {
@@ -103,6 +110,9 @@ fun CookScreen(
                 },
                 today = today,
                 onCreatePriceItem = onCreatePriceItem,
+                existingItemForBarcode = existingItemForBarcode,
+                onBarcodeLinked = onBarcodeLinked,
+                onLabelFacts = onLabelFacts,
             )
         }
         pendingScope?.let { edited ->

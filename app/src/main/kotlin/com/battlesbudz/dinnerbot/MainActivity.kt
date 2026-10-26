@@ -88,6 +88,7 @@ import com.battlesbudz.dinnerbot.core.model.GuessPricer
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
 import com.battlesbudz.dinnerbot.core.model.ImportedRecipe
 import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
+import com.battlesbudz.dinnerbot.core.model.LabelNutrition
 import com.battlesbudz.dinnerbot.core.model.PantryItem
 import com.battlesbudz.dinnerbot.core.model.PossibleOut
 import com.battlesbudz.dinnerbot.core.model.PriceItem
@@ -110,6 +111,7 @@ import com.battlesbudz.dinnerbot.core.model.TonightOverrides
 import com.battlesbudz.dinnerbot.feature.backup.BackupBarcodeLink
 import com.battlesbudz.dinnerbot.feature.backup.BackupData
 import com.battlesbudz.dinnerbot.feature.backup.BackupImportedRecipe
+import com.battlesbudz.dinnerbot.feature.backup.BackupLabelNutrition
 import com.battlesbudz.dinnerbot.feature.backup.BackupRecipeOverride
 import com.battlesbudz.dinnerbot.feature.backup.BackupRecipeRating
 import com.battlesbudz.dinnerbot.feature.backup.BackupEngine
@@ -401,6 +403,10 @@ private fun DinnerBotApp(
     // as a suggestion when the same line is scanned again.
     var scanSubstitutions by remember { mutableStateOf<List<ScanSubstitution>>(emptyList()) }
     var nutritionEntries by remember { mutableStateOf<List<IngredientNutrition>>(emptyList()) }
+    // Scanned label facts by item id (v0.6.3): an item's own product
+    // label, captured by barcode, wins over its USDA entry in recipe
+    // and week nutrition wherever the calculator reads it.
+    var labelNutritionByItemId by remember { mutableStateOf<Map<String, LabelNutrition>>(emptyMap()) }
     // Sunday reconciliation state (Phase V2-7): ran-out records and cook
     // check-offs are user data, loaded with everything else.
     var ranOutEvents by remember { mutableStateOf<List<RanOutEvent>>(emptyList()) }
@@ -529,6 +535,9 @@ private fun DinnerBotApp(
                 .map { with(SeedMapper) { it.toModel() } }
             val loadedNutrition = database.ingredientNutritionDao().getAll()
                 .map { with(SeedMapper) { it.toModel() } }
+            val loadedLabelNutrition = database.labelNutritionDao().getAll()
+                .map { with(SeedMapper) { it.toModel() } }
+                .associateBy { it.itemId }
             val loadedRanOut = database.ranOutDao().getAll()
                 .map { with(ReconciliationMapper) { it.toModel() } }
             val loadedCheckoffs = database.cookCheckoffDao().getAll()
@@ -542,7 +551,7 @@ private fun DinnerBotApp(
                 loadedRatings, loadedPresets, loadedLinks, loadedNutrition,
                 loadedRanOut, loadedCheckoffs, loadedPhotoById, loadedPhotoFiles,
                 addedStaples, loadedSubstitutions, loadedOverrides, linkedImported,
-                loadedKeepPromptAsked,
+                loadedKeepPromptAsked, loadedLabelNutrition,
             )
         }
         settings = loaded.settings
@@ -560,6 +569,7 @@ private fun DinnerBotApp(
         presets = loaded.presets
         barcodeLinks = loaded.barcodeLinks
         nutritionEntries = loaded.nutritionEntries
+        labelNutritionByItemId = loaded.labelNutrition
         ranOutEvents = loaded.ranOutEvents
         cookCheckoffs = loaded.cookCheckoffs
         scanSubstitutions = loaded.scanSubstitutions
@@ -1183,10 +1193,17 @@ private fun DinnerBotApp(
                     database.priceItemDao().upsert(with(SeedMapper) { it.toEntity() })
                 }
                 if (recipe.origin == RecipeOrigin.LIBRARY) {
+                    // An ingredients save never wipes a steps edit
+                    // (v0.6.3): the override's two halves are saved
+                    // independently, so carry the stored steps over.
+                    val existingSteps = database.recipeOverrideDao()
+                        .getByRecipeId(recipeId)
+                        ?.let { with(SeedMapper) { it.toModel() } }?.steps
                     database.recipeOverrideDao().upsert(
                         with(SeedMapper) {
                             RecipeOverride(
                                 recipeId, linked.ingredients, System.currentTimeMillis(),
+                                steps = existingSteps,
                             ).toEntity()
                         },
                     )
@@ -1211,6 +1228,51 @@ private fun DinnerBotApp(
     }
 
     /**
+     * A from-now-on steps edit (v0.6.3), routed exactly like the
+     * ingredient edit above: a library recipe's steps land on its
+     * override row, with the row's ingredient list carried over
+     * untouched (or the recipe's current saved list when this is her
+     * first edit of the recipe); an imported or hand-made recipe is
+     * rewritten in its own table. Restore-original deletes the
+     * override row whole, so the seed steps come back with everything
+     * else.
+     */
+    fun saveStepsFromNowOn(recipeId: String, steps: List<String>) {
+        val recipe = recipes.firstOrNull { it.id == recipeId } ?: return
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                if (recipe.origin == RecipeOrigin.LIBRARY) {
+                    val existing = database.recipeOverrideDao().getByRecipeId(recipeId)
+                        ?.let { with(SeedMapper) { it.toModel() } }
+                    database.recipeOverrideDao().upsert(
+                        with(SeedMapper) {
+                            RecipeOverride(
+                                recipeId = recipeId,
+                                ingredients = existing?.ingredients ?: recipe.ingredients,
+                                updatedAtMillis = System.currentTimeMillis(),
+                                steps = steps,
+                            ).toEntity()
+                        },
+                    )
+                } else {
+                    val stored = database.importedRecipeDao().getById(recipeId)
+                        ?.let { with(SeedMapper) { it.toModel() } }
+                    if (stored != null) {
+                        database.importedRecipeDao().upsert(
+                            with(SeedMapper) {
+                                stored.copy(
+                                    recipe = stored.recipe.copy(steps = steps),
+                                ).toEntity()
+                            },
+                        )
+                    }
+                }
+            }
+            refresh()
+        }
+    }
+
+    /**
      * A brand-new price book item created by hand (v0.6.2): the shared
      * add-an-ingredient form confirms into whatever door opened it —
      * the ingredient editor in recipe creation, editing, the cook
@@ -1223,6 +1285,39 @@ private fun DinnerBotApp(
         scope.launch {
             withContext(Dispatchers.IO) {
                 database.priceItemDao().upsert(with(SeedMapper) { item.toEntity() })
+            }
+            refresh()
+        }
+    }
+
+    /**
+     * Store the label facts captured for an item (v0.6.3): from a scan
+     * in the shared add form, the shopping list's link picker, or a
+     * rescan of an already-known barcode — a rescan replaces the
+     * stored facts wholesale, because the freshest label is the
+     * truest one.
+     */
+    fun saveLabelNutrition(itemId: String, facts: LabelNutrition) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                database.labelNutritionDao().upsert(
+                    with(SeedMapper) { facts.copy(itemId = itemId).toEntity() },
+                )
+            }
+            refresh()
+        }
+    }
+
+    /**
+     * Link a barcode to an item (v0.6.3): the write the add-form scan
+     * makes, identical to the one the shopping list flow teaches with.
+     */
+    fun linkBarcode(barcode: String, itemId: String) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                database.barcodeLinkDao().upsert(
+                    BarcodeLinkEntity(barcode, itemId, System.currentTimeMillis()),
+                )
             }
             refresh()
         }
@@ -1444,13 +1539,32 @@ private fun DinnerBotApp(
                     )
                 },
                 recipeOverrides = recipeOverrides.values.map { override ->
-                    BackupRecipeOverride(override.recipeId, override.ingredients)
+                    BackupRecipeOverride(
+                        override.recipeId, override.ingredients, override.steps,
+                    )
                 },
                 importedRecipes = importedRecipes.map { imported ->
                     BackupImportedRecipe(
                         imported.recipe, imported.sourceLink, imported.createdAtMillis,
                     )
                 },
+                // Label facts ride from format v9 (v0.6.3), but only
+                // for items the book in this same file carries — the
+                // import validation holds the file to that, and an
+                // orphaned fact must never make her own backup
+                // unreadable.
+                labelNutrition = labelNutritionByItemId.values
+                    .filter { facts -> priceItems.any { it.id == facts.itemId } }
+                    .map { facts ->
+                        BackupLabelNutrition(
+                            itemId = facts.itemId,
+                            barcode = facts.barcode,
+                            per100g = facts.per100g,
+                            perServing = facts.perServing,
+                            servingSizeText = facts.servingSizeText,
+                            servingGrams = facts.servingGrams,
+                        )
+                    },
             ),
         )
     }
@@ -1532,6 +1646,13 @@ private fun DinnerBotApp(
             }
             val nutritionByPantrySlug = remember(nutritionEntries) {
                 nutritionEntries.filter { it.pantryItem }.associateBy { it.itemId }
+            }
+            // The add-form scan's already-in-the-book check (v0.6.3):
+            // a barcode resolves through the links learned on this
+            // phone to the item it belongs to, if any.
+            val existingItemForBarcode: (String) -> PriceItem? = { code ->
+                barcodeLinks.firstOrNull { it.barcode == code }
+                    ?.let { link -> priceItems.firstOrNull { it.id == link.itemId } }
             }
             val weekPlanView = remember(storedPlan, groceryRows) {
                 storedPlan?.let { sp ->
@@ -2068,6 +2189,9 @@ private fun DinnerBotApp(
                             onCancel = { importStart = null },
                             editorToday = LocalDate.now().toString(),
                             onCreatePriceItem = { item -> createPriceItem(item) },
+                            existingItemForBarcode = existingItemForBarcode,
+                            onBarcodeLinked = { barcode, itemId -> linkBarcode(barcode, itemId) },
+                            onLabelFacts = { itemId, facts -> saveLabelNutrition(itemId, facts) },
                         )
                     } else if (activeFlow != null) {
                         // The Sunday gate (Phase V2-7) takes the screen:
@@ -2095,11 +2219,22 @@ private fun DinnerBotApp(
                                     onSaveIngredients = { edited ->
                                         saveFromNowOn(open.id, edited)
                                     },
+                                    onSaveSteps = { steps ->
+                                        saveStepsFromNowOn(open.id, steps)
+                                    },
                                     onRestoreOriginal = { restoreRecipeOriginal(open.id) },
                                     editorToday = LocalDate.now().toString(),
                                     onCreatePriceItem = { item -> createPriceItem(item) },
+                                    existingItemForBarcode = existingItemForBarcode,
+                                    onBarcodeLinked = { barcode, itemId ->
+                                        linkBarcode(barcode, itemId)
+                                    },
+                                    onLabelFacts = { itemId, facts ->
+                                        saveLabelNutrition(itemId, facts)
+                                    },
                                     nutritionByItemId = nutritionByItemId,
                                     nutritionByPantrySlug = nutritionByPantrySlug,
+                                    labelNutritionByItemId = labelNutritionByItemId,
                                     sourceLink = importedRecipes
                                         .firstOrNull { it.recipe.id == open.id }?.sourceLink,
                                     photo = recipePhotos[open.id],
@@ -2231,6 +2366,13 @@ private fun DinnerBotApp(
                                         saveFromNowOn(targetNight.recipeId, edited)
                                     },
                                     onCreatePriceItem = { item -> createPriceItem(item) },
+                                    existingItemForBarcode = existingItemForBarcode,
+                                    onBarcodeLinked = { barcode, itemId ->
+                                        linkBarcode(barcode, itemId)
+                                    },
+                                    onLabelFacts = { itemId, facts ->
+                                        saveLabelNutrition(itemId, facts)
+                                    },
                                 )
                             } else if (fortnightView != null && storedPlan != null && storedPlan2 != null) {
                             FortnightPlannerScreen(
@@ -2305,6 +2447,7 @@ private fun DinnerBotApp(
                                         byPantrySlug = nutritionByPantrySlug,
                                         weeks = nutritionWeeks,
                                         householdSize = currentSettings.householdSize,
+                                        labelByItemId = labelNutritionByItemId,
                                     )
                                 },
                             )
@@ -2368,6 +2511,7 @@ private fun DinnerBotApp(
                                     byPantrySlug = nutritionByPantrySlug,
                                     weeks = nutritionWeeks,
                                     householdSize = currentSettings.householdSize,
+                                    labelByItemId = labelNutritionByItemId,
                                 )
                             },
                         )
@@ -2515,6 +2659,9 @@ private fun DinnerBotApp(
                                     refresh()
                                 }
                             },
+                            onLabelFactsSeen = { itemId, facts ->
+                                saveLabelNutrition(itemId, facts)
+                            },
                             onSubstitute = { row, substitute, barcode, shelfPriceCents ->
                                 // The recipe contexts are read from the
                                 // stored plan the row belongs to, one per
@@ -2619,6 +2766,13 @@ private fun DinnerBotApp(
                                         priceItems = priceItems,
                                         today = LocalDate.now().toString(),
                                         onItemAdded = { item -> createPriceItem(item) },
+                                        existingItemForBarcode = existingItemForBarcode,
+                                        onBarcodeLinked = { barcode, itemId ->
+                                            linkBarcode(barcode, itemId)
+                                        },
+                                        onLabelFacts = { itemId, facts ->
+                                            saveLabelNutrition(itemId, facts)
+                                        },
                                         onItemEdited = { item ->
                                             scope.launch {
                                                 withContext(Dispatchers.IO) {
@@ -2766,6 +2920,8 @@ private data class LoadedState(
     val importedRecipes: List<ImportedRecipe>,
     /** Recipe ids whose first-cook keep prompt has already fired (Phase RI-3); it never fires twice. */
     val keepPromptAsked: Set<String>,
+    /** Scanned label facts by item id (v0.6.3). */
+    val labelNutrition: Map<String, LabelNutrition>,
 )
 
 /** The Sunday gate's inputs, re-read from the store at request time. */
@@ -3062,6 +3218,26 @@ private suspend fun applyBackup(database: DinnerBotDatabase, data: BackupData) {
             with(SeedMapper) {
                 RecipeOverride(
                     saved.recipeId, saved.ingredients, System.currentTimeMillis(),
+                    steps = saved.steps,
+                ).toEntity()
+            },
+        )
+    }
+    // Scanned label facts replace wholesale (v0.6.3, format v9): a
+    // pre-v9 backup has none, which clears them — the same semantics
+    // as every other household section above.
+    database.labelNutritionDao().deleteAll()
+    data.labelNutrition.forEach { saved ->
+        database.labelNutritionDao().upsert(
+            with(SeedMapper) {
+                LabelNutrition(
+                    itemId = saved.itemId,
+                    barcode = saved.barcode,
+                    per100g = saved.per100g,
+                    perServing = saved.perServing,
+                    servingSizeText = saved.servingSizeText,
+                    servingGrams = saved.servingGrams,
+                    updatedAtMillis = System.currentTimeMillis(),
                 ).toEntity()
             },
         )

@@ -1,6 +1,7 @@
 package com.battlesbudz.dinnerbot.feature.grocerylist.barcode
 
 import com.battlesbudz.dinnerbot.core.model.BarcodeLink
+import com.battlesbudz.dinnerbot.feature.barcode.OffResponseParser
 import com.battlesbudz.dinnerbot.core.model.Costing
 import com.battlesbudz.dinnerbot.core.model.GroceryLine
 import com.battlesbudz.dinnerbot.core.model.PlannedNight
@@ -509,81 +510,11 @@ object BarcodeScanLogic {
 
     /**
      * Pull a product name out of an Open Food Facts product response, or
-     * null when the response holds none. The lookup is only ever a naming
-     * hint for the link-now picker; a name found here is shown to Andrea
-     * as a suggestion and never links or prices anything by itself.
-     *
-     * OFF answers {"status":1,"product":{"product_name":"..."}} for a
-     * known code and {"status":0,...} for an unknown one. This reads the
-     * document as text (no JSON library on this module's classpath) and
-     * extracts the first usable name field, product_name preferred, then
-     * the English and generic variants.
+     * null when the response holds none. Kept as a delegate since
+     * v0.6.3: the response reading lives with the shared barcode module
+     * ([OffResponseParser]), which also reads the pack quantity and the
+     * label nutrition facts from the same document.
      */
-    fun parseOffProductName(responseBody: String): String? {
-        if (extractJsonLong(responseBody, "status") == 0L) return null
-        for (key in listOf("product_name", "product_name_en", "generic_name", "generic_name_en")) {
-            val value = extractJsonString(responseBody, key)
-            if (!value.isNullOrBlank()) return value.trim()
-        }
-        return null
-    }
-
-    /** Reads the string value of the first "key" occurrence, unescaping JSON string escapes. */
-    internal fun extractJsonString(text: String, key: String): String? {
-        val needle = "\"$key\""
-        var from = 0
-        while (true) {
-            val keyAt = text.indexOf(needle, from)
-            if (keyAt < 0) return null
-            var i = keyAt + needle.length
-            while (i < text.length && text[i].isWhitespace()) i++
-            if (i >= text.length || text[i] != ':') {
-                from = keyAt + needle.length
-                continue
-            }
-            i++
-            while (i < text.length && text[i].isWhitespace()) i++
-            if (i >= text.length || text[i] != '"') return null
-            i++
-            val out = StringBuilder()
-            while (i < text.length) {
-                val ch = text[i]
-                when {
-                    ch == '\\' && i + 1 < text.length -> {
-                        when (val esc = text[i + 1]) {
-                            'n' -> out.append('\n')
-                            't' -> out.append('\t')
-                            'r' -> out.append('\r')
-                            'u' -> {
-                                val hex = text.substring(i + 2, minOf(i + 6, text.length))
-                                hex.toIntOrNull(16)?.let { out.append(it.toChar()) }
-                                i += 4
-                            }
-                            else -> out.append(esc)
-                        }
-                        i += 2
-                    }
-                    ch == '"' -> return out.toString()
-                    else -> {
-                        out.append(ch)
-                        i++
-                    }
-                }
-            }
-            return null
-        }
-    }
-
-    /** Reads the numeric value of the first "key" occurrence, or null. */
-    internal fun extractJsonLong(text: String, key: String): Long? {
-        val needle = "\"$key\""
-        val keyAt = text.indexOf(needle)
-        if (keyAt < 0) return null
-        var i = keyAt + needle.length
-        while (i < text.length && (text[i].isWhitespace() || text[i] == ':')) i++
-        val start = i
-        while (i < text.length && (text[i].isDigit() || text[i] == '-')) i++
-        if (i == start) return null
-        return text.substring(start, i).toLongOrNull()
-    }
+    fun parseOffProductName(responseBody: String): String? =
+        OffResponseParser.parseProductName(responseBody)
 }

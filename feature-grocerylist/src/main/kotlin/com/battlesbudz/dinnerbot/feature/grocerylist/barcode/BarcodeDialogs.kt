@@ -23,11 +23,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.battlesbudz.dinnerbot.core.model.LabelNutrition
 import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.NewBookItem
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.ScanSubstitution
 import com.battlesbudz.dinnerbot.core.model.Store
+import com.battlesbudz.dinnerbot.feature.barcode.OffProduct
+import com.battlesbudz.dinnerbot.feature.barcode.OpenFoodFactsLookup
 import com.battlesbudz.dinnerbot.feature.pricebook.AddPriceItemDialog
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceCorrection
 
@@ -98,7 +101,9 @@ fun ScanPriceDialog(
  * tap-to-correct. While the picker is open, the optional Open Food
  * Facts lookup may offer the product's name as a hint (see
  * [OpenFoodFactsLookup]); it appears only when a connection produced
- * one, and picking stays hers either way.
+ * one, and picking stays hers either way. Since v0.6.3 the lookup's
+ * label facts ride along: picking an item also captures the facts
+ * onto it through [onLabelFacts].
  */
 @Composable
 fun LinkBarcodeDialog(
@@ -107,10 +112,17 @@ fun LinkBarcodeDialog(
     onPick: (PriceItem) -> Unit,
     onAddNew: (suggestedName: String?) -> Unit,
     onSkip: () -> Unit,
+    /** Label facts the lookup returned, captured onto the item she picks. */
+    onLabelFacts: (itemId: String, facts: LabelNutrition) -> Unit = { _, _ -> },
+    /** The lookup's product, reported so a following form reuses it instead of fetching again. */
+    onProductKnown: (OffProduct?) -> Unit = {},
 ) {
-    var suggestion by remember(barcode) { mutableStateOf<String?>(null) }
+    var product by remember(barcode) { mutableStateOf<OffProduct?>(null) }
+    val suggestion = product?.name
     LaunchedEffect(barcode) {
-        suggestion = OpenFoodFactsLookup.suggestProductName(barcode)
+        val found = OpenFoodFactsLookup.lookupProduct(barcode)
+        product = found
+        onProductKnown(found)
     }
     AlertDialog(
         onDismissRequest = onSkip,
@@ -154,7 +166,14 @@ fun LinkBarcodeDialog(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onPick(item) }
+                                .clickable {
+                                    product
+                                        ?.labelNutrition(
+                                            item.id, barcode, System.currentTimeMillis(),
+                                        )
+                                        ?.let { facts -> onLabelFacts(item.id, facts) }
+                                    onPick(item)
+                                }
                                 .padding(vertical = 8.dp),
                         ) {
                             Text(item.name, style = MaterialTheme.typography.bodyLarge)
@@ -195,6 +214,10 @@ fun NewItemFormDialog(
     book: List<PriceItem>,
     onConfirm: (PriceItem) -> Unit,
     onDismiss: () -> Unit,
+    /** Label facts captured for the saved item from this barcode's lookup (v0.6.3). */
+    onLabelFacts: (itemId: String, facts: LabelNutrition) -> Unit = { _, _ -> },
+    /** The product the link picker's lookup already returned for this barcode, when it did. */
+    initialProduct: OffProduct? = null,
 ) {
     AddPriceItemDialog(
         book = book,
@@ -208,6 +231,13 @@ fun NewItemFormDialog(
         confirmLabel = "Save to the price book",
         pricedSource = NewBookItem.SCAN_PRICED_SOURCE,
         guessSource = NewBookItem.SCAN_GUESS_SOURCE,
+        // The barcode was scanned to get here, so the form opens with
+        // it: the lookup prefills the pack and captures the label
+        // facts, and no second scan button is offered.
+        showScanButton = false,
+        initialBarcode = barcode,
+        initialProduct = initialProduct,
+        onLabelFacts = onLabelFacts,
         onConfirm = onConfirm,
         onDismiss = onDismiss,
     )

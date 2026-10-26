@@ -106,6 +106,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * that entered the book from a recipe import carries its guessed price
  * until the first real price write clears the mark.
  *
+ * Version 16 (v0.6.3) carries two household additions through
+ * [MIGRATION_15_16]: recipe_overrides gains stepsJson (her household
+ * steps for a library recipe, null on every stored row so the seed
+ * steps stand until she edits them), and the label_nutrition table is
+ * created empty (nutrition facts scanned from product labels by
+ * barcode; they accumulate from the upgrade on). Every v15 table and
+ * row carries over untouched, which the instrumented migration test
+ * proves from a populated v15 database.
+ *
  * Version 14 (Phase RI-3, v0.5.2) carries the weekly list's new line
  * state through [MIGRATION_13_14]: grocery_items gains
  * coveredByPantryName (the pantry entry a crossed-out line names; null
@@ -143,8 +152,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RecipeOverrideEntity::class,
         ImportedRecipeEntity::class,
         KeepPromptEntity::class,
+        LabelNutritionEntity::class,
     ],
-    version = 15,
+    version = 16,
     exportSchema = false,
 )
 abstract class DinnerBotDatabase : RoomDatabase() {
@@ -165,6 +175,7 @@ abstract class DinnerBotDatabase : RoomDatabase() {
     abstract fun recipeOverrideDao(): RecipeOverrideDao
     abstract fun importedRecipeDao(): ImportedRecipeDao
     abstract fun keepPromptDao(): KeepPromptDao
+    abstract fun labelNutritionDao(): LabelNutritionDao
 
     companion object {
         /** v2 to v3: create the recipe_ratings table. Nothing else changes. */
@@ -371,13 +382,34 @@ abstract class DinnerBotDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v15 to v16 (v0.6.3): household steps on recipe overrides
+         * (null until she edits a library recipe's steps, so the seed
+         * steps stand on every stored row) and the scanned-label
+         * nutrition table, created empty — facts accumulate from the
+         * upgrade on, one per item whose barcode she scans. Additive
+         * only.
+         */
+        val MIGRATION_15_16: Migration = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `recipe_overrides` ADD COLUMN `stepsJson` TEXT")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `label_nutrition` (" +
+                        "`itemId` TEXT NOT NULL, `barcode` TEXT NOT NULL, " +
+                        "`per100gJson` TEXT NOT NULL, `perServingJson` TEXT, " +
+                        "`servingSizeText` TEXT, `servingGrams` REAL, " +
+                        "`updatedAtMillis` INTEGER NOT NULL, PRIMARY KEY(`itemId`))",
+                )
+            }
+        }
+
         fun create(context: Context): DinnerBotDatabase =
             Room.databaseBuilder(context.applicationContext, DinnerBotDatabase::class.java, "dinner-bot.db")
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
                     MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
                     MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
-                    MIGRATION_13_14, MIGRATION_14_15,
+                    MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
                 )
                 .fallbackToDestructiveMigration()
                 .build()

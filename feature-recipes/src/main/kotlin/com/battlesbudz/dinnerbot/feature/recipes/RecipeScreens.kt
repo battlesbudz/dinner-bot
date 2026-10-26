@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
@@ -43,6 +44,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
+import com.battlesbudz.dinnerbot.core.model.LabelNutrition
 import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.NutritionCalculator
 import com.battlesbudz.dinnerbot.core.model.NutritionField
@@ -186,6 +188,11 @@ fun RecipeDetailScreen(
     onRate: (RecipeRating?) -> Unit = {},
     nutritionByItemId: Map<String, IngredientNutrition> = emptyMap(),
     nutritionByPantrySlug: Map<String, IngredientNutrition> = emptyMap(),
+    /**
+     * Scanned label facts by item id (v0.6.3): an ingredient whose item
+     * carries them is costed from the product label, not the USDA entry.
+     */
+    labelNutritionByItemId: Map<String, LabelNutrition> = emptyMap(),
     /** The household's photo record for this recipe, if any (Epic issue #10). */
     photo: RecipePhoto? = null,
     /** The photo's file in app-local storage, when it exists on this phone. */
@@ -206,12 +213,25 @@ fun RecipeDetailScreen(
     hasHouseholdEdits: Boolean = false,
     /** The editor's finished list, saved as the recipe's household version. */
     onSaveIngredients: (List<RecipeIngredient>) -> Unit = {},
+    /**
+     * Her edited steps, saved as the recipe's household version
+     * (v0.6.3): written onto her own recipes directly, and onto the
+     * override for a library recipe, so restore-original brings the
+     * seed steps back with everything else.
+     */
+    onSaveSteps: (List<String>) -> Unit = {},
     /** Restore-original: the household edit is cleared and the seed version stands again. */
     onRestoreOriginal: () -> Unit = {},
     /** Today (ISO), stamped on price book items the editor adds (v0.6.2). */
     editorToday: String = java.time.LocalDate.now().toString(),
     /** A brand-new price book item created inside the ingredient editor (v0.6.2). */
     onCreatePriceItem: (PriceItem) -> Unit = {},
+    /** Resolves a barcode scanned in the editor's add form to the item it already belongs to (v0.6.3). */
+    existingItemForBarcode: ((String) -> PriceItem?)? = null,
+    /** A barcode scanned in the editor's add form, to link to the item it created. */
+    onBarcodeLinked: (barcode: String, itemId: String) -> Unit = { _, _ -> },
+    /** Label facts captured by a scan in the editor's add form. */
+    onLabelFacts: (itemId: String, facts: LabelNutrition) -> Unit = { _, _ -> },
     /**
      * Where an imported recipe came from (Phase RI-2), shown under its
      * title. Null for library and hand-made recipes.
@@ -221,6 +241,7 @@ fun RecipeDetailScreen(
     val itemsById = remember(priceItems) { priceItems.associateBy { it.id } }
     var servings by remember(recipe.id) { mutableStateOf(recipe.servings) }
     var editingIngredients by remember(recipe.id) { mutableStateOf(false) }
+    var editingSteps by remember(recipe.id) { mutableStateOf(false) }
     val total = RecipeCostCalculator.ingredientCostCents(recipe, servings, itemsById)
     val perServing = RecipeCostCalculator.costPerServingCents(recipe, servings, itemsById)
 
@@ -361,13 +382,17 @@ fun RecipeDetailScreen(
 
         // Nutrition per serving (Phase V2-6): computed from this recipe as
         // this household cooks it (the recipe handed in is already
-        // won't-eat adapted) at the servings picked above. Estimates from
-        // USDA data; a field USDA has no value for is marked partial
-        // instead of printing a total that pretends to be whole. Since
-        // the v0.6.0 redesign this card is the app's per-recipe nutrition
-        // home; the weekly summary lives on the Plan screen.
-        val nutrition = remember(recipe, servings, nutritionByItemId, nutritionByPantrySlug) {
-            NutritionCalculator.recipeNutrition(recipe, servings, nutritionByItemId, nutritionByPantrySlug)
+        // won't-eat adapted) at the servings picked above. An ingredient
+        // whose item carries scanned label facts reads the label
+        // (v0.6.3); the rest are estimates from USDA data. A field with
+        // no sourced value is marked partial instead of printing a total
+        // that pretends to be whole. Since the v0.6.0 redesign this card
+        // is the app's per-recipe nutrition home; the weekly summary
+        // lives on the Plan screen.
+        val nutrition = remember(recipe, servings, nutritionByItemId, nutritionByPantrySlug, labelNutritionByItemId) {
+            NutritionCalculator.recipeNutrition(
+                recipe, servings, nutritionByItemId, nutritionByPantrySlug, labelNutritionByItemId,
+            )
         }
         Card(modifier = Modifier.fillMaxWidth().testTag("recipe-nutrition-card")) {
             Column(
@@ -400,9 +425,22 @@ fun RecipeDetailScreen(
                     val names = nutrition.incompleteFields.sortedBy { it.ordinal }
                         .joinToString(", ") { it.label.lowercase() }
                     Text(
-                        "Partial data: USDA FoodData Central has no $names value for one or more " +
-                            "ingredients here, so the $names total is incomplete.",
+                        if (nutrition.labelFactsUsed) {
+                            "Partial data: no $names value for one or more ingredients here, " +
+                                "so the $names total is incomplete."
+                        } else {
+                            "Partial data: USDA FoodData Central has no $names value for one or more " +
+                                "ingredients here, so the $names total is incomplete."
+                        },
                         style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                if (nutrition.labelFactsUsed) {
+                    Text(
+                        "Includes nutrition from product labels, scanned from " +
+                            "barcodes in the price book.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.testTag("recipe-nutrition-label-note"),
                     )
                 }
                 if (nutrition.closestMatchUsed) {
@@ -411,12 +449,14 @@ fun RecipeDetailScreen(
                             "Estimates from USDA FoodData Central data.",
                         style = MaterialTheme.typography.bodySmall,
                     )
-                } else {
+                } else if (nutrition.usdaUsed) {
                     Text(
                         "Estimates from USDA FoodData Central data.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
+                // A label-only total shows no USDA line at all: the label
+                // note above already says where its numbers came from.
             }
         }
 
@@ -426,7 +466,7 @@ fun RecipeDetailScreen(
         // recipe's household version, surviving every app update.
         if (hasHouseholdEdits) {
             Text(
-                "This recipe has your edits. Your ingredient list is the one Dinner Bot " +
+                "This recipe has your edits. Your version is the one Dinner Bot " +
                     "cooks, plans, and shops, and it stays yours through app updates.",
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.testTag("recipe-has-edits"),
@@ -452,6 +492,9 @@ fun RecipeDetailScreen(
                 },
                 today = editorToday,
                 onCreatePriceItem = onCreatePriceItem,
+                existingItemForBarcode = existingItemForBarcode,
+                onBarcodeLinked = onBarcodeLinked,
+                onLabelFacts = onLabelFacts,
             )
         }
         recipe.scaledIngredients(servings).forEach { ingredient ->
@@ -466,10 +509,68 @@ fun RecipeDetailScreen(
         }
 
         Text("Steps", style = MaterialTheme.typography.titleMedium)
+        // Steps editing (v0.6.3): the editor opens with the SAVED
+        // recipe's steps (her household version when she has one) and
+        // saves through the same door as the ingredients — her own
+        // recipes are rewritten directly, a library recipe's steps
+        // land on its override, and restore-original brings the seed
+        // steps back.
+        OutlinedButton(
+            onClick = { editingSteps = true },
+            modifier = Modifier.testTag("edit-steps"),
+        ) { Text("Edit steps") }
+        if (editingSteps) {
+            StepsEditorDialog(
+                initialSteps = (savedRecipe ?: recipe).steps,
+                onDismiss = { editingSteps = false },
+                onSave = { steps ->
+                    editingSteps = false
+                    onSaveSteps(steps)
+                },
+            )
+        }
         recipe.steps.forEachIndexed { index, step ->
             Text("${index + 1}. $step", style = MaterialTheme.typography.bodyMedium)
         }
     }
+}
+
+/**
+ * The steps editor (v0.6.3): one step per line, the same shape the
+ * import review uses, so how she writes steps never changes between
+ * doors. Blank lines drop out; a recipe cannot be saved with no steps
+ * at all, so Save stays off while the field holds none.
+ */
+@Composable
+fun StepsEditorDialog(
+    initialSteps: List<String>,
+    onDismiss: () -> Unit,
+    onSave: (List<String>) -> Unit,
+) {
+    var text by remember { mutableStateOf(initialSteps.joinToString("\n")) }
+    val steps = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.testTag("edit-steps-dialog"),
+        title = { Text("Edit steps") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text("One step per line") },
+                minLines = 5,
+                modifier = Modifier.fillMaxWidth().testTag("edit-steps-field"),
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(steps) },
+                enabled = steps.isNotEmpty(),
+                modifier = Modifier.testTag("edit-steps-save"),
+            ) { Text("Save steps") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 /** Whole numbers for kcal and mg, one trimmed decimal for grams; "no data" when USDA has none. */
