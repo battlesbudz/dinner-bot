@@ -21,7 +21,7 @@ class PantryLogicTest {
     )
     private val turkey = tenderloin.copy(
         id = "ground-turkey", name = "Ground turkey", homeStore = "walmart",
-        packQuantity = Quantity(1.0, MeasureUnit.POUND),
+        packQuantity = Quantity(1.0, MeasureUnit.POUND), freezeNote = null,
     )
 
     @Test fun toggleFlipsOwned() {
