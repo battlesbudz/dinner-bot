@@ -153,7 +153,7 @@ class Migration67Test {
             )
             .build()
         try {
-            assertEquals(16, db.openHelper.readableDatabase.version)
+            assertEquals(17, db.openHelper.readableDatabase.version)
 
             // User data survives whole: corrected price, rating, barcode
             // link, pantry, stock, settings, and the saved plan.

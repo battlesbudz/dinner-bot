@@ -69,7 +69,7 @@ class Migration1314Test {
     @Test fun upgradeFromV13KeepsEveryKindOfUserData() = runBlocking {
         val db = openMigrated()
         try {
-            assertEquals(16, db.openHelper.readableDatabase.version)
+            assertEquals(17, db.openHelper.readableDatabase.version)
 
             // Prices, pantry, stock, settings, ratings — the whole v13 base.
             val breast = db.priceItemDao().getById("chicken-breast")!!

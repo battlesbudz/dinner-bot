@@ -132,7 +132,7 @@ class SeedSurvivalInstrumentedTest {
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
         val db = openMigrated()
         try {
-            assertEquals(16, db.openHelper.readableDatabase.version)
+            assertEquals(17, db.openHelper.readableDatabase.version)
             val priceJson = appContext.assets.open("pricebook.json").bufferedReader().use { it.readText() }
             val recipesJson = appContext.assets.open("recipes.json").bufferedReader().use { it.readText() }
             val loader = SeedLoader(db)

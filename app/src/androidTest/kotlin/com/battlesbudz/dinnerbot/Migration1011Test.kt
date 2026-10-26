@@ -215,7 +215,7 @@ class Migration1011Test {
             )
             .build()
         try {
-            assertEquals(16, db.openHelper.readableDatabase.version)
+            assertEquals(17, db.openHelper.readableDatabase.version)
 
             // User data survives whole, corrected price and staple flag included.
             val breast = db.priceItemDao().getById("chicken-breast")!!

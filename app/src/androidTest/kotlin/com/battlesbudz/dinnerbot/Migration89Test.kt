@@ -192,7 +192,7 @@ class Migration89Test {
             )
             .build()
         try {
-            assertEquals(16, db.openHelper.readableDatabase.version)
+            assertEquals(17, db.openHelper.readableDatabase.version)
 
             // User data survives whole.
             val eggs = db.priceItemDao().getById("eggs")!!

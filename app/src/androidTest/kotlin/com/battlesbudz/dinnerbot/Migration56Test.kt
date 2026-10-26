@@ -155,7 +155,7 @@ class Migration56Test {
             )
             .build()
         try {
-            assertEquals(16, db.openHelper.readableDatabase.version)
+            assertEquals(17, db.openHelper.readableDatabase.version)
 
             // Corrected price, its flag, and its freeze note survive.
             val pork = db.priceItemDao().getById("pork-tenderloin")!!

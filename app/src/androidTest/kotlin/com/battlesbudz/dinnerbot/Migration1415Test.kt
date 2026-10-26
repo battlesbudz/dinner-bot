@@ -64,7 +64,7 @@ class Migration1415Test {
     @Test fun populatedV14OpensAtV15WithEveryRowIntact() {
         val db = openMigrated()
         try {
-            assertEquals(16, db.openHelper.writableDatabase.version)
+            assertEquals(17, db.openHelper.writableDatabase.version)
             runBlocking {
                 // The book's three fixture items (a corrected seed
                 // item, a flagged staple, her scan-added one), every

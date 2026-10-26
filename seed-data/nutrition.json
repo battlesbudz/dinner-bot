@@ -1,953 +1,973 @@
 {
- "version": 1,
- "source": "USDA FoodData Central (https://fdc.nal.usda.gov), public domain. Values are per 100 g of the food exactly as fdcDescription states. closestMatch=true means the shipped item is a packaged or branded product and the FDC entry is the closest match for that food, not a lab reading of the package. A null field means FoodData Central does not publish that value for the entry; it was not estimated. Nutrition capture for Phase V2-0; loaded by the app in Phase V2-6.",
- "capturedDate": "2026-10-22",
- "entries": [
-  {
-   "itemId": "american-cheese",
-   "pantryItem": false,
-   "fdcId": 2647439,
-   "fdcDescription": "Cheese, pasteurized process cheese food or product, American, singles",
-   "fdcDataType": "Foundation",
-   "closestMatch": true,
-   "source": "USDA FoodData Central (fdcId 2647439), captured 2026-10-22 Note: FDC entry is the generic pasteurized-process American singles; the shipped item is the Aldi Happy Farms brand.",
-   "per100g": {
-    "caloriesKcal": 309.768,
-    "proteinG": 15.5672,
-    "fatG": 23.86,
-    "carbohydrateG": 8.1898,
-    "fiberG": null,
-    "sugarsG": null,
-    "sodiumMg": 1420.0,
-    "saturatedFatG": 13.7,
-    "cholesterolMg": 73.24
-   },
-   "gramWeights": {
-    "COUNT": 21.0
-   },
-   "gramWeightSource": "One COUNT is one single slice. The entry record (fdcId 2647439) publishes no slice weight; the SR Legacy records for pasteurized process American cheese (fdcId 170853 and 171290) both give one 3/4 oz slice = 21 g, the standard singles slice."
-  },
-  {
-   "itemId": "bell-peppers",
-   "pantryItem": false,
-   "fdcId": 2258588,
-   "fdcDescription": "Peppers, bell, green, raw",
-   "fdcDataType": "Foundation",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 2258588), captured 2026-10-22",
-   "per100g": {
-    "caloriesKcal": 22.9291,
-    "proteinG": 0.715,
-    "fatG": 0.1063,
-    "carbohydrateG": 4.7781,
-    "fiberG": 0.9419,
-    "sugarsG": null,
-    "sodiumMg": 0.0,
-    "saturatedFatG": null,
-    "cholesterolMg": null
-   },
-   "gramWeights": {
-    "COUNT": 119.0
-   },
-   "gramWeightSource": "One COUNT is one whole pepper. The entry record (fdcId 2258588) publishes no piece weight; the SR Legacy record for the same food, Peppers, sweet, green, raw (fdcId 170427), gives one medium pepper = 119 g."
-  },
-  {
-   "itemId": "canned-black-beans",
-   "pantryItem": false,
-   "fdcId": 2644285,
-   "fdcDescription": "Beans, black, canned, sodium added, drained and rinsed",
-   "fdcDataType": "Foundation",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 2644285), captured 2026-10-22 Note: Canned black beans, drained and rinsed, as recipes use them.",
-   "per100g": {
-    "caloriesKcal": 118.361,
-    "proteinG": 6.9125,
-    "fatG": 1.273,
-    "carbohydrateG": 19.8135,
-    "fiberG": null,
-    "sugarsG": null,
-    "sodiumMg": 217.9,
-    "saturatedFatG": null,
-    "cholesterolMg": null
-   },
-   "gramWeights": {
-    "COUNT": 425.24
-   },
-   "gramWeightSource": "One COUNT is one whole 15 oz can. Grams are the can net weight from the price book pack description (Phase 0 verified), at 28.3495 g per ounce. The FDC values describe the beans drained and rinsed, so this reads as an upper estimate."
-  },
-  {
-   "itemId": "canned-diced-tomatoes",
-   "pantryItem": false,
-   "fdcId": 333281,
-   "fdcDescription": "Tomatoes, canned, red, ripe, diced",
-   "fdcDataType": "Foundation",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 333281), captured 2026-10-22",
-   "per100g": {
-    "caloriesKcal": 18.0,
-    "proteinG": 0.84,
-    "fatG": 0.5,
-    "carbohydrateG": 3.32,
-    "fiberG": null,
-    "sugarsG": 2.99,
-    "sodiumMg": 125.0,
-    "saturatedFatG": null,
-    "cholesterolMg": null
-   },
-   "gramWeights": {
-    "COUNT": 411.07
-   },
-   "gramWeightSource": "One COUNT is one whole 14.5 oz can. Grams are the can net weight from the price book pack description (Phase 0 verified), at 28.3495 g per ounce."
-  },
-  {
-   "itemId": "canned-kidney-beans",
-   "pantryItem": false,
-   "fdcId": 2644289,
-   "fdcDescription": "Beans, kidney, dark red, canned, sodium added, sugar added, drained and rinsed",
-   "fdcDataType": "Foundation",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 2644289), captured 2026-10-22 Note: Entry is dark red kidney beans, matching the shipped item.",
-   "per100g": {
-    "caloriesKcal": 126.624,
-    "proteinG": 7.8,
-    "fatG": 1.256,
-    "carbohydrateG": 21.03,
-    "fiberG": null,
-    "sugarsG": null,
-    "sodiumMg": 172.3,
-    "saturatedFatG": null,
-    "cholesterolMg": null
-   },
-   "gramWeights": {
-    "COUNT": 439.42
-   },
-   "gramWeightSource": "One COUNT is one whole 15.5 oz can. Grams are the can net weight from the price book pack description (Phase 0 verified), at 28.3495 g per ounce. The FDC values describe the beans drained and rinsed, so this reads as an upper estimate."
-  },
-  {
-   "itemId": "canned-tomato-soup",
-   "pantryItem": false,
-   "fdcId": 172882,
-   "fdcDescription": "Soup, tomato, canned, condensed",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": true,
-   "source": "USDA FoodData Central (fdcId 172882), captured 2026-10-22 Note: FDC entry is generic condensed tomato soup; the shipped item is Campbell's condensed tomato soup.",
-   "per100g": {
-    "caloriesKcal": 66.0,
-    "proteinG": 1.46,
-    "fatG": 0.44,
-    "carbohydrateG": 15.22,
-    "fiberG": 1.1,
-    "sugarsG": null,
-    "sodiumMg": 377.0,
-    "saturatedFatG": 0.115,
-    "cholesterolMg": 0.0
-   },
-   "gramWeights": {
-    "COUNT": 304.76
-   },
-   "gramWeightSource": "One COUNT is one whole 10.75 oz can. Grams are the can net weight from the price book pack description (Phase 0 verified), at 28.3495 g per ounce."
-  },
-  {
-   "itemId": "chicken-breast",
-   "pantryItem": false,
-   "fdcId": 2646170,
-   "fdcDescription": "Chicken, breast, boneless, skinless, raw",
-   "fdcDataType": "Foundation",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 2646170), captured 2026-10-22",
-   "per100g": {
-    "caloriesKcal": 106.034,
-    "proteinG": 22.525,
-    "fatG": 1.934,
-    "carbohydrateG": 0,
-    "fiberG": null,
-    "sugarsG": null,
-    "sodiumMg": 65.75,
-    "saturatedFatG": 0.3488,
-    "cholesterolMg": 72.73
-   }
-  },
-  {
-   "itemId": "egg-noodles",
-   "pantryItem": false,
-   "fdcId": 169731,
-   "fdcDescription": "Noodles, egg, dry, enriched",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 169731), captured 2026-10-22 Note: Dry, enriched, as purchased.",
-   "per100g": {
-    "caloriesKcal": 384.0,
-    "proteinG": 14.16,
-    "fatG": 4.44,
-    "carbohydrateG": 71.27,
-    "fiberG": 3.3,
-    "sugarsG": null,
-    "sodiumMg": 21.0,
-    "saturatedFatG": 1.18,
-    "cholesterolMg": 84.0
-   }
-  },
-  {
-   "itemId": "eggs",
-   "pantryItem": false,
-   "fdcId": 171287,
-   "fdcDescription": "Egg, whole, raw, fresh",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 171287), captured 2026-10-22",
-   "per100g": {
-    "caloriesKcal": 143.0,
-    "proteinG": 12.56,
-    "fatG": 9.51,
-    "carbohydrateG": 0.72,
-    "fiberG": 0.0,
-    "sugarsG": null,
-    "sodiumMg": 142.0,
-    "saturatedFatG": 3.126,
-    "cholesterolMg": 372.0
-   },
-   "gramWeights": {
-    "COUNT": 50.0
-   },
-   "gramWeightSource": "USDA FoodData Central food portions for fdcId 171287: one large egg = 50 g."
-  },
-  {
-   "itemId": "flour-tortillas",
-   "pantryItem": false,
-   "fdcId": 167535,
-   "fdcDescription": "Tortillas, ready-to-bake or -fry, flour, shelf stable",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": true,
-   "source": "USDA FoodData Central (fdcId 167535), captured 2026-10-22 Note: FDC entry is the generic shelf-stable flour tortilla; the shipped item is the Aldi Pueblo Lindo brand.",
-   "per100g": {
-    "caloriesKcal": 297.0,
-    "proteinG": 8.01,
-    "fatG": 7.58,
-    "carbohydrateG": 49.27,
-    "fiberG": 2.4,
-    "sugarsG": null,
-    "sodiumMg": 742.0,
-    "saturatedFatG": 1.225,
-    "cholesterolMg": 0.0
-   },
-   "gramWeights": {
-    "COUNT": 49.0
-   },
-   "gramWeightSource": "USDA FoodData Central food portions for fdcId 167535: one tortilla = 49 g."
-  },
-  {
-   "itemId": "frozen-broccoli",
-   "pantryItem": false,
-   "fdcId": 169970,
-   "fdcDescription": "Broccoli, frozen, spears, unprepared (Includes foods for USDA's Food Distribution Program)",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 169970), captured 2026-10-22 Note: Frozen spears entry stands for the shipped florets; same food, cut shape differs only.",
-   "per100g": {
-    "caloriesKcal": 29.0,
-    "proteinG": 3.06,
-    "fatG": 0.34,
-    "carbohydrateG": 5.35,
-    "fiberG": 3.0,
-    "sugarsG": null,
-    "sodiumMg": 17.0,
-    "saturatedFatG": 0.052,
-    "cholesterolMg": 0.0
-   }
-  },
-  {
-   "itemId": "frozen-green-beans",
-   "pantryItem": false,
-   "fdcId": 169962,
-   "fdcDescription": "Beans, snap, green, frozen, all styles, unprepared (Includes foods for USDA's Food Distribution Program)",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 169962), captured 2026-10-22",
-   "per100g": {
-    "caloriesKcal": 33.0,
-    "proteinG": 1.79,
-    "fatG": 0.21,
-    "carbohydrateG": 7.54,
-    "fiberG": 2.6,
-    "sugarsG": null,
-    "sodiumMg": 3.0,
-    "saturatedFatG": 0.047,
-    "cholesterolMg": 0.0
-   }
-  },
-  {
-   "itemId": "frozen-mixed-vegetables",
-   "pantryItem": false,
-   "fdcId": 170471,
-   "fdcDescription": "Vegetables, mixed, frozen, unprepared",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 170471), captured 2026-10-22",
-   "per100g": {
-    "caloriesKcal": 72.0,
-    "proteinG": 3.33,
-    "fatG": 0.52,
-    "carbohydrateG": 13.47,
-    "fiberG": 4.0,
-    "sugarsG": null,
-    "sodiumMg": 47.0,
-    "saturatedFatG": 0.098,
-    "cholesterolMg": 0.0
-   }
-  },
-  {
-   "itemId": "frozen-peas-carrots",
-   "pantryItem": false,
-   "fdcId": 170425,
-   "fdcDescription": "Peas and carrots, frozen, unprepared",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 170425), captured 2026-10-22",
-   "per100g": {
-    "caloriesKcal": 53.0,
-    "proteinG": 3.4,
-    "fatG": 0.47,
-    "carbohydrateG": 11.15,
-    "fiberG": 3.4,
-    "sugarsG": null,
-    "sodiumMg": 79.0,
-    "saturatedFatG": 0.084,
-    "cholesterolMg": 0.0
-   }
-  },
-  {
-   "itemId": "garden-salad",
-   "pantryItem": false,
-   "fdcId": 2346388,
-   "fdcDescription": "Lettuce, iceberg, raw",
-   "fdcDataType": "Foundation",
-   "closestMatch": true,
-   "source": "USDA FoodData Central (fdcId 2346388), captured 2026-10-22 Note: Bagged garden salad is mostly iceberg; the FDC iceberg entry stands in for the mix.",
-   "per100g": {
-    "caloriesKcal": 17.10875,
-    "proteinG": 0.7425,
-    "fatG": 0.07375,
-    "carbohydrateG": 3.36875,
-    "fiberG": null,
-    "sugarsG": null,
-    "sodiumMg": 16.11,
-    "saturatedFatG": null,
-    "cholesterolMg": null
-   }
-  },
-  {
-   "itemId": "garlic",
-   "pantryItem": false,
-   "fdcId": 1104647,
-   "fdcDescription": "Garlic, raw",
-   "fdcDataType": "Foundation",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 1104647), captured 2026-10-22",
-   "per100g": {
-    "caloriesKcal": 143.0,
-    "proteinG": 6.62,
-    "fatG": 0.38,
-    "carbohydrateG": 28.2,
-    "fiberG": 2.7,
-    "sugarsG": null,
-    "sodiumMg": null,
-    "saturatedFatG": null,
-    "cholesterolMg": null
-   }
-  },
-  {
-   "itemId": "garlic-texas-toast",
-   "pantryItem": false,
-   "fdcId": 167939,
-   "fdcDescription": "Garlic bread, frozen",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": true,
-   "source": "USDA FoodData Central (fdcId 167939), captured 2026-10-22 Note: FDC entry is generic frozen garlic bread; the shipped item is New York Bakery Garlic Texas Toast.",
-   "per100g": {
-    "caloriesKcal": 350.0,
-    "proteinG": 8.36,
-    "fatG": 16.61,
-    "carbohydrateG": 41.72,
-    "fiberG": 2.5,
-    "sugarsG": null,
-    "sodiumMg": 544.0,
-    "saturatedFatG": 5.281,
-    "cholesterolMg": 0.0
-   },
-   "gramWeights": {
-    "COUNT": 39.87
-   },
-   "gramWeightSource": "One COUNT is one slice. The price book pack is an 11.25 oz box of 8 slices (Phase 0 verified), so one slice is 11.25/8 oz = 39.87 g."
-  },
-  {
-   "itemId": "ground-turkey",
-   "pantryItem": false,
-   "fdcId": 171505,
-   "fdcDescription": "Turkey, Ground, raw",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 171505), captured 2026-10-22",
-   "per100g": {
-    "caloriesKcal": 148.0,
-    "proteinG": 19.66,
-    "fatG": 7.66,
-    "carbohydrateG": 0.0,
-    "fiberG": 0.0,
-    "sugarsG": null,
-    "sodiumMg": 58.0,
-    "saturatedFatG": 2.024,
-    "cholesterolMg": 69.0
-   }
-  },
-  {
-   "itemId": "hamburger-buns",
-   "pantryItem": false,
-   "fdcId": 172796,
-   "fdcDescription": "Rolls, hamburger or hotdog, plain",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": true,
-   "source": "USDA FoodData Central (fdcId 172796), captured 2026-10-22 Note: FDC entry is the generic plain hamburger roll; the shipped item is the Aldi L'Oven Fresh brand.",
-   "per100g": {
-    "caloriesKcal": 279.0,
-    "proteinG": 9.77,
-    "fatG": 3.91,
-    "carbohydrateG": 50.12,
-    "fiberG": 1.8,
-    "sugarsG": null,
-    "sodiumMg": 494.0,
-    "saturatedFatG": 0.842,
-    "cholesterolMg": 0.0
-   },
-   "gramWeights": {
-    "COUNT": 42.52
-   },
-   "gramWeightSource": "One COUNT is one bun. The price book pack is a 12 oz package of 8 buns (Phase 0 verified), so one bun is 12/8 oz = 42.52 g."
-  },
-  {
-   "itemId": "iceberg-lettuce",
-   "pantryItem": false,
-   "fdcId": 2346388,
-   "fdcDescription": "Lettuce, iceberg, raw",
-   "fdcDataType": "Foundation",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 2346388), captured 2026-10-22",
-   "per100g": {
-    "caloriesKcal": 17.10875,
-    "proteinG": 0.7425,
-    "fatG": 0.07375,
-    "carbohydrateG": 3.36875,
-    "fiberG": null,
-    "sugarsG": null,
-    "sodiumMg": 16.11,
-    "saturatedFatG": null,
-    "cholesterolMg": null
-   },
-   "gramWeights": {
-    "COUNT": 539.0
-   },
-   "gramWeightSource": "One COUNT is one head. The entry record (fdcId 2346388) publishes no head weight; the SR Legacy record for the same food, Lettuce, iceberg (includes crisphead types), raw (fdcId 169248), gives one medium head (6 in dia) = 539 g."
-  },
-  {
-   "itemId": "milk",
-   "pantryItem": false,
-   "fdcId": 746778,
-   "fdcDescription": "Milk, reduced fat, fluid, 2% milkfat, with added vitamin A and vitamin D",
-   "fdcDataType": "Foundation",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 746778), captured 2026-10-22 Note: 2% milkfat, as the shipped item is labeled.",
-   "per100g": {
-    "caloriesKcal": 50.0,
-    "proteinG": 3.36,
-    "fatG": 1.9,
-    "carbohydrateG": 4.9,
-    "fiberG": null,
-    "sugarsG": 4.89,
-    "sodiumMg": 39.0,
-    "saturatedFatG": 1.11,
-    "cholesterolMg": 8.0
-   },
-   "gramWeights": {
-    "FLUID_OUNCE": 30.5
-   },
-   "gramWeightSource": "The entry record (fdcId 746778) publishes no fluid-ounce weight; the SR Legacy record for the same food, Milk, reduced fat, fluid, 2% milkfat, with added vitamin A and vitamin D (fdcId 171267), gives 1 fl oz = 30.5 g."
-  },
-  {
-   "itemId": "pasta-sauce",
-   "pantryItem": false,
-   "fdcId": 332282,
-   "fdcDescription": "Sauce, pasta, spaghetti/marinara, ready-to-serve",
-   "fdcDataType": "Foundation",
-   "closestMatch": true,
-   "source": "USDA FoodData Central (fdcId 332282), captured 2026-10-22 Note: FDC entry is generic ready-to-serve marinara; the shipped item is the Aldi Reggano brand.",
-   "per100g": {
-    "caloriesKcal": 45.0,
-    "proteinG": 1.41,
-    "fatG": 1.48,
-    "carbohydrateG": 8.05,
-    "fiberG": 1.8,
-    "sugarsG": 5.5,
-    "sodiumMg": 419.0,
-    "saturatedFatG": 0.17,
-    "cholesterolMg": null
-   }
-  },
-  {
-   "itemId": "pork-tenderloin",
-   "pantryItem": false,
-   "fdcId": 2646169,
-   "fdcDescription": "Pork, loin, tenderloin, boneless, raw",
-   "fdcDataType": "Foundation",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 2646169), captured 2026-10-22",
-   "per100g": {
-    "caloriesKcal": 119.039,
-    "proteinG": 21.58125,
-    "fatG": 3.899,
-    "carbohydrateG": 0,
-    "fiberG": null,
-    "sugarsG": null,
-    "sodiumMg": 41.39,
-    "saturatedFatG": 0.8663,
-    "cholesterolMg": 59.58
-   }
-  },
-  {
-   "itemId": "roma-tomatoes",
-   "pantryItem": false,
-   "fdcId": 170457,
-   "fdcDescription": "Tomatoes, red, ripe, raw, year round average",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 170457), captured 2026-10-22 Note: FDC entry is the year-round average red tomato; the shipped item is the Roma variety.",
-   "per100g": {
-    "caloriesKcal": 18.0,
-    "proteinG": 0.88,
-    "fatG": 0.2,
-    "carbohydrateG": 3.89,
-    "fiberG": 1.2,
-    "sugarsG": null,
-    "sodiumMg": 5.0,
-    "saturatedFatG": 0.028,
-    "cholesterolMg": 0.0
-   }
-  },
-  {
-   "itemId": "rotini",
-   "pantryItem": false,
-   "fdcId": 169736,
-   "fdcDescription": "Pasta, dry, enriched",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 169736), captured 2026-10-22 Note: Dry, enriched, as purchased.",
-   "per100g": {
-    "caloriesKcal": 371.0,
-    "proteinG": 13.04,
-    "fatG": 1.51,
-    "carbohydrateG": 74.67,
-    "fiberG": 3.2,
-    "sugarsG": null,
-    "sodiumMg": 6.0,
-    "saturatedFatG": 0.277,
-    "cholesterolMg": 0.0
-   }
-  },
-  {
-   "itemId": "russet-potatoes",
-   "pantryItem": false,
-   "fdcId": 170027,
-   "fdcDescription": "Potatoes, russet, flesh and skin, raw (Includes foods for USDA's Food Distribution Program)",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 170027), captured 2026-10-22 Note: Flesh and skin, raw.",
-   "per100g": {
-    "caloriesKcal": 79.0,
-    "proteinG": 2.14,
-    "fatG": 0.08,
-    "carbohydrateG": 18.07,
-    "fiberG": 1.3,
-    "sugarsG": null,
-    "sodiumMg": 5.0,
-    "saturatedFatG": 0.026,
-    "cholesterolMg": 0.0
-   }
-  },
-  {
-   "itemId": "shredded-cheddar",
-   "pantryItem": false,
-   "fdcId": 328637,
-   "fdcDescription": "Cheese, cheddar",
-   "fdcDataType": "Foundation",
-   "closestMatch": true,
-   "source": "USDA FoodData Central (fdcId 328637), captured 2026-10-22 Note: FDC entry is cheddar cheese; the shipped item is a branded bag of shredded cheddar (same cheese, shredded form).",
-   "per100g": {
-    "caloriesKcal": 408.0,
-    "proteinG": 23.3,
-    "fatG": 34.0,
-    "carbohydrateG": 2.44,
-    "fiberG": null,
-    "sugarsG": 0.33,
-    "sodiumMg": 654.0,
-    "saturatedFatG": 19.2,
-    "cholesterolMg": 100.0
-   }
-  },
-  {
-   "itemId": "sour-cream",
-   "pantryItem": false,
-   "fdcId": 171257,
-   "fdcDescription": "Cream, sour, cultured",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": true,
-   "source": "USDA FoodData Central (fdcId 171257), captured 2026-10-22 Note: FDC entry is generic cultured sour cream; the shipped item is the Aldi Friendly Farms brand.",
-   "per100g": {
-    "caloriesKcal": 198.0,
-    "proteinG": 2.44,
-    "fatG": 19.35,
-    "carbohydrateG": 4.63,
-    "fiberG": 0.0,
-    "sugarsG": null,
-    "sodiumMg": 31.0,
-    "saturatedFatG": 10.14,
-    "cholesterolMg": 59.0
-   }
-  },
-  {
-   "itemId": "spaghetti",
-   "pantryItem": false,
-   "fdcId": 169736,
-   "fdcDescription": "Pasta, dry, enriched",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": true,
-   "source": "USDA FoodData Central (fdcId 169736), captured 2026-10-22 Note: FDC publishes a spaghetti-specific Foundation record (fdcId 2758998) but it currently carries only a partial nutrient set, so the complete SR Legacy dry enriched pasta entry is used; pasta shape does not change the values.",
-   "per100g": {
-    "caloriesKcal": 371.0,
-    "proteinG": 13.04,
-    "fatG": 1.51,
-    "carbohydrateG": 74.67,
-    "fiberG": 3.2,
-    "sugarsG": null,
-    "sodiumMg": 6.0,
-    "saturatedFatG": 0.277,
-    "cholesterolMg": 0.0
-   }
-  },
-  {
-   "itemId": "white-bread",
-   "pantryItem": false,
-   "fdcId": 174924,
-   "fdcDescription": "Bread, white, commercially prepared (includes soft bread crumbs)",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": true,
-   "source": "USDA FoodData Central (fdcId 174924), captured 2026-10-22 Note: FDC entry is generic commercially prepared white bread; the shipped item is the Aldi L'oven Fresh brand.",
-   "per100g": {
-    "caloriesKcal": 266.0,
-    "proteinG": 8.85,
-    "fatG": 3.33,
-    "carbohydrateG": 49.42,
-    "fiberG": 2.7,
-    "sugarsG": null,
-    "sodiumMg": 490.0,
-    "saturatedFatG": 0.698,
-    "cholesterolMg": 0.0
-   }
-  },
-  {
-   "itemId": "yellow-onions",
-   "pantryItem": false,
-   "fdcId": 790646,
-   "fdcDescription": "Onions, yellow, raw",
-   "fdcDataType": "Foundation",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 790646), captured 2026-10-22",
-   "per100g": {
-    "caloriesKcal": 38.0,
-    "proteinG": 0.83,
-    "fatG": 0.05,
-    "carbohydrateG": 8.61,
-    "fiberG": 1.9,
-    "sugarsG": 5.82,
-    "sodiumMg": 1.0,
-    "saturatedFatG": null,
-    "cholesterolMg": null
-   }
-  },
-  {
-   "itemId": "black-pepper",
-   "pantryItem": false,
-   "fdcId": 170931,
-   "fdcDescription": "Spices, pepper, black",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 170931), captured 2026-10-22",
-   "per100g": {
-    "caloriesKcal": 251.0,
-    "proteinG": 10.39,
-    "fatG": 3.26,
-    "carbohydrateG": 63.95,
-    "fiberG": 25.3,
-    "sugarsG": null,
-    "sodiumMg": 20.0,
-    "saturatedFatG": 1.392,
-    "cholesterolMg": 0.0
-   },
-   "pantryName": "Black pepper",
-   "gramWeights": {
-    "TEASPOON": 2.3
-   },
-   "gramWeightSource": "USDA FoodData Central food portions for fdcId 170931: 1 tsp, ground = 2.3 g."
-  },
-  {
-   "itemId": "butter",
-   "pantryItem": false,
-   "fdcId": 173410,
-   "fdcDescription": "Butter, salted",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 173410), captured 2026-10-22 Note: Salted butter, the household default.",
-   "per100g": {
-    "caloriesKcal": 717.0,
-    "proteinG": 0.85,
-    "fatG": 81.11,
-    "carbohydrateG": 0.06,
-    "fiberG": 0.0,
-    "sugarsG": null,
-    "sodiumMg": 643.0,
-    "saturatedFatG": 51.368,
-    "cholesterolMg": 215.0
-   },
-   "pantryName": "Butter",
-   "gramWeights": {
-    "TABLESPOON": 14.2
-   },
-   "gramWeightSource": "USDA FoodData Central food portions for fdcId 173410: 1 tbsp = 14.2 g."
-  },
-  {
-   "itemId": "chili-powder",
-   "pantryItem": false,
-   "fdcId": 171319,
-   "fdcDescription": "Spices, chili powder",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 171319), captured 2026-10-22",
-   "per100g": {
-    "caloriesKcal": 282.0,
-    "proteinG": 13.46,
-    "fatG": 14.28,
-    "carbohydrateG": 49.7,
-    "fiberG": 34.8,
-    "sugarsG": null,
-    "sodiumMg": 2867.0,
-    "saturatedFatG": 2.462,
-    "cholesterolMg": 0.0
-   },
-   "pantryName": "Chili powder",
-   "gramWeights": {
-    "TEASPOON": 2.7,
-    "TABLESPOON": 8.0
-   },
-   "gramWeightSource": "USDA FoodData Central food portions for fdcId 171319: 1 tsp = 2.7 g, 1 tbsp = 8 g."
-  },
-  {
-   "itemId": "flour",
-   "pantryItem": false,
-   "fdcId": 789890,
-   "fdcDescription": "Flour, wheat, all-purpose, enriched, bleached",
-   "fdcDataType": "Foundation",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 789890), captured 2026-10-22 Note: All-purpose, enriched, bleached.",
-   "per100g": {
-    "caloriesKcal": 366.0,
-    "proteinG": 10.9,
-    "fatG": 1.48,
-    "carbohydrateG": 77.3,
-    "fiberG": null,
-    "sugarsG": null,
-    "sodiumMg": 2.0,
-    "saturatedFatG": null,
-    "cholesterolMg": null
-   },
-   "pantryName": "Flour",
-   "gramWeights": {
-    "CUP": 125.0,
-    "TABLESPOON": 7.8125
-   },
-   "gramWeightSource": "The entry record (fdcId 789890) publishes no spoon weight; the SR Legacy record for the same food, Wheat flour, white, all-purpose, enriched, bleached (fdcId 168894), gives 1 cup = 125 g, so 1 tbsp = 125/16 = 7.8125 g."
-  },
-  {
-   "itemId": "garlic-powder",
-   "pantryItem": false,
-   "fdcId": 171325,
-   "fdcDescription": "Spices, garlic powder",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 171325), captured 2026-10-22",
-   "per100g": {
-    "caloriesKcal": 331.0,
-    "proteinG": 16.55,
-    "fatG": 0.73,
-    "carbohydrateG": 72.73,
-    "fiberG": 9.0,
-    "sugarsG": null,
-    "sodiumMg": 60.0,
-    "saturatedFatG": 0.249,
-    "cholesterolMg": 0.0
-   },
-   "pantryName": "Garlic powder",
-   "gramWeights": {
-    "TEASPOON": 3.1
-   },
-   "gramWeightSource": "USDA FoodData Central food portions for fdcId 171325: 1 tsp = 3.1 g."
-  },
-  {
-   "itemId": "ground-cumin",
-   "pantryItem": false,
-   "fdcId": 170923,
-   "fdcDescription": "Spices, cumin seed",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 170923), captured 2026-10-22 Note: FDC values are for cumin seed; ground cumin is the same seed, ground.",
-   "per100g": {
-    "caloriesKcal": 375.0,
-    "proteinG": 17.81,
-    "fatG": 22.27,
-    "carbohydrateG": 44.24,
-    "fiberG": 10.5,
-    "sugarsG": null,
-    "sodiumMg": 168.0,
-    "saturatedFatG": 1.535,
-    "cholesterolMg": 0.0
-   },
-   "pantryName": "Ground cumin",
-   "gramWeights": {
-    "TEASPOON": 2.1
-   },
-   "gramWeightSource": "USDA FoodData Central food portions for fdcId 170923 (Spices, cumin seed): 1 tsp = 2.1 g, used for the ground spice."
-  },
-  {
-   "itemId": "long-grain-white-rice",
-   "pantryItem": false,
-   "fdcId": 168877,
-   "fdcDescription": "Rice, white, long-grain, regular, raw, enriched",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 168877), captured 2026-10-22 Note: Dry, enriched, as stored.",
-   "per100g": {
-    "caloriesKcal": 365.0,
-    "proteinG": 7.13,
-    "fatG": 0.66,
-    "carbohydrateG": 79.95,
-    "fiberG": 1.3,
-    "sugarsG": null,
-    "sodiumMg": 5.0,
-    "saturatedFatG": 0.18,
-    "cholesterolMg": 0.0
-   },
-   "pantryName": "Long grain white rice",
-   "gramWeights": {
-    "CUP": 185.0
-   },
-   "gramWeightSource": "USDA FoodData Central food portions for fdcId 168877: 1 cup = 185 g."
-  },
-  {
-   "itemId": "paprika",
-   "pantryItem": false,
-   "fdcId": 171329,
-   "fdcDescription": "Spices, paprika",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 171329), captured 2026-10-22",
-   "per100g": {
-    "caloriesKcal": 282.0,
-    "proteinG": 14.14,
-    "fatG": 12.89,
-    "carbohydrateG": 53.99,
-    "fiberG": 34.9,
-    "sugarsG": null,
-    "sodiumMg": 68.0,
-    "saturatedFatG": 2.14,
-    "cholesterolMg": 0.0
-   },
-   "pantryName": "Paprika",
-   "gramWeights": {
-    "TEASPOON": 2.3
-   },
-   "gramWeightSource": "USDA FoodData Central food portions for fdcId 171329: 1 tsp = 2.3 g."
-  },
-  {
-   "itemId": "salt",
-   "pantryItem": false,
-   "fdcId": 173468,
-   "fdcDescription": "Salt, table",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 173468), captured 2026-10-22 Note: Table salt.",
-   "per100g": {
-    "caloriesKcal": 0.0,
-    "proteinG": 0.0,
-    "fatG": 0.0,
-    "carbohydrateG": 0.0,
-    "fiberG": 0.0,
-    "sugarsG": null,
-    "sodiumMg": 38758.0,
-    "saturatedFatG": 0.0,
-    "cholesterolMg": 0.0
-   },
-   "pantryName": "Salt",
-   "gramWeights": {
-    "TEASPOON": 6.0
-   },
-   "gramWeightSource": "USDA FoodData Central food portions for fdcId 173468: 1 tsp = 6 g."
-  },
-  {
-   "itemId": "soy-sauce",
-   "pantryItem": false,
-   "fdcId": 174277,
-   "fdcDescription": "Soy sauce made from soy and wheat (shoyu)",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 174277), captured 2026-10-22 Note: Shoyu (soy and wheat), the standard soy sauce.",
-   "per100g": {
-    "caloriesKcal": 53.0,
-    "proteinG": 8.14,
-    "fatG": 0.57,
-    "carbohydrateG": 4.93,
-    "fiberG": 0.8,
-    "sugarsG": null,
-    "sodiumMg": 5493.0,
-    "saturatedFatG": 0.073,
-    "cholesterolMg": 0.0
-   },
-   "pantryName": "Soy sauce",
-   "gramWeights": {
-    "TABLESPOON": 16.0
-   },
-   "gramWeightSource": "USDA FoodData Central food portions for fdcId 174277: 1 tbsp = 16 g."
-  },
-  {
-   "itemId": "vegetable-oil",
-   "pantryItem": false,
-   "fdcId": 171411,
-   "fdcDescription": "Oil, soybean, salad or cooking",
-   "fdcDataType": "SR Legacy",
-   "closestMatch": false,
-   "source": "USDA FoodData Central (fdcId 171411), captured 2026-10-22 Note: Soybean salad or cooking oil; generic vegetable oil is soybean oil.",
-   "per100g": {
-    "caloriesKcal": 884.0,
-    "proteinG": 0.0,
-    "fatG": 100.0,
-    "carbohydrateG": 0.0,
-    "fiberG": 0.0,
-    "sugarsG": null,
-    "sodiumMg": 0.0,
-    "saturatedFatG": 15.65,
-    "cholesterolMg": 0.0
-   },
-   "pantryName": "Vegetable oil",
-   "gramWeights": {
-    "TABLESPOON": 13.6
-   },
-   "gramWeightSource": "USDA FoodData Central food portions for fdcId 171411: 1 tbsp = 13.6 g."
-  }
- ],
- "incomplete": []
+  "version": 1,
+  "source": "USDA FoodData Central (https://fdc.nal.usda.gov), public domain. Values are per 100 g of the food exactly as fdcDescription states. closestMatch=true means the shipped item is a packaged or branded product and the FDC entry is the closest match for that food, not a lab reading of the package. A null field means FoodData Central does not publish that value for the entry; it was not estimated. Nutrition capture for Phase V2-0; loaded by the app in Phase V2-6.",
+  "capturedDate": "2026-10-22",
+  "entries": [
+    {
+      "itemId": "american-cheese",
+      "pantryItem": false,
+      "fdcId": 2647439,
+      "fdcDescription": "Cheese, pasteurized process cheese food or product, American, singles",
+      "fdcDataType": "Foundation",
+      "closestMatch": true,
+      "source": "USDA FoodData Central (fdcId 2647439), captured 2026-10-22 Note: FDC entry is the generic pasteurized-process American singles; the shipped item is the Aldi Happy Farms brand.",
+      "per100g": {
+        "caloriesKcal": 309.768,
+        "proteinG": 15.5672,
+        "fatG": 23.86,
+        "carbohydrateG": 8.1898,
+        "fiberG": null,
+        "sugarsG": null,
+        "sodiumMg": 1420.0,
+        "saturatedFatG": 13.7,
+        "cholesterolMg": 73.24
+      },
+      "gramWeights": {
+        "COUNT": 21.0
+      },
+      "gramWeightSource": "One COUNT is one single slice. The entry record (fdcId 2647439) publishes no slice weight; the SR Legacy records for pasteurized process American cheese (fdcId 170853 and 171290) both give one 3/4 oz slice = 21 g, the standard singles slice."
+    },
+    {
+      "itemId": "bell-peppers",
+      "pantryItem": false,
+      "fdcId": 2258588,
+      "fdcDescription": "Peppers, bell, green, raw",
+      "fdcDataType": "Foundation",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 2258588), captured 2026-10-22",
+      "per100g": {
+        "caloriesKcal": 22.9291,
+        "proteinG": 0.715,
+        "fatG": 0.1063,
+        "carbohydrateG": 4.7781,
+        "fiberG": 0.9419,
+        "sugarsG": null,
+        "sodiumMg": 0.0,
+        "saturatedFatG": null,
+        "cholesterolMg": null
+      },
+      "gramWeights": {
+        "COUNT": 119.0
+      },
+      "gramWeightSource": "One COUNT is one whole pepper. The entry record (fdcId 2258588) publishes no piece weight; the SR Legacy record for the same food, Peppers, sweet, green, raw (fdcId 170427), gives one medium pepper = 119 g."
+    },
+    {
+      "itemId": "canned-black-beans",
+      "pantryItem": false,
+      "fdcId": 2644285,
+      "fdcDescription": "Beans, black, canned, sodium added, drained and rinsed",
+      "fdcDataType": "Foundation",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 2644285), captured 2026-10-22 Note: Canned black beans, drained and rinsed, as recipes use them.",
+      "per100g": {
+        "caloriesKcal": 118.361,
+        "proteinG": 6.9125,
+        "fatG": 1.273,
+        "carbohydrateG": 19.8135,
+        "fiberG": null,
+        "sugarsG": null,
+        "sodiumMg": 217.9,
+        "saturatedFatG": null,
+        "cholesterolMg": null
+      },
+      "gramWeights": {
+        "COUNT": 425.24
+      },
+      "gramWeightSource": "One COUNT is one whole 15 oz can. Grams are the can net weight from the price book pack description (Phase 0 verified), at 28.3495 g per ounce. The FDC values describe the beans drained and rinsed, so this reads as an upper estimate."
+    },
+    {
+      "itemId": "canned-diced-tomatoes",
+      "pantryItem": false,
+      "fdcId": 333281,
+      "fdcDescription": "Tomatoes, canned, red, ripe, diced",
+      "fdcDataType": "Foundation",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 333281), captured 2026-10-22",
+      "per100g": {
+        "caloriesKcal": 18.0,
+        "proteinG": 0.84,
+        "fatG": 0.5,
+        "carbohydrateG": 3.32,
+        "fiberG": null,
+        "sugarsG": 2.99,
+        "sodiumMg": 125.0,
+        "saturatedFatG": null,
+        "cholesterolMg": null
+      },
+      "gramWeights": {
+        "COUNT": 411.07
+      },
+      "gramWeightSource": "One COUNT is one whole 14.5 oz can. Grams are the can net weight from the price book pack description (Phase 0 verified), at 28.3495 g per ounce."
+    },
+    {
+      "itemId": "canned-kidney-beans",
+      "pantryItem": false,
+      "fdcId": 2644289,
+      "fdcDescription": "Beans, kidney, dark red, canned, sodium added, sugar added, drained and rinsed",
+      "fdcDataType": "Foundation",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 2644289), captured 2026-10-22 Note: Entry is dark red kidney beans, matching the shipped item.",
+      "per100g": {
+        "caloriesKcal": 126.624,
+        "proteinG": 7.8,
+        "fatG": 1.256,
+        "carbohydrateG": 21.03,
+        "fiberG": null,
+        "sugarsG": null,
+        "sodiumMg": 172.3,
+        "saturatedFatG": null,
+        "cholesterolMg": null
+      },
+      "gramWeights": {
+        "COUNT": 439.42
+      },
+      "gramWeightSource": "One COUNT is one whole 15.5 oz can. Grams are the can net weight from the price book pack description (Phase 0 verified), at 28.3495 g per ounce. The FDC values describe the beans drained and rinsed, so this reads as an upper estimate."
+    },
+    {
+      "itemId": "canned-tomato-soup",
+      "pantryItem": false,
+      "fdcId": 172882,
+      "fdcDescription": "Soup, tomato, canned, condensed",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": true,
+      "source": "USDA FoodData Central (fdcId 172882), captured 2026-10-22 Note: FDC entry is generic condensed tomato soup; the shipped item is Campbell's condensed tomato soup.",
+      "per100g": {
+        "caloriesKcal": 66.0,
+        "proteinG": 1.46,
+        "fatG": 0.44,
+        "carbohydrateG": 15.22,
+        "fiberG": 1.1,
+        "sugarsG": null,
+        "sodiumMg": 377.0,
+        "saturatedFatG": 0.115,
+        "cholesterolMg": 0.0
+      },
+      "gramWeights": {
+        "COUNT": 304.76
+      },
+      "gramWeightSource": "One COUNT is one whole 10.75 oz can. Grams are the can net weight from the price book pack description (Phase 0 verified), at 28.3495 g per ounce."
+    },
+    {
+      "itemId": "chicken-breast",
+      "pantryItem": false,
+      "fdcId": 2646170,
+      "fdcDescription": "Chicken, breast, boneless, skinless, raw",
+      "fdcDataType": "Foundation",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 2646170), captured 2026-10-22",
+      "per100g": {
+        "caloriesKcal": 106.034,
+        "proteinG": 22.525,
+        "fatG": 1.934,
+        "carbohydrateG": 0,
+        "fiberG": null,
+        "sugarsG": null,
+        "sodiumMg": 65.75,
+        "saturatedFatG": 0.3488,
+        "cholesterolMg": 72.73
+      }
+    },
+    {
+      "itemId": "egg-noodles",
+      "pantryItem": false,
+      "fdcId": 169731,
+      "fdcDescription": "Noodles, egg, dry, enriched",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 169731), captured 2026-10-22 Note: Dry, enriched, as purchased.",
+      "per100g": {
+        "caloriesKcal": 384.0,
+        "proteinG": 14.16,
+        "fatG": 4.44,
+        "carbohydrateG": 71.27,
+        "fiberG": 3.3,
+        "sugarsG": null,
+        "sodiumMg": 21.0,
+        "saturatedFatG": 1.18,
+        "cholesterolMg": 84.0
+      }
+    },
+    {
+      "itemId": "eggs",
+      "pantryItem": false,
+      "fdcId": 171287,
+      "fdcDescription": "Egg, whole, raw, fresh",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 171287), captured 2026-10-22",
+      "per100g": {
+        "caloriesKcal": 143.0,
+        "proteinG": 12.56,
+        "fatG": 9.51,
+        "carbohydrateG": 0.72,
+        "fiberG": 0.0,
+        "sugarsG": null,
+        "sodiumMg": 142.0,
+        "saturatedFatG": 3.126,
+        "cholesterolMg": 372.0
+      },
+      "gramWeights": {
+        "COUNT": 50.0
+      },
+      "gramWeightSource": "USDA FoodData Central food portions for fdcId 171287: one large egg = 50 g."
+    },
+    {
+      "itemId": "flour-tortillas",
+      "pantryItem": false,
+      "fdcId": 167535,
+      "fdcDescription": "Tortillas, ready-to-bake or -fry, flour, shelf stable",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": true,
+      "source": "USDA FoodData Central (fdcId 167535), captured 2026-10-22 Note: FDC entry is the generic shelf-stable flour tortilla; the shipped item is the Aldi Pueblo Lindo brand.",
+      "per100g": {
+        "caloriesKcal": 297.0,
+        "proteinG": 8.01,
+        "fatG": 7.58,
+        "carbohydrateG": 49.27,
+        "fiberG": 2.4,
+        "sugarsG": null,
+        "sodiumMg": 742.0,
+        "saturatedFatG": 1.225,
+        "cholesterolMg": 0.0
+      },
+      "gramWeights": {
+        "COUNT": 49.0
+      },
+      "gramWeightSource": "USDA FoodData Central food portions for fdcId 167535: one tortilla = 49 g."
+    },
+    {
+      "itemId": "frozen-broccoli",
+      "pantryItem": false,
+      "fdcId": 169970,
+      "fdcDescription": "Broccoli, frozen, spears, unprepared (Includes foods for USDA's Food Distribution Program)",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 169970), captured 2026-10-22 Note: Frozen spears entry stands for the shipped florets; same food, cut shape differs only.",
+      "per100g": {
+        "caloriesKcal": 29.0,
+        "proteinG": 3.06,
+        "fatG": 0.34,
+        "carbohydrateG": 5.35,
+        "fiberG": 3.0,
+        "sugarsG": null,
+        "sodiumMg": 17.0,
+        "saturatedFatG": 0.052,
+        "cholesterolMg": 0.0
+      }
+    },
+    {
+      "itemId": "frozen-green-beans",
+      "pantryItem": false,
+      "fdcId": 169962,
+      "fdcDescription": "Beans, snap, green, frozen, all styles, unprepared (Includes foods for USDA's Food Distribution Program)",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 169962), captured 2026-10-22",
+      "per100g": {
+        "caloriesKcal": 33.0,
+        "proteinG": 1.79,
+        "fatG": 0.21,
+        "carbohydrateG": 7.54,
+        "fiberG": 2.6,
+        "sugarsG": null,
+        "sodiumMg": 3.0,
+        "saturatedFatG": 0.047,
+        "cholesterolMg": 0.0
+      }
+    },
+    {
+      "itemId": "frozen-mixed-vegetables",
+      "pantryItem": false,
+      "fdcId": 170471,
+      "fdcDescription": "Vegetables, mixed, frozen, unprepared",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 170471), captured 2026-10-22",
+      "per100g": {
+        "caloriesKcal": 72.0,
+        "proteinG": 3.33,
+        "fatG": 0.52,
+        "carbohydrateG": 13.47,
+        "fiberG": 4.0,
+        "sugarsG": null,
+        "sodiumMg": 47.0,
+        "saturatedFatG": 0.098,
+        "cholesterolMg": 0.0
+      }
+    },
+    {
+      "itemId": "frozen-peas-carrots",
+      "pantryItem": false,
+      "fdcId": 170425,
+      "fdcDescription": "Peas and carrots, frozen, unprepared",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 170425), captured 2026-10-22",
+      "per100g": {
+        "caloriesKcal": 53.0,
+        "proteinG": 3.4,
+        "fatG": 0.47,
+        "carbohydrateG": 11.15,
+        "fiberG": 3.4,
+        "sugarsG": null,
+        "sodiumMg": 79.0,
+        "saturatedFatG": 0.084,
+        "cholesterolMg": 0.0
+      }
+    },
+    {
+      "itemId": "garden-salad",
+      "pantryItem": false,
+      "fdcId": 2346388,
+      "fdcDescription": "Lettuce, iceberg, raw",
+      "fdcDataType": "Foundation",
+      "closestMatch": true,
+      "source": "USDA FoodData Central (fdcId 2346388), captured 2026-10-22 Note: Bagged garden salad is mostly iceberg; the FDC iceberg entry stands in for the mix.",
+      "per100g": {
+        "caloriesKcal": 17.10875,
+        "proteinG": 0.7425,
+        "fatG": 0.07375,
+        "carbohydrateG": 3.36875,
+        "fiberG": null,
+        "sugarsG": null,
+        "sodiumMg": 16.11,
+        "saturatedFatG": null,
+        "cholesterolMg": null
+      }
+    },
+    {
+      "itemId": "garlic",
+      "pantryItem": false,
+      "fdcId": 1104647,
+      "fdcDescription": "Garlic, raw",
+      "fdcDataType": "Foundation",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 1104647), captured 2026-10-22",
+      "per100g": {
+        "caloriesKcal": 143.0,
+        "proteinG": 6.62,
+        "fatG": 0.38,
+        "carbohydrateG": 28.2,
+        "fiberG": 2.7,
+        "sugarsG": null,
+        "sodiumMg": null,
+        "saturatedFatG": null,
+        "cholesterolMg": null
+      }
+    },
+    {
+      "itemId": "garlic-texas-toast",
+      "pantryItem": false,
+      "fdcId": 167939,
+      "fdcDescription": "Garlic bread, frozen",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": true,
+      "source": "USDA FoodData Central (fdcId 167939), captured 2026-10-22 Note: FDC entry is generic frozen garlic bread; the shipped item is New York Bakery Garlic Texas Toast.",
+      "per100g": {
+        "caloriesKcal": 350.0,
+        "proteinG": 8.36,
+        "fatG": 16.61,
+        "carbohydrateG": 41.72,
+        "fiberG": 2.5,
+        "sugarsG": null,
+        "sodiumMg": 544.0,
+        "saturatedFatG": 5.281,
+        "cholesterolMg": 0.0
+      },
+      "gramWeights": {
+        "COUNT": 39.87
+      },
+      "gramWeightSource": "One COUNT is one slice. The price book pack is an 11.25 oz box of 8 slices (Phase 0 verified), so one slice is 11.25/8 oz = 39.87 g."
+    },
+    {
+      "itemId": "ground-beef",
+      "pantryItem": false,
+      "fdcId": 174036,
+      "fdcDescription": "Beef, ground, 80% lean meat / 20% fat, raw",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 174036), captured 2026-10-26",
+      "per100g": {
+        "caloriesKcal": 250.0,
+        "proteinG": 17.0,
+        "fatG": 20.0,
+        "carbohydrateG": 0.0,
+        "fiberG": 0.0,
+        "sugarsG": 0.0,
+        "sodiumMg": 66.0,
+        "saturatedFatG": 8.0,
+        "cholesterolMg": 70.0
+      }
+    },
+    {
+      "itemId": "ground-turkey",
+      "pantryItem": false,
+      "fdcId": 171505,
+      "fdcDescription": "Turkey, Ground, raw",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 171505), captured 2026-10-22",
+      "per100g": {
+        "caloriesKcal": 148.0,
+        "proteinG": 19.66,
+        "fatG": 7.66,
+        "carbohydrateG": 0.0,
+        "fiberG": 0.0,
+        "sugarsG": null,
+        "sodiumMg": 58.0,
+        "saturatedFatG": 2.024,
+        "cholesterolMg": 69.0
+      }
+    },
+    {
+      "itemId": "hamburger-buns",
+      "pantryItem": false,
+      "fdcId": 172796,
+      "fdcDescription": "Rolls, hamburger or hotdog, plain",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": true,
+      "source": "USDA FoodData Central (fdcId 172796), captured 2026-10-22 Note: FDC entry is the generic plain hamburger roll; the shipped item is the Aldi L'Oven Fresh brand.",
+      "per100g": {
+        "caloriesKcal": 279.0,
+        "proteinG": 9.77,
+        "fatG": 3.91,
+        "carbohydrateG": 50.12,
+        "fiberG": 1.8,
+        "sugarsG": null,
+        "sodiumMg": 494.0,
+        "saturatedFatG": 0.842,
+        "cholesterolMg": 0.0
+      },
+      "gramWeights": {
+        "COUNT": 42.52
+      },
+      "gramWeightSource": "One COUNT is one bun. The price book pack is a 12 oz package of 8 buns (Phase 0 verified), so one bun is 12/8 oz = 42.52 g."
+    },
+    {
+      "itemId": "iceberg-lettuce",
+      "pantryItem": false,
+      "fdcId": 2346388,
+      "fdcDescription": "Lettuce, iceberg, raw",
+      "fdcDataType": "Foundation",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 2346388), captured 2026-10-22",
+      "per100g": {
+        "caloriesKcal": 17.10875,
+        "proteinG": 0.7425,
+        "fatG": 0.07375,
+        "carbohydrateG": 3.36875,
+        "fiberG": null,
+        "sugarsG": null,
+        "sodiumMg": 16.11,
+        "saturatedFatG": null,
+        "cholesterolMg": null
+      },
+      "gramWeights": {
+        "COUNT": 539.0
+      },
+      "gramWeightSource": "One COUNT is one head. The entry record (fdcId 2346388) publishes no head weight; the SR Legacy record for the same food, Lettuce, iceberg (includes crisphead types), raw (fdcId 169248), gives one medium head (6 in dia) = 539 g."
+    },
+    {
+      "itemId": "milk",
+      "pantryItem": false,
+      "fdcId": 746778,
+      "fdcDescription": "Milk, reduced fat, fluid, 2% milkfat, with added vitamin A and vitamin D",
+      "fdcDataType": "Foundation",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 746778), captured 2026-10-22 Note: 2% milkfat, as the shipped item is labeled.",
+      "per100g": {
+        "caloriesKcal": 50.0,
+        "proteinG": 3.36,
+        "fatG": 1.9,
+        "carbohydrateG": 4.9,
+        "fiberG": null,
+        "sugarsG": 4.89,
+        "sodiumMg": 39.0,
+        "saturatedFatG": 1.11,
+        "cholesterolMg": 8.0
+      },
+      "gramWeights": {
+        "FLUID_OUNCE": 30.5
+      },
+      "gramWeightSource": "The entry record (fdcId 746778) publishes no fluid-ounce weight; the SR Legacy record for the same food, Milk, reduced fat, fluid, 2% milkfat, with added vitamin A and vitamin D (fdcId 171267), gives 1 fl oz = 30.5 g."
+    },
+    {
+      "itemId": "pasta-sauce",
+      "pantryItem": false,
+      "fdcId": 332282,
+      "fdcDescription": "Sauce, pasta, spaghetti/marinara, ready-to-serve",
+      "fdcDataType": "Foundation",
+      "closestMatch": true,
+      "source": "USDA FoodData Central (fdcId 332282), captured 2026-10-22 Note: FDC entry is generic ready-to-serve marinara; the shipped item is the Aldi Reggano brand.",
+      "per100g": {
+        "caloriesKcal": 45.0,
+        "proteinG": 1.41,
+        "fatG": 1.48,
+        "carbohydrateG": 8.05,
+        "fiberG": 1.8,
+        "sugarsG": 5.5,
+        "sodiumMg": 419.0,
+        "saturatedFatG": 0.17,
+        "cholesterolMg": null
+      }
+    },
+    {
+      "itemId": "pork-tenderloin",
+      "pantryItem": false,
+      "fdcId": 2646169,
+      "fdcDescription": "Pork, loin, tenderloin, boneless, raw",
+      "fdcDataType": "Foundation",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 2646169), captured 2026-10-22",
+      "per100g": {
+        "caloriesKcal": 119.039,
+        "proteinG": 21.58125,
+        "fatG": 3.899,
+        "carbohydrateG": 0,
+        "fiberG": null,
+        "sugarsG": null,
+        "sodiumMg": 41.39,
+        "saturatedFatG": 0.8663,
+        "cholesterolMg": 59.58
+      }
+    },
+    {
+      "itemId": "roma-tomatoes",
+      "pantryItem": false,
+      "fdcId": 170457,
+      "fdcDescription": "Tomatoes, red, ripe, raw, year round average",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 170457), captured 2026-10-22 Note: FDC entry is the year-round average red tomato; the shipped item is the Roma variety.",
+      "per100g": {
+        "caloriesKcal": 18.0,
+        "proteinG": 0.88,
+        "fatG": 0.2,
+        "carbohydrateG": 3.89,
+        "fiberG": 1.2,
+        "sugarsG": null,
+        "sodiumMg": 5.0,
+        "saturatedFatG": 0.028,
+        "cholesterolMg": 0.0
+      }
+    },
+    {
+      "itemId": "rotini",
+      "pantryItem": false,
+      "fdcId": 169736,
+      "fdcDescription": "Pasta, dry, enriched",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 169736), captured 2026-10-22 Note: Dry, enriched, as purchased.",
+      "per100g": {
+        "caloriesKcal": 371.0,
+        "proteinG": 13.04,
+        "fatG": 1.51,
+        "carbohydrateG": 74.67,
+        "fiberG": 3.2,
+        "sugarsG": null,
+        "sodiumMg": 6.0,
+        "saturatedFatG": 0.277,
+        "cholesterolMg": 0.0
+      }
+    },
+    {
+      "itemId": "russet-potatoes",
+      "pantryItem": false,
+      "fdcId": 170027,
+      "fdcDescription": "Potatoes, russet, flesh and skin, raw (Includes foods for USDA's Food Distribution Program)",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 170027), captured 2026-10-22 Note: Flesh and skin, raw.",
+      "per100g": {
+        "caloriesKcal": 79.0,
+        "proteinG": 2.14,
+        "fatG": 0.08,
+        "carbohydrateG": 18.07,
+        "fiberG": 1.3,
+        "sugarsG": null,
+        "sodiumMg": 5.0,
+        "saturatedFatG": 0.026,
+        "cholesterolMg": 0.0
+      }
+    },
+    {
+      "itemId": "shredded-cheddar",
+      "pantryItem": false,
+      "fdcId": 328637,
+      "fdcDescription": "Cheese, cheddar",
+      "fdcDataType": "Foundation",
+      "closestMatch": true,
+      "source": "USDA FoodData Central (fdcId 328637), captured 2026-10-22 Note: FDC entry is cheddar cheese; the shipped item is a branded bag of shredded cheddar (same cheese, shredded form).",
+      "per100g": {
+        "caloriesKcal": 408.0,
+        "proteinG": 23.3,
+        "fatG": 34.0,
+        "carbohydrateG": 2.44,
+        "fiberG": null,
+        "sugarsG": 0.33,
+        "sodiumMg": 654.0,
+        "saturatedFatG": 19.2,
+        "cholesterolMg": 100.0
+      }
+    },
+    {
+      "itemId": "sour-cream",
+      "pantryItem": false,
+      "fdcId": 171257,
+      "fdcDescription": "Cream, sour, cultured",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": true,
+      "source": "USDA FoodData Central (fdcId 171257), captured 2026-10-22 Note: FDC entry is generic cultured sour cream; the shipped item is the Aldi Friendly Farms brand.",
+      "per100g": {
+        "caloriesKcal": 198.0,
+        "proteinG": 2.44,
+        "fatG": 19.35,
+        "carbohydrateG": 4.63,
+        "fiberG": 0.0,
+        "sugarsG": null,
+        "sodiumMg": 31.0,
+        "saturatedFatG": 10.14,
+        "cholesterolMg": 59.0
+      }
+    },
+    {
+      "itemId": "spaghetti",
+      "pantryItem": false,
+      "fdcId": 169736,
+      "fdcDescription": "Pasta, dry, enriched",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": true,
+      "source": "USDA FoodData Central (fdcId 169736), captured 2026-10-22 Note: FDC publishes a spaghetti-specific Foundation record (fdcId 2758998) but it currently carries only a partial nutrient set, so the complete SR Legacy dry enriched pasta entry is used; pasta shape does not change the values.",
+      "per100g": {
+        "caloriesKcal": 371.0,
+        "proteinG": 13.04,
+        "fatG": 1.51,
+        "carbohydrateG": 74.67,
+        "fiberG": 3.2,
+        "sugarsG": null,
+        "sodiumMg": 6.0,
+        "saturatedFatG": 0.277,
+        "cholesterolMg": 0.0
+      }
+    },
+    {
+      "itemId": "white-bread",
+      "pantryItem": false,
+      "fdcId": 174924,
+      "fdcDescription": "Bread, white, commercially prepared (includes soft bread crumbs)",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": true,
+      "source": "USDA FoodData Central (fdcId 174924), captured 2026-10-22 Note: FDC entry is generic commercially prepared white bread; the shipped item is the Aldi L'oven Fresh brand.",
+      "per100g": {
+        "caloriesKcal": 266.0,
+        "proteinG": 8.85,
+        "fatG": 3.33,
+        "carbohydrateG": 49.42,
+        "fiberG": 2.7,
+        "sugarsG": null,
+        "sodiumMg": 490.0,
+        "saturatedFatG": 0.698,
+        "cholesterolMg": 0.0
+      }
+    },
+    {
+      "itemId": "yellow-onions",
+      "pantryItem": false,
+      "fdcId": 790646,
+      "fdcDescription": "Onions, yellow, raw",
+      "fdcDataType": "Foundation",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 790646), captured 2026-10-22",
+      "per100g": {
+        "caloriesKcal": 38.0,
+        "proteinG": 0.83,
+        "fatG": 0.05,
+        "carbohydrateG": 8.61,
+        "fiberG": 1.9,
+        "sugarsG": 5.82,
+        "sodiumMg": 1.0,
+        "saturatedFatG": null,
+        "cholesterolMg": null
+      }
+    },
+    {
+      "itemId": "black-pepper",
+      "pantryItem": false,
+      "fdcId": 170931,
+      "fdcDescription": "Spices, pepper, black",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 170931), captured 2026-10-22",
+      "per100g": {
+        "caloriesKcal": 251.0,
+        "proteinG": 10.39,
+        "fatG": 3.26,
+        "carbohydrateG": 63.95,
+        "fiberG": 25.3,
+        "sugarsG": null,
+        "sodiumMg": 20.0,
+        "saturatedFatG": 1.392,
+        "cholesterolMg": 0.0
+      },
+      "pantryName": "Black pepper",
+      "gramWeights": {
+        "TEASPOON": 2.3
+      },
+      "gramWeightSource": "USDA FoodData Central food portions for fdcId 170931: 1 tsp, ground = 2.3 g."
+    },
+    {
+      "itemId": "butter",
+      "pantryItem": false,
+      "fdcId": 173410,
+      "fdcDescription": "Butter, salted",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 173410), captured 2026-10-22 Note: Salted butter, the household default.",
+      "per100g": {
+        "caloriesKcal": 717.0,
+        "proteinG": 0.85,
+        "fatG": 81.11,
+        "carbohydrateG": 0.06,
+        "fiberG": 0.0,
+        "sugarsG": null,
+        "sodiumMg": 643.0,
+        "saturatedFatG": 51.368,
+        "cholesterolMg": 215.0
+      },
+      "pantryName": "Butter",
+      "gramWeights": {
+        "TABLESPOON": 14.2
+      },
+      "gramWeightSource": "USDA FoodData Central food portions for fdcId 173410: 1 tbsp = 14.2 g."
+    },
+    {
+      "itemId": "chili-powder",
+      "pantryItem": false,
+      "fdcId": 171319,
+      "fdcDescription": "Spices, chili powder",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 171319), captured 2026-10-22",
+      "per100g": {
+        "caloriesKcal": 282.0,
+        "proteinG": 13.46,
+        "fatG": 14.28,
+        "carbohydrateG": 49.7,
+        "fiberG": 34.8,
+        "sugarsG": null,
+        "sodiumMg": 2867.0,
+        "saturatedFatG": 2.462,
+        "cholesterolMg": 0.0
+      },
+      "pantryName": "Chili powder",
+      "gramWeights": {
+        "TEASPOON": 2.7,
+        "TABLESPOON": 8.0
+      },
+      "gramWeightSource": "USDA FoodData Central food portions for fdcId 171319: 1 tsp = 2.7 g, 1 tbsp = 8 g."
+    },
+    {
+      "itemId": "flour",
+      "pantryItem": false,
+      "fdcId": 789890,
+      "fdcDescription": "Flour, wheat, all-purpose, enriched, bleached",
+      "fdcDataType": "Foundation",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 789890), captured 2026-10-22 Note: All-purpose, enriched, bleached.",
+      "per100g": {
+        "caloriesKcal": 366.0,
+        "proteinG": 10.9,
+        "fatG": 1.48,
+        "carbohydrateG": 77.3,
+        "fiberG": null,
+        "sugarsG": null,
+        "sodiumMg": 2.0,
+        "saturatedFatG": null,
+        "cholesterolMg": null
+      },
+      "pantryName": "Flour",
+      "gramWeights": {
+        "CUP": 125.0,
+        "TABLESPOON": 7.8125
+      },
+      "gramWeightSource": "The entry record (fdcId 789890) publishes no spoon weight; the SR Legacy record for the same food, Wheat flour, white, all-purpose, enriched, bleached (fdcId 168894), gives 1 cup = 125 g, so 1 tbsp = 125/16 = 7.8125 g."
+    },
+    {
+      "itemId": "garlic-powder",
+      "pantryItem": false,
+      "fdcId": 171325,
+      "fdcDescription": "Spices, garlic powder",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 171325), captured 2026-10-22",
+      "per100g": {
+        "caloriesKcal": 331.0,
+        "proteinG": 16.55,
+        "fatG": 0.73,
+        "carbohydrateG": 72.73,
+        "fiberG": 9.0,
+        "sugarsG": null,
+        "sodiumMg": 60.0,
+        "saturatedFatG": 0.249,
+        "cholesterolMg": 0.0
+      },
+      "pantryName": "Garlic powder",
+      "gramWeights": {
+        "TEASPOON": 3.1
+      },
+      "gramWeightSource": "USDA FoodData Central food portions for fdcId 171325: 1 tsp = 3.1 g."
+    },
+    {
+      "itemId": "ground-cumin",
+      "pantryItem": false,
+      "fdcId": 170923,
+      "fdcDescription": "Spices, cumin seed",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 170923), captured 2026-10-22 Note: FDC values are for cumin seed; ground cumin is the same seed, ground.",
+      "per100g": {
+        "caloriesKcal": 375.0,
+        "proteinG": 17.81,
+        "fatG": 22.27,
+        "carbohydrateG": 44.24,
+        "fiberG": 10.5,
+        "sugarsG": null,
+        "sodiumMg": 168.0,
+        "saturatedFatG": 1.535,
+        "cholesterolMg": 0.0
+      },
+      "pantryName": "Ground cumin",
+      "gramWeights": {
+        "TEASPOON": 2.1
+      },
+      "gramWeightSource": "USDA FoodData Central food portions for fdcId 170923 (Spices, cumin seed): 1 tsp = 2.1 g, used for the ground spice."
+    },
+    {
+      "itemId": "long-grain-white-rice",
+      "pantryItem": false,
+      "fdcId": 168877,
+      "fdcDescription": "Rice, white, long-grain, regular, raw, enriched",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 168877), captured 2026-10-22 Note: Dry, enriched, as stored.",
+      "per100g": {
+        "caloriesKcal": 365.0,
+        "proteinG": 7.13,
+        "fatG": 0.66,
+        "carbohydrateG": 79.95,
+        "fiberG": 1.3,
+        "sugarsG": null,
+        "sodiumMg": 5.0,
+        "saturatedFatG": 0.18,
+        "cholesterolMg": 0.0
+      },
+      "pantryName": "Long grain white rice",
+      "gramWeights": {
+        "CUP": 185.0
+      },
+      "gramWeightSource": "USDA FoodData Central food portions for fdcId 168877: 1 cup = 185 g."
+    },
+    {
+      "itemId": "paprika",
+      "pantryItem": false,
+      "fdcId": 171329,
+      "fdcDescription": "Spices, paprika",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 171329), captured 2026-10-22",
+      "per100g": {
+        "caloriesKcal": 282.0,
+        "proteinG": 14.14,
+        "fatG": 12.89,
+        "carbohydrateG": 53.99,
+        "fiberG": 34.9,
+        "sugarsG": null,
+        "sodiumMg": 68.0,
+        "saturatedFatG": 2.14,
+        "cholesterolMg": 0.0
+      },
+      "pantryName": "Paprika",
+      "gramWeights": {
+        "TEASPOON": 2.3
+      },
+      "gramWeightSource": "USDA FoodData Central food portions for fdcId 171329: 1 tsp = 2.3 g."
+    },
+    {
+      "itemId": "salt",
+      "pantryItem": false,
+      "fdcId": 173468,
+      "fdcDescription": "Salt, table",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 173468), captured 2026-10-22 Note: Table salt.",
+      "per100g": {
+        "caloriesKcal": 0.0,
+        "proteinG": 0.0,
+        "fatG": 0.0,
+        "carbohydrateG": 0.0,
+        "fiberG": 0.0,
+        "sugarsG": null,
+        "sodiumMg": 38758.0,
+        "saturatedFatG": 0.0,
+        "cholesterolMg": 0.0
+      },
+      "pantryName": "Salt",
+      "gramWeights": {
+        "TEASPOON": 6.0
+      },
+      "gramWeightSource": "USDA FoodData Central food portions for fdcId 173468: 1 tsp = 6 g."
+    },
+    {
+      "itemId": "soy-sauce",
+      "pantryItem": false,
+      "fdcId": 174277,
+      "fdcDescription": "Soy sauce made from soy and wheat (shoyu)",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 174277), captured 2026-10-22 Note: Shoyu (soy and wheat), the standard soy sauce.",
+      "per100g": {
+        "caloriesKcal": 53.0,
+        "proteinG": 8.14,
+        "fatG": 0.57,
+        "carbohydrateG": 4.93,
+        "fiberG": 0.8,
+        "sugarsG": null,
+        "sodiumMg": 5493.0,
+        "saturatedFatG": 0.073,
+        "cholesterolMg": 0.0
+      },
+      "pantryName": "Soy sauce",
+      "gramWeights": {
+        "TABLESPOON": 16.0
+      },
+      "gramWeightSource": "USDA FoodData Central food portions for fdcId 174277: 1 tbsp = 16 g."
+    },
+    {
+      "itemId": "vegetable-oil",
+      "pantryItem": false,
+      "fdcId": 171411,
+      "fdcDescription": "Oil, soybean, salad or cooking",
+      "fdcDataType": "SR Legacy",
+      "closestMatch": false,
+      "source": "USDA FoodData Central (fdcId 171411), captured 2026-10-22 Note: Soybean salad or cooking oil; generic vegetable oil is soybean oil.",
+      "per100g": {
+        "caloriesKcal": 884.0,
+        "proteinG": 0.0,
+        "fatG": 100.0,
+        "carbohydrateG": 0.0,
+        "fiberG": 0.0,
+        "sugarsG": null,
+        "sodiumMg": 0.0,
+        "saturatedFatG": 15.65,
+        "cholesterolMg": 0.0
+      },
+      "pantryName": "Vegetable oil",
+      "gramWeights": {
+        "TABLESPOON": 13.6
+      },
+      "gramWeightSource": "USDA FoodData Central food portions for fdcId 171411: 1 tbsp = 13.6 g."
+    }
+  ],
+  "incomplete": []
 }

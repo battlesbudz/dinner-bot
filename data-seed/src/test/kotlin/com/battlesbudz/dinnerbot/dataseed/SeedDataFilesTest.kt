@@ -141,8 +141,8 @@ class SeedDataFilesTest {
             nutrition.entries, priceBook.items, recipes.recipes, nutrition.incomplete,
         )
         assertTrue("nutrition seed errors: $errors", errors.isEmpty())
-        assertEquals(42, nutrition.entries.size)
-        assertEquals(42, nutrition.entries.count { !it.pantryItem })
+        assertEquals(43, nutrition.entries.size)
+        assertEquals(43, nutrition.entries.count { !it.pantryItem })
         assertEquals(0, nutrition.entries.count { it.pantryItem })
         // Every price book item resolves a nutrition entry by its id.
         val entryIds = nutrition.entries.map { it.itemId }.toSet()

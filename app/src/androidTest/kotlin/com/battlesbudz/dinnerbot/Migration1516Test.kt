@@ -64,7 +64,7 @@ class Migration1516Test {
     @Test fun populatedV15OpensAtV16WithEveryRowIntact() {
         val db = openMigrated()
         try {
-            assertEquals(16, db.openHelper.writableDatabase.version)
+            assertEquals(17, db.openHelper.writableDatabase.version)
             runBlocking {
                 // The price book, including the guess mark v15 added.
                 val items = db.priceItemDao().getAll()

@@ -195,7 +195,7 @@ class RecipeImportInstrumentedTest {
             assertEquals("user-spring-onion", createdId)
             assertEquals(null, model.recipe.ingredients[0].pantryItem)
             val items = runBlocking { db.priceItemDao().getAll() }
-            assertEquals(43, items.size)
+            assertEquals(44, items.size)
             val created = items.single { it.id == "user-spring-onion" }
             assertEquals("spring onions", created.name)
             assertTrue(created.guessPriced)

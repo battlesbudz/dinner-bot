@@ -72,7 +72,7 @@ class Migration1112Test {
     @Test fun upgradeFromV11KeepsEveryKindOfUserData() = runBlocking {
         val db = openMigrated()
         try {
-            assertEquals(16, db.openHelper.readableDatabase.version)
+            assertEquals(17, db.openHelper.readableDatabase.version)
 
             // Prices: the corrected one, the staple flag, the scan-added item.
             val breast = db.priceItemDao().getById("chicken-breast")!!
