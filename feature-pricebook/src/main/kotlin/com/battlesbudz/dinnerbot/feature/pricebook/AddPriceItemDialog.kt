@@ -148,8 +148,9 @@ fun AddPriceItemDialog(
     var cameraDenied by remember { mutableStateOf(false) }
 
     fun applyPrefill(product: OffProduct) {
-        if (name.isBlank() && !product.name.isNullOrBlank()) {
-            name = product.name
+        val productName = product.name
+        if (name.isBlank() && !productName.isNullOrBlank()) {
+            name = productName
         }
         val pack = OffPackParser.parse(
             quantityText = product.quantityText,
@@ -157,12 +158,15 @@ fun AddPriceItemDialog(
             productQuantityUnit = product.productQuantityUnit,
             servingSizeText = product.servingSizeText,
         )
-        if (packDescription.isBlank() && !pack.description.isNullOrBlank()) {
-            packDescription = pack.description
+        val packDescriptionSuggestion = pack.description
+        if (packDescription.isBlank() && !packDescriptionSuggestion.isNullOrBlank()) {
+            packDescription = packDescriptionSuggestion
         }
-        if (packAmountText.isBlank() && pack.amount != null && pack.unit != null) {
-            packAmountText = formatPackAmount(pack.amount)
-            unit = pack.unit
+        val packAmountSuggestion = pack.amount
+        val packUnitSuggestion = pack.unit
+        if (packAmountText.isBlank() && packAmountSuggestion != null && packUnitSuggestion != null) {
+            packAmountText = formatPackAmount(packAmountSuggestion)
+            unit = packUnitSuggestion
         }
         scanNote = "Filled in from the barcode lookup — check it over; " +
             "everything here can be edited."
