@@ -17,10 +17,10 @@ import org.junit.Test
  */
 class GroceryListBuilderFortnightTest {
 
-    private fun item(id: String, category: String, store: String) = PriceItem(
+    private fun item(id: String, category: String, store: String, freezeNote: String? = null) = PriceItem(
         id = id, name = id, category = category, homeStore = store, packDescription = "pack",
         packQuantity = Quantity(1.0, MeasureUnit.POUND), packPriceCents = 100,
-        checkedDate = "2026-10-22", source = "test",
+        checkedDate = "2026-10-22", source = "test", freezeNote = freezeNote,
     )
 
     private fun line(itemId: String, store: String, packs: Int = 1, price: Int = 100) = GroceryLine(
@@ -34,7 +34,7 @@ class GroceryListBuilderFortnightTest {
         item("chicken-breast", "Meat", "aldi"),
         item("spaghetti", "Dry and canned", "aldi"),
         item("frozen-broccoli", "Frozen", "walmart"),
-        item("pork-tenderloin", "Meat", "sams-club"),
+        item("pork-tenderloin", "Meat", "sams-club", freezeNote = "Freeze the rest."),
     )
 
     @Test fun week2PerishablesGoToTopUpAndShelfStableStaysOnBigTrip() {
@@ -60,15 +60,15 @@ class GroceryListBuilderFortnightTest {
         assertEquals(week1.size + 2, sections.bigTripLines.size)
     }
 
-    @Test fun samsStockPurchaseRidesTheBigTripEvenThoughItIsMeat() {
+    @Test fun bulkPackPurchaseRidesTheBigTripEvenThoughItIsMeat() {
         val week2 = listOf(line("pork-tenderloin", "sams-club", packs = 1, price = 2168))
         val sections = GroceryListBuilder.splitFortnight(emptyList(), week2, book)
         assertTrue(sections.topUpLines.isEmpty())
         assertEquals(listOf("pork-tenderloin"), sections.bigTripLines.map { it.itemId })
     }
 
-    @Test fun reroutedMeatLineSplitsToTopUp() {
-        // Gate unmet: the Sam's pork is bought fresh at Aldi instead.
+    @Test fun freshMeatLineAtAnotherStoreSplitsToTopUp() {
+        // A plain (non-bulk) meat line shops with the week 2 top-up.
         val week2 = listOf(line("pork-tenderloin", "aldi"))
         val sections = GroceryListBuilder.splitFortnight(emptyList(), week2, book)
         assertEquals(listOf("pork-tenderloin"), sections.topUpLines.map { it.itemId })

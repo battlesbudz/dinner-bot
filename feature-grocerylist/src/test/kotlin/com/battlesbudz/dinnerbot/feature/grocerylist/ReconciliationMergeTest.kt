@@ -140,23 +140,25 @@ class ReconciliationMergeTest {
     }
 
     @Test fun stapleMergeTopsQuantityToTheMaxNeverTheSum() {
-        // Gate off: the plan's tenderloin need (2 lb) was rerouted to
-        // Aldi by weight at 297c/lb (594c). The staple reason wants one
-        // full 9 lb pack: the merged quantity is 9 lb (the max), priced
-        // at the line's own store rate, never 11 lb (the sum).
-        val rerouted = GroceryLine(
+        // The plan's tenderloin line holds 2 lb bought by weight at
+        // another store (594c). The staple reason wants one full 9 lb
+        // pack: the merged quantity is 9 lb (the max), never 11 lb
+        // (the sum), and the topped line is the item's own home-store
+        // pack at its pack price — no store rerouting exists anymore.
+        val byWeight = GroceryLine(
             itemId = "pork-tenderloin", displayName = "Pork tenderloin", store = "aldi",
             needed = Quantity.pounds(2.0), packsToBuy = 1, estimatedPackPriceCents = 594,
         )
         val result = merge(
-            lines = listOf(rerouted),
+            lines = listOf(byWeight),
             outs = listOf(stapleOut(tenderloin)),
         )
         assertEquals(1, result.lines.size)
         val merged = result.lines.single()
         assertEquals(9.0, merged.needed.amount, 0.001)
-        assertEquals(9 * 297, merged.estimatedPackPriceCents)
-        assertEquals(9 * 297 - 594, result.cashDeltaCents)
+        assertEquals("sams-club", merged.store)
+        assertEquals(2168, merged.estimatedPackPriceCents)
+        assertEquals(2168 - 594, result.cashDeltaCents)
         assertTrue(merged.reconciliationAdded)
         // A top-up is not an addition.
         assertTrue(result.addedNames.isEmpty())
