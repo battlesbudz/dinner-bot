@@ -37,7 +37,7 @@ class WalkthroughInstrumentedTest {
             waitForText("One cash budget for the week")
             composeRule.onNodeWithText("One cash budget for the week").assertIsDisplayed()
             composeRule.onNodeWithText("Next").performClick()
-            waitForText("Three stores, one list")
+            waitForText("Your stores, one list")
             composeRule.onNodeWithText("Set up my household").performClick()
             waitForText("How many are you feeding?")
             composeRule.onNodeWithText("How many are you feeding?").assertIsDisplayed()

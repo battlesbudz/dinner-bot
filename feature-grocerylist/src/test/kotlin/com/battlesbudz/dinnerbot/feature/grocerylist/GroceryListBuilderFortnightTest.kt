@@ -69,9 +69,9 @@ class GroceryListBuilderFortnightTest {
 
     @Test fun freshMeatLineAtAnotherStoreSplitsToTopUp() {
         // A plain (non-bulk) meat line shops with the week 2 top-up.
-        val week2 = listOf(line("pork-tenderloin", "aldi"))
+        val week2 = listOf(line("chicken-breast", "walmart"))
         val sections = GroceryListBuilder.splitFortnight(emptyList(), week2, book)
-        assertEquals(listOf("pork-tenderloin"), sections.topUpLines.map { it.itemId })
+        assertEquals(listOf("chicken-breast"), sections.topUpLines.map { it.itemId })
     }
 
     @Test fun sectionCashesSumToTheCombinedTotal() {
