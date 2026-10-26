@@ -177,19 +177,29 @@ fun AddPriceItemDialog(
         val existing = existingItemForBarcode?.invoke(code)
         if (existing != null) {
             // Already in the book: refresh its label facts from this
-            // scan, hand the item back, and close — no duplicate.
+            // scan, hand the item back, and close — no duplicate. The
+            // refresh runs in this form's scope and closing the form
+            // cancels that scope, so the callbacks and the close wait
+            // until the lookup has landed (Codex review, v0.6.3).
+            scanNote = "That barcode is already in the book — " +
+                "refreshing its label facts…"
             scope.launch {
                 val product = runCatching { productLookup(code) }.getOrNull()
                 product?.labelNutrition(existing.id, code, System.currentTimeMillis())
                     ?.let { facts -> onLabelFacts(existing.id, facts) }
+                onExistingItemScanned(existing)
+                onDismiss()
             }
-            onExistingItemScanned(existing)
-            onDismiss()
             return
         }
         scannedBarcode = code
+        scannedProduct = null
         scope.launch {
             val product = runCatching { productLookup(code) }.getOrNull()
+            // A newer scan supersedes this one: the shared state has
+            // moved on, so a late result must not prefill the form or
+            // attach its facts to the newer barcode (Codex review).
+            if (scannedBarcode != code) return@launch
             if (product == null) {
                 scanNote = "That barcode is not in Open Food Facts. Fill the form " +
                     "in from the package — the barcode still links to the item you save."

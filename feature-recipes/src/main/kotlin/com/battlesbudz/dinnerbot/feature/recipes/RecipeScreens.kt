@@ -449,12 +449,14 @@ fun RecipeDetailScreen(
                             "Estimates from USDA FoodData Central data.",
                         style = MaterialTheme.typography.bodySmall,
                     )
-                } else {
+                } else if (nutrition.usdaUsed) {
                     Text(
                         "Estimates from USDA FoodData Central data.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
+                // A label-only total shows no USDA line at all: the label
+                // note above already says where its numbers came from.
             }
         }
 

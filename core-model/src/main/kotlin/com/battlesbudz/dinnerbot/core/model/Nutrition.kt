@@ -155,6 +155,8 @@ data class RecipeNutrition(
     val closestMatchUsed: Boolean,
     /** True when any included ingredient was computed from its own scanned label facts (v0.6.3). */
     val labelFactsUsed: Boolean = false,
+    /** True when any included ingredient's numbers came from the USDA data (v0.6.3). */
+    val usdaUsed: Boolean = false,
 ) {
     val isPartial: Boolean get() = incompleteFields.isNotEmpty()
 }
@@ -254,6 +256,7 @@ object NutritionCalculator {
         val incomplete = mutableSetOf<NutritionField>()
         var closest = false
         var labelUsed = false
+        var usdaUsed = false
         for (ingredient in recipe.scaledIngredients(forServings)) {
             val label = labelFor(ingredient, labelByItemId)
             val fromLabel = label?.let { labelContribution(ingredient, it) }
@@ -280,6 +283,7 @@ object NutritionCalculator {
                 incomplete += NutritionField.entries
                 continue
             }
+            usdaUsed = true
             for (field in NutritionField.entries) {
                 val per100 = entry.per100g.value(field)
                 if (per100 == null) {
@@ -306,6 +310,7 @@ object NutritionCalculator {
             incompleteFields = incomplete,
             closestMatchUsed = closest,
             labelFactsUsed = labelUsed,
+            usdaUsed = usdaUsed,
         )
     }
 
@@ -343,6 +348,7 @@ object NutritionCalculator {
             incompleteFields = parts.flatMap { it.incompleteFields }.toSet(),
             closestMatchUsed = parts.any { it.closestMatchUsed },
             labelFactsUsed = parts.any { it.labelFactsUsed },
+            usdaUsed = parts.any { it.usdaUsed },
         )
     }
 }

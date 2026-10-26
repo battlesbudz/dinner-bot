@@ -57,8 +57,21 @@ fun WeekNutritionCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("Week nutrition (estimate)", style = MaterialTheme.typography.titleLarge)
-            Text(NUTRITION_ESTIMATE_LABEL, style = MaterialTheme.typography.bodySmall)
-            if (labelByItemId.isNotEmpty()) {
+            // Provenance follows the computed weeks (Codex review, v0.6.3):
+            // the USDA header prints only when USDA numbers actually fed a
+            // total, and the label line only when a label did — a week fed
+            // entirely by scanned labels never claims USDA estimates.
+            val weekNutritions = remember(weeks, recipesById, householdSize, byItemId, byPantrySlug, labelByItemId) {
+                weeks.map { week ->
+                    WeekNutrition.forWeek(
+                        week.nights, recipesById, householdSize, byItemId, byPantrySlug, labelByItemId,
+                    )
+                }
+            }
+            if (weekNutritions.any { it?.usdaUsed == true }) {
+                Text(NUTRITION_ESTIMATE_LABEL, style = MaterialTheme.typography.bodySmall)
+            }
+            if (weekNutritions.any { it?.labelFactsUsed == true }) {
                 Text(
                     "Ingredients whose products were scanned into the price book " +
                         "use their own label facts instead of the USDA entry.",
@@ -71,12 +84,8 @@ fun WeekNutritionCard(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            weeks.forEach { week ->
-                val weekNutrition = remember(week, recipesById, householdSize, byItemId, byPantrySlug, labelByItemId) {
-                    WeekNutrition.forWeek(
-                        week.nights, recipesById, householdSize, byItemId, byPantrySlug, labelByItemId,
-                    )
-                }
+            weeks.forEachIndexed { index, week ->
+                val weekNutrition = weekNutritions[index]
                 Text(week.label, style = MaterialTheme.typography.titleMedium)
                 if (weekNutrition == null) {
                     Text(

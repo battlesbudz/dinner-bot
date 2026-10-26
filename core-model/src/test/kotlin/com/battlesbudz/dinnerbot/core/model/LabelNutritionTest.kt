@@ -91,6 +91,21 @@ class LabelNutritionTest {
         val nutrition = NutritionCalculator.recipeNutrition(recipe, 4, byItemId, emptyMap())
         assertEquals(839.15, nutrition.totals.caloriesKcal!!, 0.5)
         assertFalse(nutrition.labelFactsUsed)
+        assertTrue(nutrition.usdaUsed)
+    }
+
+    @Test fun labelOnlyRecipeDoesNotClaimUsda() {
+        // Provenance honesty (Codex review): a total fed entirely by a
+        // scanned label must not present itself as a USDA estimate.
+        val recipe = dinner(
+            RecipeIngredient(priceItemId = "spaghetti", quantity = Quantity(8.0, MeasureUnit.OUNCE)),
+        )
+        val nutrition = NutritionCalculator.recipeNutrition(
+            recipe, 4, byItemId, emptyMap(),
+            labelByItemId = mapOf("spaghetti" to pastaLabel),
+        )
+        assertTrue(nutrition.labelFactsUsed)
+        assertFalse(nutrition.usdaUsed)
     }
 
     @Test fun countLineUsesPerServingFactsWhenPublished() {

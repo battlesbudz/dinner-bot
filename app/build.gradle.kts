@@ -68,6 +68,8 @@ dependencies {
     implementation(project(":feature-planner"))
     implementation(project(":feature-grocerylist"))
     implementation(project(":feature-pricebook"))
+    // The shared scanner/lookup types surface in screen signatures (v0.6.3).
+    implementation(project(":feature-barcode"))
     implementation(project(":feature-pantry"))
     implementation(project(":feature-backup"))
     implementation(project(":feature-import"))
@@ -85,7 +87,7 @@ dependencies {
     implementation(libs.coroutines.android)
     testImplementation(libs.junit)
     // Test-only: the instrumented barcode test drives ML Kit's decoder
-    // directly. Production ML Kit stays confined to feature-grocerylist.
+    // directly. Production ML Kit lives in feature-barcode (v0.6.3).
     androidTestImplementation(libs.mlkit.barcode.scanning)
     androidTestImplementation(libs.test.uiautomator)
     androidTestImplementation(libs.work.testing)
