@@ -143,6 +143,10 @@ fun AddPriceItemDialog(
     val scope = rememberCoroutineScope()
     var scannedBarcode by remember { mutableStateOf(initialBarcode) }
     var scannedProduct by remember { mutableStateOf<OffProduct?>(null) }
+    // True while a known-barcode hand-off lookup is in flight: the form
+    // locks (no save, no new scan) so a fast Save cannot create the very
+    // duplicate the hand-off exists to prevent (Codex review, v0.6.3).
+    var handingOff by remember { mutableStateOf(false) }
     var scanning by remember { mutableStateOf(false) }
     var scanNote by remember { mutableStateOf<String?>(null) }
     var cameraDenied by remember { mutableStateOf(false) }
@@ -183,6 +187,7 @@ fun AddPriceItemDialog(
             // until the lookup has landed (Codex review, v0.6.3).
             scanNote = "That barcode is already in the book — " +
                 "refreshing its label facts…"
+            handingOff = true
             scope.launch {
                 val product = runCatching { productLookup(code) }.getOrNull()
                 product?.labelNutrition(existing.id, code, System.currentTimeMillis())
@@ -240,6 +245,7 @@ fun AddPriceItemDialog(
         }
     }
     fun startScan() {
+        if (handingOff) return
         cameraDenied = false
         if (cameraGranted) {
             scanning = true
@@ -250,7 +256,7 @@ fun AddPriceItemDialog(
 
     val packAmount = packAmountText.toDoubleOrNull()
     val priceCents = if (priceText.isBlank()) null else PriceCorrection.parseToCents(priceText)
-    val canSave = name.isNotBlank() &&
+    val canSave = !handingOff && name.isNotBlank() &&
         packAmount != null && packAmount > 0.0 &&
         (priceText.isBlank() || (priceCents != null && priceCents > 0))
 
