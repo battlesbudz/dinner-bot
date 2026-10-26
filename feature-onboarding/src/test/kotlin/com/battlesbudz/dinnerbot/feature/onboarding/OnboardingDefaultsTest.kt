@@ -22,8 +22,8 @@ class OnboardingDefaultsTest {
         // The documented heuristic: $3.50 per person per cook night,
         // rounded to the nearest $5.
         assertEquals(7000, OnboardingDefaults.suggestedBudgetCents(4, 5))
-        assertEquals(2450, OnboardingDefaults.suggestedBudgetCents(2, 7))
-        assertEquals(1050, OnboardingDefaults.suggestedBudgetCents(1, 3))
+        assertEquals(5000, OnboardingDefaults.suggestedBudgetCents(2, 7))
+        assertEquals(1000, OnboardingDefaults.suggestedBudgetCents(1, 3))
         assertEquals(0, OnboardingDefaults.suggestedBudgetCents(0, 5))
     }
 
