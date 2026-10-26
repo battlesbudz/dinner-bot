@@ -3106,7 +3106,7 @@ private suspend fun applyScanSubstitution(
             // mislabel the store section, the price, or the schedule
             // (Codex, PR #24). A line already carrying a swap never
             // absorbs another.
-            it.itemId == priced.id && it.store == row.line.store.name &&
+            it.itemId == priced.id && it.store == row.line.store &&
                 it.substitutedForItemId == null &&
                 BarcodeScanLogic.isTopUpPurchase(
                     with(PlanMapper) { it.toModel() }, priced,
