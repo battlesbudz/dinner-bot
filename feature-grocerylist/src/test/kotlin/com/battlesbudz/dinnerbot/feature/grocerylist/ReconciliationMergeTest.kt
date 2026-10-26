@@ -143,7 +143,7 @@ class ReconciliationMergeTest {
         // Gate off: the plan's tenderloin need (2 lb) was rerouted to
         // Aldi by weight at 297c/lb (594c). The staple reason wants one
         // full 9 lb pack: the merged quantity is 9 lb (the max), priced
-        // the same rerouted way, never 11 lb (the sum).
+        // at the line's own store rate, never 11 lb (the sum).
         val rerouted = GroceryLine(
             itemId = "pork-tenderloin", displayName = "Pork tenderloin", store = "aldi",
             needed = Quantity.pounds(2.0), packsToBuy = 1, estimatedPackPriceCents = 594,
@@ -151,7 +151,6 @@ class ReconciliationMergeTest {
         val result = merge(
             lines = listOf(rerouted),
             outs = listOf(stapleOut(tenderloin)),
-            gateMet = false,
         )
         assertEquals(1, result.lines.size)
         val merged = result.lines.single()

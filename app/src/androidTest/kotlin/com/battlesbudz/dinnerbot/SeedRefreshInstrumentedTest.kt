@@ -186,7 +186,7 @@ class SeedRefreshInstrumentedTest {
             val sugar = db.priceItemDao().getById("user-granulated-sugar")!!
             assertEquals("Granulated sugar", sugar.name)
             assertEquals(342, sugar.packPriceCents)
-            assertEquals("walmart", sugar.homeStore)
+            assertEquals("WALMART", sugar.homeStore)
             assertTrue(sugar.userCorrected)
             assertEquals(43, db.priceItemDao().getAll().size)
             val link = db.barcodeLinkDao().getByBarcode("036800123456")!!
