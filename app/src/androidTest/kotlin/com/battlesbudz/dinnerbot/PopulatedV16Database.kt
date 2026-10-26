@@ -250,7 +250,7 @@ object PopulatedV16Database {
         )
         db.execSQL(
             "INSERT INTO label_nutrition (itemId, barcode, per100gJson, perServingJson, " +
-                servingSizeText, servingGrams, updatedAtMillis) VALUES " +
+                "servingSizeText, servingGrams, updatedAtMillis) VALUES " +
                 "('chicken-breast', '012345678905', '{}', NULL, '4 oz', 112.0, 123)",
         )
         helper.close()

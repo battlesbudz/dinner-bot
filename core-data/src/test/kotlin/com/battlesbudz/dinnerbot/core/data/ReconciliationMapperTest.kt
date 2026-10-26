@@ -60,7 +60,7 @@ class ReconciliationMapperTest {
         )
         val line = com.battlesbudz.dinnerbot.core.model.GroceryLine(
             itemId = "pork-tenderloin", displayName = "Pork tenderloin",
-            store = com.battlesbudz.dinnerbot.core.model."sams-club",
+            store = "sams-club",
             needed = com.battlesbudz.dinnerbot.core.model.Quantity.pounds(9.0),
             packsToBuy = 1, estimatedPackPriceCents = 2168,
             reconciliationAdded = true,
