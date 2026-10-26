@@ -12,8 +12,43 @@ on:
 # Builds the signed release APK from repository secrets and publishes it as a
 # GitHub Release. Secrets: KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS,
 # KEY_PASSWORD. The keystore itself never enters the repository.
+#
+# Commercial-branch guard: GitHub Actions tag triggers cannot be filtered
+# by branch, so a v* tag pointing at a commit that is only on the
+# commercial branch would otherwise run this workflow. The guard job
+# below checks that the commit being released is an ancestor of main
+# and the release job only runs when that check passes. For a release
+# from main (the only supported case) the guard passes and the release
+# job below runs exactly as before. A tag or dispatch whose target
+# commit is not on main is skipped and publishes nothing. The
+# commercial version is distributed through Google Play only and must
+# never publish a GitHub Release APK.
 jobs:
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      allow: ${{ steps.check.outputs.allow }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - name: Verify the release commit is on main
+        id: check
+        run: |
+          git fetch origin main:refs/remotes/origin/main
+          TARGET_SHA="$(git rev-parse HEAD)"
+          echo "Release target commit: $TARGET_SHA"
+          if git merge-base --is-ancestor "$TARGET_SHA" origin/main; then
+            echo "Target commit is on main; release may proceed."
+            echo "allow=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Target commit is NOT on main; skipping release. Releases are published from main only."
+            echo "allow=false" >> "$GITHUB_OUTPUT"
+          fi
   release:
+    needs: guard
+    if: needs.guard.outputs.allow == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write

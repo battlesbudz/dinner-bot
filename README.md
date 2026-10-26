@@ -1,37 +1,39 @@
 # Dinner Bot
 
-Dinner Bot is a local-first budget dinner planner for one household. It plans a week of dinners against a weekly cash budget, builds one grocery list split across the three stores the household actually uses (Aldi for ingredients, Walmart for frozen foods, Sam's Club for bulk meats and packaged goods), and keeps working fully offline, at home and at the store.
+Dinner Bot is a budget-first weekly meal planner for Android. It plans a week of dinners against a weekly budget, builds one grocery list from the plan, and helps you keep track of what you already have at home, what things cost, and what you actually spent.
 
-## Design
+This branch (`commercial`) is the commercial version of Dinner Bot, in development for a Google Play release in the United States. It is a separate, long-lived branch and is not the free household app on `main`.
 
-- **Local-first, no server.** Everything lives on the phone in a local database. No account, no sign-in, no subscription, no ads, no tracking. Since v0.3.0 the app holds the INTERNET permission for exactly one optional assist: suggesting a product name from the public Open Food Facts database while a scanned barcode is being linked. There is no Dinner Bot server, nothing about the household is ever sent, and every feature works fully offline.
-- **Clean room.** Dinner Bot does the job of subscription budget meal planners, with new code, new words, and its own recipes and price data.
-- **Seed data is data, not code.** Recipes and the price book live in `seed-data/` as JSON and are the single source of truth: the app bundles them as assets and the `data-seed` module validates them in tests (every recipe ingredient maps to a priced item, no zero prices, pack sizes present).
-- **Money is integer cents** everywhere. The weekly budget caps **cash spent** each week across all three stores combined; Sam's Club bulk packs charge their full price in the week they are bought and $0 in weeks that eat from home stock, and portion cost is tracked as information.
+## What the app does today
 
-## Household rules baked in
+- **Planner:** Generates a week of dinners for your cook nights and prices the week against your weekly budget, showing cash needed for the week and the estimated food cost as separate numbers.
+- **Recipes:** Browse a starter recipe library, scale servings, see the estimated cost per serving, rate recipes, add your own recipes, and edit recipe ingredients and steps.
+- **Recipe import:** Import recipes by sharing them to the app, pasting a link, or pasting recipe text, then review and edit the imported ingredients before saving.
+- **Grocery list:** Builds one list from the week's plan, scaled to servings, subtracts what your pantry already covers, groups items by store, and keeps check-offs as you shop. Tapping a price corrects it, and the correction is remembered in the price book.
+- **Price book:** Your prices for each item, by store and pack size, all editable. Prices you correct or scan replace starter prices.
+- **Pantry:** Track staple items you have at home and quantity-tracked bulk stock, so the planner and the list do not tell you to buy what you already own.
+- **Barcode scanning:** Scan a product barcode while adding an ingredient, shopping, or correcting a price. The scan can suggest a product name and label nutrition from the public Open Food Facts database, and the price you enter is remembered for that item. The camera permission is requested only when you start a scan.
+- **Nutrition:** See nutrition totals for a planned week and per-serving figures on each recipe. Figures come from product label data captured at scan time where available, with USDA FoodData Central values as the fallback, and totals that are missing values are marked as partial.
+- **Reminders:** Local reminders, including defrost reminders, set by you.
+- **Backup:** Export and import your settings, price book, pantry, ratings, and learned barcode links as one file through the Android system file picker. Sharing is by file export and import.
+- **Week rollover and reconciliation:** At the end of a week, check what was actually bought and used, carry the pantry forward, and reconcile the plan against what happened.
 
-- **No beef, ever.** This household always substitutes ground turkey for ground beef, in planning, costing, and lists.
-- **Three-store routine.** Every price book item has a home store; a week's list can cover all three stores.
-- **Sam's Club has to earn the trip.** Bulk buying is only planned when projected Sam's savings for the month reach at least $15 against regular packs elsewhere.
-- Prices are estimates. The target is that a quoted week lands within $10 of what is actually spent on those items; per-store calibration and in-app price corrections (later phases) are how that stays true.
+The app is local-first: your recipes, prices, pantry, and plans live in a local database on your phone, and the core planning, list, and recipe features work offline. An internet connection is used only for optional assists you start, such as a barcode product lookup, and for importing a recipe from a link you paste.
 
-Phase 1 was the skeleton: project structure in isolated packages with per-package unit tests, the Room database, the seed loader and validator, onboarding/settings, and recipe browsing with serving scaling and estimated cost per serving.
+## Project structure
 
-## Status: v0.1.0 (Phase 2)
+Recipes and starter price data live in `seed-data/` as JSON and are the single source of truth for starter data: the app bundles them as assets and the `data-seed` module validates them in tests. Application code is organized into isolated feature packages (planner, recipes, grocery list, price book, pantry, barcode, nutrition, import, backup, reminders, onboarding), with unit tests per package. Money is handled in integer cents throughout.
 
-Phase 2 is the working app:
+CI runs per-package JVM unit tests, Android lint, and instrumented tests on an API 34 emulator.
 
-- **Planner** (`feature-planner`): generates a week of dinners for the household's cook nights, prices it with the shared costing engine in `core-model`, prefers dinners covered by Sam's bulk stock at home, and keeps the week's cash under the budget cap. A Sam's restock that cannot fit is deferred and named in plain language in the plan, never quietly charged over the cap. The week view shows cash needed and attributed food cost as two separate numbers, plus the "Sam's Club saves about $X this month" line from the $15 gate.
-- **Grocery list** (`feature-grocerylist`): aggregates the plan's ingredients scaled to servings, subtracts pantry-owned staples and bulk-stock-covered amounts, splits into Aldi / Walmart / Sam's Club sections with per-store cash subtotals, and persists check-offs in Room. Tapping a price corrects it, and the correction writes back to the price book.
-- **Price book** (`feature-pricebook`): every item with its store and pack price, editable; corrected prices are flagged and always win over seed data.
-- **Pantry** (`feature-pantry`): the owned/not-owned staple checklist plus quantity-tracked Sam's bulk stock.
-- **Backup** (`feature-backup`): settings, price book (with corrections), pantry, bulk stock, recipe ratings, and learned barcode links export/import as one JSON file through the Android system file picker.
-- **Barcode scanning** (`feature-grocerylist`, barcode package; v0.3.0): while shopping, scan an item's barcode to correct its price. ML Kit decodes on the device; a code is linked to a price book item once, learned locally, and remembered; the shelf price Andrea types then writes into the price book through the same correction path as tapping a price. The CAMERA permission is requested only when a scan is first tapped.
-- **Nutrition** (`feature-nutrition`; v0.3.1): a Nutrition tab with the planned week's totals and every recipe's per-serving figures, also shown on each recipe's screen. Figures are computed from the recipe's ingredients against USDA FoodData Central values shipped as seed data with their source ids; packaged foods are matched to the closest USDA entry and the figures are labeled estimates. Where USDA publishes no value for an ingredient, the affected total is marked partial in plain words rather than printed as whole. Nutrition is display only: it never enters planning or costing.
+## Status
 
-CI runs per-package JVM unit tests, Android lint, and instrumented tests on an API 34 emulator. Releases are built only from version tags by `release.yml`, signed from repository secrets, and published as GitHub Releases.
+The commercial version is in active development and has not been released yet. Generalizing starter data, stores, and defaults for public users, expanding the starter recipe library, and adding the planned free and premium tiers are tracked in the Dinner Bot Commercial milestone and its phase issues in this repository. Until those phases land, some starter data and defaults still reflect early development.
+
+Distribution for this version will be through Google Play only. No APK for this branch is published as a GitHub Release.
 
 ## License
 
-Undecided. A license will be chosen before any public release.
+Copyright (c) 2026 Justin Battles. All rights reserved. See [LICENSE](LICENSE).
+
+The source in this repository is visible for reading only. No copying, reuse, redistribution, or derivative rights are granted.

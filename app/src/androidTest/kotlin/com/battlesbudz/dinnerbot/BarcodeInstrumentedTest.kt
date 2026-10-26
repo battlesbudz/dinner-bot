@@ -81,7 +81,7 @@ class BarcodeInstrumentedTest {
             db.close()
         }
         // Start from a known permission state whatever ran before.
-        shell("pm revoke com.battlesbudz.dinnerbot android.permission.CAMERA")
+        shell("pm revoke ${context.packageName} android.permission.CAMERA")
     }
 
     @After fun tearDown() {
@@ -139,7 +139,7 @@ class BarcodeInstrumentedTest {
             composeRule.onNodeWithTag("scan-barcode-button").assertIsDisplayed()
 
             // With the permission granted, the same tap opens the scanner.
-            shell("pm grant com.battlesbudz.dinnerbot android.permission.CAMERA")
+            shell("pm grant ${context.packageName} android.permission.CAMERA")
             composeRule.onNodeWithTag("scan-barcode-button").performClick()
             waitForTag("barcode-scanner")
             composeRule.onNodeWithTag("barcode-scanner").assertIsDisplayed()
