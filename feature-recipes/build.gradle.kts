@@ -26,6 +26,8 @@ dependencies {
     implementation(project(":core-model"))
     // The shared add-an-ingredient form lives with the price book (v0.6.2).
     implementation(project(":feature-pricebook"))
+    // The form's scan seams expose feature-barcode types in its signature (v0.6.3).
+    implementation(project(":feature-barcode"))
     // The recipe photo picker (Epic issue #10) launches from the detail screen.
     implementation(libs.activity.compose)
     implementation(platform(libs.compose.bom))
