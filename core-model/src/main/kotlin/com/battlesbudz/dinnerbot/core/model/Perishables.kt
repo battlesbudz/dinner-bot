@@ -1,3 +1,5 @@
+package com.battlesbudz.dinnerbot.core.model
+
 /**
  * The two-week plan's freshness split (Phase V2-3). A fortnight is bought
  * as ONE big trip plus a small fresh top-up at the start of week 2, so
