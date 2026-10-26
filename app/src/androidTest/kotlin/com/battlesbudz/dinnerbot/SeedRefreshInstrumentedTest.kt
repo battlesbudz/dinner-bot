@@ -79,7 +79,8 @@ class SeedRefreshInstrumentedTest {
     }
 
     /**
-     * The v0.4.3 upgrade: a book stored by v0.4.2 (31 items, no staples)
+     * The v0.4.3 upgrade: a book stored by v0.4.2 (no staples; 32 of the
+     * current 43 seed items)
      * gains the eleven priced staples on the next start, flagged staple,
      * while a corrected price and an owned pantry mark are untouched.
      */
@@ -111,7 +112,7 @@ class SeedRefreshInstrumentedTest {
 
             val loader = SeedLoader(db)
             loader.seedIfEmpty(root.toString(), recipesJson)
-            assertEquals(31, db.priceItemDao().getAll().size)
+            assertEquals(32, db.priceItemDao().getAll().size)
 
             // User data that must survive: a corrected price and an
             // owned staple mark in the pantry.

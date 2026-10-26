@@ -32,7 +32,7 @@ object SeedValidator {
             if (item.source.isBlank()) errors += "price item ${item.id}: missing source"
             runCatching { LocalDate.parse(item.checkedDate, DateTimeFormatter.ISO_LOCAL_DATE) }
                 .onFailure { errors += "price item ${item.id}: checkedDate '${item.checkedDate}' is not yyyy-MM-dd" }
-            if (item.homeStore.isBlank()) errors += "price item ${item.id}: missing home store
+            if (item.homeStore.isBlank()) errors += "price item ${item.id}: missing home store"
         }
 
         val recipeIds = recipes.map { it.id }

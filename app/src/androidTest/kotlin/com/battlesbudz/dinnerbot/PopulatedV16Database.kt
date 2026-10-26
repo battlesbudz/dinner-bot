@@ -78,7 +78,7 @@ object PopulatedV16Database {
             "`createdAtMillis` INTEGER NOT NULL)",
         "CREATE TABLE IF NOT EXISTS `recipe_overrides` (`recipeId` TEXT NOT NULL, " +
             "`ingredientsJson` TEXT NOT NULL, `updatedAtMillis` INTEGER NOT NULL, " +
-            "PRIMARY KEY(`recipeId`))",
+            "`stepsJson` TEXT, PRIMARY KEY(`recipeId`))",
         "CREATE TABLE IF NOT EXISTS `imported_recipes` (`id` TEXT NOT NULL, " +
             "`title` TEXT NOT NULL, `servings` INTEGER NOT NULL, " +
             "`activeMinutes` INTEGER NOT NULL, `cuisine` TEXT NOT NULL, " +

@@ -187,7 +187,7 @@ class IngredientCaptureInstrumentedTest {
             assertEquals("user-gochujang", ingredient.priceItemId)
 
             val items = runBlocking { db.priceItemDao().getAll() }
-            assertEquals("the 42 seed items plus the one she added", 43, items.size)
+            assertEquals("the 43 seed items plus the one she added", 44, items.size)
             val created = items.single { it.id == "user-gochujang" }
             assertEquals("Gochujang", created.name)
             assertTrue("no price typed, so the item starts guess-priced", created.guessPriced)
@@ -226,7 +226,7 @@ class IngredientCaptureInstrumentedTest {
         val db = openDb()
         try {
             val items = runBlocking { db.priceItemDao().getAll() }
-            assertEquals(43, items.size)
+            assertEquals(44, items.size)
             val created = items.single { it.id == "user-tahini" }
             assertEquals("Tahini", created.name)
             assertEquals(429, created.packPriceCents)
@@ -259,7 +259,7 @@ class IngredientCaptureInstrumentedTest {
                 model.ingredients.any { it.priceItemId == "user-harissa" },
             )
             val items = runBlocking { db.priceItemDao().getAll() }
-            assertEquals(43, items.size)
+            assertEquals(44, items.size)
             val created = items.single { it.id == "user-harissa" }
             assertEquals(119, created.packPriceCents)
             assertTrue(created.userCorrected)

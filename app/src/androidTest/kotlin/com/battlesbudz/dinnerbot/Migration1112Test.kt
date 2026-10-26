@@ -65,6 +65,7 @@ class Migration1112Test {
                 DinnerBotDatabase.MIGRATION_13_14,
                 DinnerBotDatabase.MIGRATION_14_15,
                 DinnerBotDatabase.MIGRATION_15_16,
+                DinnerBotDatabase.MIGRATION_16_17,
             )
             .build()
 
