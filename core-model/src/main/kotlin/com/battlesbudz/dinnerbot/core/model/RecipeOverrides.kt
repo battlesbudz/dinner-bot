@@ -12,7 +12,7 @@ import kotlinx.serialization.Serializable
 enum class RecipeOrigin { LIBRARY, IMPORTED, MANUAL }
 
 /**
- * Andrea's saved household version of one library recipe (Phase RI-1,
+ * the user's saved household version of one library recipe (Phase RI-1,
  * steps added v0.6.3). The override stores the recipe's FULL ingredient
  * list as she last saved it, and, once she edits the steps, her steps
  * too: [steps] is null while she has never edited the steps, which
@@ -22,7 +22,7 @@ enum class RecipeOrigin { LIBRARY, IMPORTED, MANUAL }
  * Title, servings, and tags always stay the seed's. Absence of a row
  * means the seed version stands, and restore-original is deleting the
  * row. Overrides are household data: they ride in backups and no seed
- * refresh ever writes to them (Battles's rule: changed recipes are
+ * refresh ever writes to them (the user's rule: changed recipes are
  * never refreshed; refresh delivers additions only).
  */
 @Serializable
@@ -91,7 +91,7 @@ object RecipeEditing {
         }
     }
 
-    /** Flip the essential / removable mark of the ingredient at [index] (Battles's won't-eat rule reads this mark). */
+    /** Flip the essential / removable mark of the ingredient at [index] (the user's won't-eat rule reads this mark). */
     fun setEssential(
         ingredients: List<RecipeIngredient>,
         index: Int,
@@ -149,7 +149,7 @@ object EffectiveRecipes {
 
     /**
      * The full effective set (Phase RI-2): the library recipes (already
-     * override-merged by [applyOverrides]) plus Andrea's own imported
+     * override-merged by [applyOverrides]) plus the user's own imported
      * and hand-made recipes. User recipes live in their own table and
      * their ids are prefixed, so a collision cannot occur; the filter
      * is a guard, and a library id always stands over a duplicate.

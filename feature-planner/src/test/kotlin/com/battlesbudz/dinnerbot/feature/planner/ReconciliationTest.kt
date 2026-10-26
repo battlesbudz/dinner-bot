@@ -28,7 +28,7 @@ import org.junit.Test
 class ReconciliationTest {
 
     private fun item(
-        id: String, name: String, store: Store, packAmount: Double, unit: MeasureUnit,
+        id: String, name: String, store: String, packAmount: Double, unit: MeasureUnit,
         packPrice: Int, alternates: List<StorePrice> = emptyList(), staple: Boolean = false,
     ) = PriceItem(
         id = id, name = name, category = "Test", homeStore = store, packDescription = "pack",
@@ -36,16 +36,17 @@ class ReconciliationTest {
         pricePerUnitCents = packPrice / packAmount,
         checkedDate = "2026-10-22", source = "test", alternates = alternates,
         staple = staple,
+        freezeNote = if (id == "pork-tenderloin") "Portioned into bags." else null,
     )
 
     private val tenderloin = item(
-        "pork-tenderloin", "Pork tenderloin", Store.SAMS_CLUB, 9.0, MeasureUnit.POUND, 2168,
-        alternates = listOf(StorePrice(Store.ALDI, 297.0)),
+        "pork-tenderloin", "Pork tenderloin", "sams-club", 9.0, MeasureUnit.POUND, 2168,
+        alternates = listOf(StorePrice("aldi", 297.0)),
     )
-    private val turkey = item("ground-turkey", "Ground turkey", Store.WALMART, 1.0, MeasureUnit.POUND, 198)
-    private val spaghetti = item("spaghetti", "Spaghetti", Store.ALDI, 32.0, MeasureUnit.OUNCE, 209)
-    private val eggs = item("eggs", "Eggs", Store.ALDI, 12.0, MeasureUnit.COUNT, 185)
-    private val potatoes = item("russet-potatoes", "Russet potatoes", Store.ALDI, 5.0, MeasureUnit.POUND, 329)
+    private val turkey = item("ground-turkey", "Ground turkey", "walmart", 1.0, MeasureUnit.POUND, 198)
+    private val spaghetti = item("spaghetti", "Spaghetti", "aldi", 32.0, MeasureUnit.OUNCE, 209)
+    private val eggs = item("eggs", "Eggs", "aldi", 12.0, MeasureUnit.COUNT, 185)
+    private val potatoes = item("russet-potatoes", "Russet potatoes", "aldi", 5.0, MeasureUnit.POUND, 329)
     private val book = listOf(tenderloin, turkey, spaghetti, eggs, potatoes)
 
     private fun recipe(id: String, title: String, vararg ingredients: RecipeIngredient) = Recipe(
@@ -230,7 +231,7 @@ class ReconciliationTest {
         assertEquals(listOf(pendingMark), session.markedOuts)
         // List 2: the inference.
         assertEquals(infer().map { it.itemKey }, session.possibleOuts.map { it.itemKey })
-        // List 3: the pantry she owns, plus Sam's bulk with stock on hand.
+        // List 3: the pantry she owns, plus bulk stock on hand.
         assertEquals(listOf("Olive oil", "Potatoes", "Salt"), session.pantryChecklist.map { it.name })
         assertEquals(listOf("pork-tenderloin"), session.bulkChecklist.map { it.id })
     }
@@ -411,7 +412,7 @@ class ReconciliationTest {
     // ------------------------------------------------------------------
 
     private val saltItem = item(
-        "salt", "Salt", Store.ALDI, 26.0, MeasureUnit.OUNCE, 89, staple = true,
+        "salt", "Salt", "aldi", 26.0, MeasureUnit.OUNCE, 89, staple = true,
     )
     private val saltBook = book + saltItem
     private val saltDinner = recipe(

@@ -190,7 +190,7 @@ object NutritionCalculator {
     ): IngredientNutrition? {
         ingredient.pantryItem?.let { return byPantrySlug[pantrySlug(it)] }
         val rawId = ingredient.priceItemId ?: return null
-        return byItemId[Costing.substituteItemId(rawId)] ?: byItemId[rawId]
+        return byItemId[rawId]
     }
 
     /**
@@ -205,7 +205,7 @@ object NutritionCalculator {
     ): LabelNutrition? {
         if (ingredient.pantryItem != null) return null
         val rawId = ingredient.priceItemId ?: return null
-        return labelByItemId[Costing.substituteItemId(rawId)] ?: labelByItemId[rawId]
+        return labelByItemId[rawId]
     }
 
     /**

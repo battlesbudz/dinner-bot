@@ -28,7 +28,7 @@ class ImportReviewTest {
         pack: Quantity = Quantity(1.0, MeasureUnit.POUND),
     ) = PriceItem(
         id = id, name = name, category = "Test",
-        homeStore = Store.ALDI, packDescription = "pack",
+        homeStore = "aldi", packDescription = "pack",
         packQuantity = pack, packPriceCents = 100,
         pricePerUnitCents = 100.0, checkedDate = "2026-10-24", source = "test",
     )

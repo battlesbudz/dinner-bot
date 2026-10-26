@@ -32,7 +32,7 @@ import com.battlesbudz.dinnerbot.core.model.RecipeIngredient
 /**
  * The cook view for one planned dinner (Phase V2-7, scope B4 step 0):
  * tonight's ingredients, scaled to the household, each with a check-off
- * Andrea ticks as she uses it while cooking and preparing. The check-off
+ * the user ticks while cooking and preparing. The check-off
  * state is kept per planned dinner, so a half-cooked night resumes where
  * it stopped.
  *
@@ -93,7 +93,7 @@ fun CookScreen(
         // Ingredient editing from a planned night (Phase RI-1): saving
         // asks tonight only, or from now on — tonight only is the
         // default, and a tonight-only change never touches the saved
-        // recipe (the peppers case / broccoli case in Battles's ruling).
+        // recipe (the peppers case / broccoli case in the user's ruling).
         OutlinedButton(
             onClick = { editingIngredients = true },
             modifier = Modifier.testTag("edit-ingredients"),

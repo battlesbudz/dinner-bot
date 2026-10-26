@@ -28,10 +28,10 @@ import kotlin.math.roundToInt
  *   rest of the price book by name.
  * - A scan correction is the price book's existing correction write with
  *   a scan source note. Scanning never invents a price: the cents always
- *   come from the shelf in front of Andrea, typed by her, exactly like a
+ *   come from the shelf in front of the user, typed by her, exactly like a
  *   tap-to-correct.
  *
- * The v0.4.4 rework (Battles's field reports on the v0.4.2 build) adds:
+ * The v0.4.4 rework (the user's field reports on the v0.4.2 build) adds:
  *
  * - A scanned product that is not in the book can be ADDED from the
  *   link picker: [buildUserItem] makes the price book item from the
@@ -142,7 +142,7 @@ object BarcodeScanLogic {
     }
 
     /**
-     * The item as it lands in the price book after Andrea confirms the
+     * The item as it lands in the price book after the user confirms the
      * shelf price she is looking at: the exact record a typed correction
      * writes, with the source noting it came from a scan.
      */
@@ -187,9 +187,9 @@ object BarcodeScanLogic {
 
     /**
      * The price book item a scan creates for a product the book did not
-     * have (Battles's sugar case: the lookup named it, the book did not
+     * have (the user's sugar case: the lookup named it, the book did not
      * hold it, and the old flow dead-ended). Every field comes from the
-     * form Andrea filled in; the typed price is the pack price, flagged
+     * form the user filled in; the typed price is the pack price, flagged
      * user-corrected like any price she enters, with [NEW_ITEM_SOURCE]
      * noting the door it came through. From here the item is an
      * ordinary book item: the planner costs it, backups carry it, and
@@ -198,7 +198,7 @@ object BarcodeScanLogic {
     fun buildUserItem(
         name: String,
         category: String,
-        homeStore: Store,
+        homeStore: String,
         packDescription: String,
         packQuantity: Quantity,
         shelfPriceCents: Int,
@@ -246,7 +246,7 @@ object BarcodeScanLogic {
      * Costing): that same need at the typed price's per-unit rate,
      * never the whole pack when the pack is bigger.
      *
-     * The planned line's check-off state carries over: a line Andrea
+     * The planned line's check-off state carries over: a line the user
      * already checked off was already dealt with, and its replacement
      * must not reappear as still to buy. The marker names every origin
      * the fold must suppress: the replaced line's own origins plus the

@@ -15,7 +15,7 @@ import org.junit.Test
  */
 class NewBookItemTest {
 
-    private fun item(id: String, name: String, packPrice: Int, store: Store = Store.ALDI) =
+    private fun item(id: String, name: String, packPrice: Int, store: String = "aldi") =
         PriceItem(
             id = id, name = name, category = "Produce", homeStore = store,
             packDescription = "pack", packQuantity = Quantity(1.0, MeasureUnit.POUND),
@@ -32,7 +32,7 @@ class NewBookItemTest {
         val built = NewBookItem.build(
             name = "Gochujang",
             category = "Sauces",
-            homeStore = Store.WALMART,
+            homeStore = "walmart",
             packDescription = "Tub, 1 lb",
             packQuantity = Quantity(1.0, MeasureUnit.POUND),
             priceCents = 549,
@@ -42,7 +42,7 @@ class NewBookItemTest {
         assertEquals("user-gochujang", built.id)
         assertEquals("Gochujang", built.name)
         assertEquals("Sauces", built.category)
-        assertEquals(Store.WALMART, built.homeStore)
+        assertEquals("walmart", built.homeStore)
         assertEquals("Tub, 1 lb", built.packDescription)
         assertEquals(549, built.packPriceCents)
         assertEquals(549.0, built.pricePerUnitCents!!, 0.001)
@@ -59,7 +59,7 @@ class NewBookItemTest {
         val built = NewBookItem.build(
             name = "Gochujang",
             category = "",
-            homeStore = Store.ALDI,
+            homeStore = "aldi",
             packDescription = "",
             packQuantity = Quantity(2.0, MeasureUnit.COUNT),
             priceCents = null,
@@ -79,7 +79,7 @@ class NewBookItemTest {
         val built = NewBookItem.build(
             name = "White onion",
             category = "",
-            homeStore = Store.ALDI,
+            homeStore = "aldi",
             packDescription = "",
             packQuantity = Quantity(1.0, MeasureUnit.POUND),
             priceCents = null,
@@ -96,7 +96,7 @@ class NewBookItemTest {
         val built = NewBookItem.build(
             name = "Tahini",
             category = "Other",
-            homeStore = Store.ALDI,
+            homeStore = "aldi",
             packDescription = "",
             packQuantity = Quantity(1.0, MeasureUnit.COUNT),
             priceCents = null,
@@ -109,12 +109,12 @@ class NewBookItemTest {
 
     @Test fun aSecondItemWithTheSameNameGetsANumberedId() {
         val first = NewBookItem.build(
-            name = "Tahini", category = "Other", homeStore = Store.ALDI,
+            name = "Tahini", category = "Other", homeStore = "aldi",
             packDescription = "", packQuantity = Quantity(1.0, MeasureUnit.COUNT),
             priceCents = 429, book = book, checkedDate = "2026-10-25",
         )
         val second = NewBookItem.build(
-            name = "Tahini", category = "Other", homeStore = Store.ALDI,
+            name = "Tahini", category = "Other", homeStore = "aldi",
             packDescription = "", packQuantity = Quantity(1.0, MeasureUnit.COUNT),
             priceCents = 459, book = book + first, checkedDate = "2026-10-25",
         )
@@ -126,7 +126,7 @@ class NewBookItemTest {
         val built = NewBookItem.build(
             name = "Granulated sugar",
             category = "Dry and canned",
-            homeStore = Store.ALDI,
+            homeStore = "aldi",
             packDescription = "Bag, 4 lb",
             packQuantity = Quantity(4.0, MeasureUnit.POUND),
             priceCents = 342,
@@ -141,7 +141,7 @@ class NewBookItemTest {
 
     @Test fun blankNamesAndBadNumbersAreRejected() {
         fun build(name: String, amount: Double, price: Int?) = NewBookItem.build(
-            name = name, category = "Other", homeStore = Store.ALDI,
+            name = name, category = "Other", homeStore = "aldi",
             packDescription = "", packQuantity = Quantity(amount, MeasureUnit.COUNT),
             priceCents = price, book = book, checkedDate = "2026-10-25",
         )

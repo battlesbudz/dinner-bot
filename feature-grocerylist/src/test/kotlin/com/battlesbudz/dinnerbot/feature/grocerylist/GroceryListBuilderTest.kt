@@ -14,18 +14,18 @@ import org.junit.Test
 
 class GroceryListBuilderTest {
 
-    private fun item(id: String, store: Store, packAmount: Double, unit: MeasureUnit, packPrice: Int) =
+    private fun item(id: String, store: String, packAmount: Double, unit: MeasureUnit, packPrice: Int) =
         PriceItem(
             id = id, name = id, category = "Test", homeStore = store, packDescription = "pack",
             packQuantity = Quantity(packAmount, unit), packPriceCents = packPrice,
             pricePerUnitCents = packPrice / packAmount, checkedDate = "2026-10-22", source = "test",
         )
 
-    private val turkey = item("ground-turkey", Store.WALMART, 1.0, MeasureUnit.POUND, 198)
-    private val tenderloin = item("pork-tenderloin", Store.SAMS_CLUB, 9.0, MeasureUnit.POUND, 2168)
-    private val spaghetti = item("spaghetti", Store.ALDI, 32.0, MeasureUnit.OUNCE, 209)
-    private val sauce = item("pasta-sauce", Store.ALDI, 24.0, MeasureUnit.OUNCE, 185)
-    private val eggs = item("eggs", Store.ALDI, 12.0, MeasureUnit.COUNT, 185)
+    private val turkey = item("ground-turkey", "walmart", 1.0, MeasureUnit.POUND, 198)
+    private val tenderloin = item("pork-tenderloin", "sams-club", 9.0, MeasureUnit.POUND, 2168)
+    private val spaghetti = item("spaghetti", "aldi", 32.0, MeasureUnit.OUNCE, 209)
+    private val sauce = item("pasta-sauce", "aldi", 24.0, MeasureUnit.OUNCE, 185)
+    private val eggs = item("eggs", "aldi", 12.0, MeasureUnit.COUNT, 185)
     private val book = listOf(turkey, tenderloin, spaghetti, sauce, eggs)
 
     private fun recipe(id: String, vararg ingredients: RecipeIngredient) = Recipe(
@@ -70,9 +70,9 @@ class GroceryListBuilderTest {
         // list nothing (imports link theirs into the book instead).
         assertTrue(built.lines.none { it.displayName.contains("Salt") })
         // Aldi: spaghetti 32 oz total = 1 pack 209, sauce 185, eggs 185 -> 579.
-        assertEquals(579, built.cashByStoreCents[Store.ALDI])
+        assertEquals(579, built.cashByStoreCents["aldi"])
         // Walmart: turkey 1 lb = 198.
-        assertEquals(198, built.cashByStoreCents[Store.WALMART])
+        assertEquals(198, built.cashByStoreCents["walmart"])
         assertEquals(579 + 198, built.totalCashCents)
     }
 
@@ -104,7 +104,7 @@ class GroceryListBuilderTest {
 
     private val russetPotatoes = PriceItem(
         id = "russet-potatoes", name = "Russet potatoes", category = "Produce",
-        homeStore = Store.ALDI, packDescription = "5 lb bag",
+        homeStore = "aldi", packDescription = "5 lb bag",
         packQuantity = Quantity(5.0, MeasureUnit.POUND), packPriceCents = 349,
         pricePerUnitCents = 69.8, checkedDate = "2026-10-22", source = "test",
     )
@@ -127,7 +127,7 @@ class GroceryListBuilderTest {
         assertEquals(0, GroceryListBuilder.lineCashCents(covered))
         // The eggs are unaffected: one pack at 185, all of the cash.
         assertEquals(185, built.totalCashCents)
-        assertEquals(185, built.cashByStoreCents[Store.ALDI])
+        assertEquals(185, built.cashByStoreCents["aldi"])
         assertEquals(setOf("eggs", "russet-potatoes"), built.lines.map { it.itemId }.toSet())
     }
 

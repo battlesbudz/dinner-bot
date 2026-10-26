@@ -25,7 +25,7 @@ class ReminderPlannerTest {
         id = "pork-tenderloin",
         name = "Pork tenderloin",
         category = "Meat",
-        homeStore = Store.SAMS_CLUB,
+        homeStore = "sams-club",
         packDescription = "about 9 lb",
         packQuantity = Quantity(9.0, MeasureUnit.POUND),
         packPriceCents = 2168,
@@ -34,12 +34,12 @@ class ReminderPlannerTest {
         freezeNote = "Freeze what this week will not use.",
     )
 
-    /** A Sam's item with NO freeze guidance: stock-tracked but never a defrost candidate. */
+    /** A bulk item with NO freeze guidance: stock-tracked but never a defrost candidate. */
     private val bulkRice = PriceItem(
         id = "bulk-rice",
         name = "Bulk rice",
         category = "Pantry",
-        homeStore = Store.SAMS_CLUB,
+        homeStore = "sams-club",
         packDescription = "10 lb bag",
         packQuantity = Quantity(10.0, MeasureUnit.POUND),
         packPriceCents = 800,
@@ -51,7 +51,7 @@ class ReminderPlannerTest {
         id = "ground-turkey",
         name = "Ground turkey",
         category = "Meat",
-        homeStore = Store.WALMART,
+        homeStore = "walmart",
         packDescription = "1 lb",
         packQuantity = Quantity(1.0, MeasureUnit.POUND),
         packPriceCents = 198,

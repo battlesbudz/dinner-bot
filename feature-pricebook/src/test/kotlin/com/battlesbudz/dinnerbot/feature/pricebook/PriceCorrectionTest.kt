@@ -14,7 +14,7 @@ class PriceCorrectionTest {
 
     private val onions = PriceItem(
         id = "yellow-onions", name = "Yellow onions", category = "Produce",
-        homeStore = Store.ALDI, packDescription = "3 lb bag",
+        homeStore = "aldi", packDescription = "3 lb bag",
         packQuantity = Quantity(3.0, MeasureUnit.POUND), packPriceCents = 219,
         pricePerUnitCents = 73.0, checkedDate = "2026-10-21", source = "seed",
     )
@@ -29,7 +29,7 @@ class PriceCorrectionTest {
         assertEquals(249, corrected.packPriceCents)
         assertTrue(!corrected.guessPriced)
         assertTrue(corrected.userCorrected)
-        val moved = PriceCorrection.applyHomeStore(guessed, Store.WALMART)
+        val moved = PriceCorrection.applyHomeStore(guessed, "walmart")
         assertTrue(moved.guessPriced)
     }
 
@@ -50,19 +50,19 @@ class PriceCorrectionTest {
     }
 
     @Test fun homeStoreMoveKeepsPrice() {
-        val moved = PriceCorrection.applyHomeStore(onions, Store.WALMART)
-        assertEquals(Store.WALMART, moved.homeStore)
+        val moved = PriceCorrection.applyHomeStore(onions, "walmart")
+        assertEquals("walmart", moved.homeStore)
         assertEquals(219, moved.packPriceCents)
     }
 
     @Test fun alternatePriceReplacesExistingForThatStore() {
         val item = onions.copy(
-            homeStore = Store.SAMS_CLUB,
-            alternates = listOf(StorePrice(Store.ALDI, 297.0), StorePrice(Store.WALMART, 417.0)),
+            homeStore = "sams-club",
+            alternates = listOf(StorePrice("aldi", 297.0), StorePrice("walmart", 417.0)),
         )
-        val updated = PriceCorrection.applyAlternatePrice(item, Store.ALDI, 289.0)
-        assertEquals(289.0, updated.alternates.single { it.store == Store.ALDI }.pricePerUnitCents, 0.001)
-        assertEquals(417.0, updated.alternates.single { it.store == Store.WALMART }.pricePerUnitCents, 0.001)
+        val updated = PriceCorrection.applyAlternatePrice(item, "aldi", 289.0)
+        assertEquals(289.0, updated.alternates.single { it.store == "aldi" }.pricePerUnitCents, 0.001)
+        assertEquals(417.0, updated.alternates.single { it.store == "walmart" }.pricePerUnitCents, 0.001)
         assertTrue(updated.userCorrected)
     }
 }

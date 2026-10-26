@@ -207,7 +207,7 @@ class NutritionCalculatorTest {
     @Test fun wontEatAdaptationChangesTheFigures() {
         val item = PriceItem(
             id = "ground-turkey", name = "Ground turkey", category = "Meat",
-            homeStore = Store.WALMART, packDescription = "pack",
+            homeStore = "walmart", packDescription = "pack",
             packQuantity = Quantity.pounds(1.0), packPriceCents = 198,
             checkedDate = "2026-10-22", source = "fixture",
         )

@@ -17,34 +17,34 @@ import org.junit.Test
  */
 class GroceryListBuilderFortnightTest {
 
-    private fun item(id: String, category: String, store: Store) = PriceItem(
+    private fun item(id: String, category: String, store: String) = PriceItem(
         id = id, name = id, category = category, homeStore = store, packDescription = "pack",
         packQuantity = Quantity(1.0, MeasureUnit.POUND), packPriceCents = 100,
         checkedDate = "2026-10-22", source = "test",
     )
 
-    private fun line(itemId: String, store: Store, packs: Int = 1, price: Int = 100) = GroceryLine(
+    private fun line(itemId: String, store: String, packs: Int = 1, price: Int = 100) = GroceryLine(
         itemId = itemId, displayName = itemId, store = store,
         needed = Quantity(1.0, MeasureUnit.POUND), packsToBuy = packs, estimatedPackPriceCents = price,
     )
 
     private val book = listOf(
-        item("milk", "Dairy and eggs", Store.ALDI),
-        item("russet-potatoes", "Produce", Store.ALDI),
-        item("chicken-breast", "Meat", Store.ALDI),
-        item("spaghetti", "Dry and canned", Store.ALDI),
-        item("frozen-broccoli", "Frozen", Store.WALMART),
-        item("pork-tenderloin", "Meat", Store.SAMS_CLUB),
+        item("milk", "Dairy and eggs", "aldi"),
+        item("russet-potatoes", "Produce", "aldi"),
+        item("chicken-breast", "Meat", "aldi"),
+        item("spaghetti", "Dry and canned", "aldi"),
+        item("frozen-broccoli", "Frozen", "walmart"),
+        item("pork-tenderloin", "Meat", "sams-club"),
     )
 
     @Test fun week2PerishablesGoToTopUpAndShelfStableStaysOnBigTrip() {
-        val week1 = listOf(line("milk", Store.ALDI), line("spaghetti", Store.ALDI))
+        val week1 = listOf(line("milk", "aldi"), line("spaghetti", "aldi"))
         val week2 = listOf(
-            line("milk", Store.ALDI),
-            line("russet-potatoes", Store.ALDI),
-            line("chicken-breast", Store.ALDI),
-            line("spaghetti", Store.ALDI),
-            line("frozen-broccoli", Store.WALMART),
+            line("milk", "aldi"),
+            line("russet-potatoes", "aldi"),
+            line("chicken-breast", "aldi"),
+            line("spaghetti", "aldi"),
+            line("frozen-broccoli", "walmart"),
         )
         val sections = GroceryListBuilder.splitFortnight(week1, week2, book)
         assertEquals(
@@ -61,7 +61,7 @@ class GroceryListBuilderFortnightTest {
     }
 
     @Test fun samsStockPurchaseRidesTheBigTripEvenThoughItIsMeat() {
-        val week2 = listOf(line("pork-tenderloin", Store.SAMS_CLUB, packs = 1, price = 2168))
+        val week2 = listOf(line("pork-tenderloin", "sams-club", packs = 1, price = 2168))
         val sections = GroceryListBuilder.splitFortnight(emptyList(), week2, book)
         assertTrue(sections.topUpLines.isEmpty())
         assertEquals(listOf("pork-tenderloin"), sections.bigTripLines.map { it.itemId })
@@ -69,14 +69,14 @@ class GroceryListBuilderFortnightTest {
 
     @Test fun reroutedMeatLineSplitsToTopUp() {
         // Gate unmet: the Sam's pork is bought fresh at Aldi instead.
-        val week2 = listOf(line("pork-tenderloin", Store.ALDI))
+        val week2 = listOf(line("pork-tenderloin", "aldi"))
         val sections = GroceryListBuilder.splitFortnight(emptyList(), week2, book)
         assertEquals(listOf("pork-tenderloin"), sections.topUpLines.map { it.itemId })
     }
 
     @Test fun sectionCashesSumToTheCombinedTotal() {
-        val week1 = listOf(line("milk", Store.ALDI, price = 250), line("spaghetti", Store.ALDI, packs = 2, price = 209))
-        val week2 = listOf(line("milk", Store.ALDI, price = 250), line("spaghetti", Store.ALDI, price = 209))
+        val week1 = listOf(line("milk", "aldi", price = 250), line("spaghetti", "aldi", packs = 2, price = 209))
+        val week2 = listOf(line("milk", "aldi", price = 250), line("spaghetti", "aldi", price = 209))
         val sections = GroceryListBuilder.splitFortnight(week1, week2, book)
         assertEquals(250, sections.topUpCashCents)
         assertEquals(250 + 2 * 209 + 209, sections.bigTripCashCents)
@@ -88,8 +88,8 @@ class GroceryListBuilderFortnightTest {
     }
 
     @Test fun everyLineLandsInExactlyOneSection() {
-        val week1 = listOf(line("milk", Store.ALDI), line("pork-tenderloin", Store.SAMS_CLUB))
-        val week2 = listOf(line("milk", Store.ALDI), line("spaghetti", Store.ALDI), line("frozen-broccoli", Store.WALMART))
+        val week1 = listOf(line("milk", "aldi"), line("pork-tenderloin", "sams-club"))
+        val week2 = listOf(line("milk", "aldi"), line("spaghetti", "aldi"), line("frozen-broccoli", "walmart"))
         val sections = GroceryListBuilder.splitFortnight(week1, week2, book)
         assertEquals(week1.size + week2.size, sections.bigTripLines.size + sections.topUpLines.size)
     }

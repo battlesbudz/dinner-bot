@@ -5,7 +5,6 @@ import com.battlesbudz.dinnerbot.core.model.MeasureUnit
 import com.battlesbudz.dinnerbot.core.model.PantryItem
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Quantity
-import com.battlesbudz.dinnerbot.core.model.Store
 
 /** Pure pantry and bulk-stock rules. */
 object PantryLogic {
@@ -21,9 +20,15 @@ object PantryLogic {
     fun ownedNames(items: List<PantryItem>): Set<String> =
         items.filter { it.owned }.map { it.name }.toSet()
 
-    /** Price items that live at Sam's Club and are therefore bulk-stock tracked. */
-    fun bulkItems(priceItems: List<PriceItem>): List<PriceItem> =
-        priceItems.filter { it.homeStore == Store.SAMS_CLUB }
+    /**
+     * Bulk-stock tracked price items (Phase C1): the ones carrying
+     * freeze guidance, plus any item that already has tracked stock.
+     * Bulk is a property of the item, never of its store.
+     */
+    fun bulkItems(priceItems: List<PriceItem>, stocks: List<BulkStock> = emptyList()): List<PriceItem> {
+        val stockedIds = stocks.map { it.itemId }.toSet()
+        return priceItems.filter { it.freezeNote != null || it.id in stockedIds }
+    }
 
     /** Sensible stepper increment for an item's stock, in the item's pack unit. */
     fun stepFor(item: PriceItem): Double = when (item.packQuantity.unit.dimension) {

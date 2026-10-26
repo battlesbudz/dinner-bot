@@ -15,7 +15,7 @@ import org.junit.Test
  */
 class GuessPricerTest {
 
-    private fun item(id: String, name: String, packPrice: Int, store: Store = Store.ALDI) =
+    private fun item(id: String, name: String, packPrice: Int, store: String = "aldi") =
         PriceItem(
             id = id, name = name, category = "Produce", homeStore = store,
             packDescription = "pack", packQuantity = Quantity(1.0, MeasureUnit.POUND),
@@ -52,7 +52,7 @@ class GuessPricerTest {
         assertEquals("user-white-onion", item.id)
         assertEquals("White onion", item.name)
         assertEquals("Produce", item.category)
-        assertEquals(Store.ALDI, item.homeStore)
+        assertEquals("aldi", item.homeStore)
         // The pack is the ingredient's own parsed amount.
         assertEquals(Quantity(2.0, MeasureUnit.POUND), item.packQuantity)
         assertEquals(69.5, item.pricePerUnitCents!!, 0.001)

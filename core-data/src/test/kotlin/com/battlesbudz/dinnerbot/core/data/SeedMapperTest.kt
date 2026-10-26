@@ -14,7 +14,7 @@ class SeedMapperTest {
     @Test fun priceItemRoundTrips() {
         val item = PriceItem(
             id = "pork-tenderloin", name = "Pork tenderloin", category = "Meat",
-            homeStore = Store.SAMS_CLUB, packDescription = "about 9 lb",
+            homeStore = "sams-club", packDescription = "about 9 lb",
             packQuantity = Quantity.pounds(9.0), packPriceCents = 2168,
             pricePerUnitCents = 240.9, checkedDate = "2026-10-22", source = "Battles",
         )
@@ -49,7 +49,7 @@ class SeedMapperTest {
     @Test fun priceItemFreezeNoteRoundTrips() {
         val item = PriceItem(
             id = "pork-tenderloin", name = "Pork tenderloin", category = "Meat",
-            homeStore = Store.SAMS_CLUB, packDescription = "about 9 lb",
+            homeStore = "sams-club", packDescription = "about 9 lb",
             packQuantity = Quantity.pounds(9.0), packPriceCents = 2168,
             pricePerUnitCents = 240.9, checkedDate = "2026-10-22", source = "Battles",
             freezeNote = "Cut into meal-size portions, bag flat, and freeze.",
@@ -74,7 +74,7 @@ class SeedMapperTest {
         // 2026-10-24): it must survive the entity round trip exactly.
         val item = PriceItem(
             id = "user-white-onion", name = "White onion", category = "Produce",
-            homeStore = Store.ALDI, packDescription = "2 lb (from a recipe)",
+            homeStore = "aldi", packDescription = "2 lb (from a recipe)",
             packQuantity = Quantity.pounds(2.0), packPriceCents = 139,
             pricePerUnitCents = 69.5, checkedDate = "2026-10-24",
             source = "Recipe import — guessed price",

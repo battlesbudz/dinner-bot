@@ -21,7 +21,7 @@ import org.junit.Test
 class WeekPlannerPresetsTest {
 
     private fun item(id: String, name: String, price: Int, pack: Quantity) = PriceItem(
-        id = id, name = name, category = "Test", homeStore = Store.ALDI,
+        id = id, name = name, category = "Test", homeStore = "aldi",
         packDescription = "pack", packQuantity = pack,
         packPriceCents = price, pricePerUnitCents = price / pack.amount,
         checkedDate = "2026-10-22", source = "test",

@@ -21,7 +21,7 @@ import org.junit.Test
 class WeekPlannerRi3Test {
 
     private fun item(id: String, name: String, packPrice: Int) = PriceItem(
-        id = id, name = name, category = "Test", homeStore = Store.ALDI,
+        id = id, name = name, category = "Test", homeStore = "aldi",
         packDescription = "pack", packQuantity = Quantity(1.0, MeasureUnit.POUND),
         packPriceCents = packPrice, pricePerUnitCents = packPrice.toDouble(),
         checkedDate = "2026-10-24", source = "test",
@@ -31,7 +31,7 @@ class WeekPlannerRi3Test {
     private val rice = item("rice", "Rice", 210)
     private val potatoes = PriceItem(
         id = "russet-potatoes", name = "Russet potatoes", category = "Produce",
-        homeStore = Store.ALDI, packDescription = "5 lb bag",
+        homeStore = "aldi", packDescription = "5 lb bag",
         packQuantity = Quantity(5.0, MeasureUnit.POUND), packPriceCents = 349,
         pricePerUnitCents = 69.8, checkedDate = "2026-10-24", source = "test",
     )

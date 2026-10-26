@@ -29,7 +29,7 @@ class BackupRatingsTest {
         priceItems = listOf(
             PriceItem(
                 id = "eggs", name = "Eggs", category = "Dairy",
-                homeStore = Store.ALDI, packDescription = "12 ct",
+                homeStore = "aldi", packDescription = "12 ct",
                 packQuantity = Quantity(12.0, MeasureUnit.COUNT), packPriceCents = 185,
                 pricePerUnitCents = 15.4, checkedDate = "2026-10-22", source = "test",
             ),

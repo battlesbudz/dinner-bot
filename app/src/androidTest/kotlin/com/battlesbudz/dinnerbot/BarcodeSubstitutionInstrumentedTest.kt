@@ -55,7 +55,7 @@ class BarcodeSubstitutionInstrumentedTest {
     val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     private fun item(id: String, name: String, packPrice: Int = 200) = PriceItem(
-        id = id, name = name, category = "Meat", homeStore = Store.ALDI,
+        id = id, name = name, category = "Meat", homeStore = "aldi",
         packDescription = "pack", packQuantity = Quantity(2.0, MeasureUnit.POUND),
         packPriceCents = packPrice, pricePerUnitCents = packPrice / 2.0,
         checkedDate = "2026-10-22", source = "seed",
@@ -90,7 +90,7 @@ class BarcodeSubstitutionInstrumentedTest {
             NewItemFormDialog(
                 barcode = "036800123456",
                 suggestedName = "Granulated sugar",
-                initialStore = Store.ALDI,
+                initialStore = "aldi",
                 today = "2026-10-23",
                 book = listOf(breast),
                 onConfirm = { created = it },
@@ -109,7 +109,7 @@ class BarcodeSubstitutionInstrumentedTest {
         val built = created!!
         assertEquals("user-granulated-sugar", built.id)
         assertEquals("Granulated sugar", built.name)
-        assertEquals(Store.ALDI, built.homeStore)
+        assertEquals("aldi", built.homeStore)
         assertEquals("Bag, 4 lb", built.packDescription)
         assertEquals(342, built.packPriceCents)
         assertEquals(85.5, built.pricePerUnitCents!!, 0.001)
@@ -127,7 +127,7 @@ class BarcodeSubstitutionInstrumentedTest {
             NewItemFormDialog(
                 barcode = "036800123456",
                 suggestedName = "Granulated sugar",
-                initialStore = Store.ALDI,
+                initialStore = "aldi",
                 today = "2026-10-23",
                 book = listOf(breast),
                 onConfirm = { created = it },

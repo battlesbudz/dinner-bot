@@ -2,13 +2,13 @@ package com.battlesbudz.dinnerbot.core.model
 
 import kotlinx.serialization.Serializable
 
-@Serializable
-enum class Store { ALDI, WALMART, SAMS_CLUB }
+// Stores are user data since Phase C1: see Stores.kt for the Store type.
 
 /** A per-unit price for the same item at a store other than its home store. */
 @Serializable
 data class StorePrice(
-    val store: Store,
+    /** The other store's id (see Store); ids, not names, so renames are free. */
+    val store: String,
     /** Cents per 1.0 of the item's pack unit (same unit basis as [PriceItem.pricePerUnitCents]). */
     val pricePerUnitCents: Double,
 )
@@ -19,7 +19,8 @@ data class PriceItem(
     val id: String,
     val name: String,
     val category: String,
-    val homeStore: Store,
+    /** Id of the user's store this item is bought at (see Store). */
+    val homeStore: String,
     val packDescription: String,
     val packQuantity: Quantity,
     val packPriceCents: Int,
@@ -27,21 +28,28 @@ data class PriceItem(
     val pricePerUnitCents: Double? = null,
     val checkedDate: String,
     val source: String,
-    /** True when Andrea has corrected this price in the app; her number always wins over seed data. */
+    /** True when the user has corrected this price in the app; their number always wins over seed data. */
     val userCorrected: Boolean = false,
-    /** Known per-unit prices at other stores, used by the Sam's Club savings gate. */
+    /**
+     * Known per-unit prices at other stores. Pure price data since
+     * Phase C1: nothing routes a purchase to another store any more;
+     * the record survives so a scan-price correction on a line at that
+     * store can still be written back against it.
+     */
     val alternates: List<StorePrice> = emptyList(),
     /**
-     * Short project-written freezing guidance for oversize (Sam's Club bulk)
-     * packs, Phase V2-2. Shown on the grocery line when a pack is bought and
-     * on the pantry stock entry while stock is on hand. Seed-owned: refreshed
-     * from the bundled price book, never user-edited.
+     * Short project-written freezing guidance for oversize bulk packs,
+     * Phase V2-2. Shown on the grocery line when a pack is bought and
+     * on the pantry stock entry while stock is on hand. Since Phase C1
+     * the note doubles as the bulk marker: an item carrying one is
+     * stock-tracked, at any store. Seed-owned: refreshed from the
+     * bundled price book, never user-edited.
      */
     val freezeNote: String? = null,
     /**
      * True for the pantry staples (rice, butter, oil, flour, salt, the
      * spices, soy sauce): priced like every other item since v0.4.3
-     * (Battles: "everything should be in the pricing book"), but still
+     * ("everything should be in the pricing book"), but still
      * staples for the rules that treat them differently — the pantry owned
      * checklist covers them by name, and Sunday reconciliation always
      * restocks them rather than only when a planned dinner used them.
@@ -49,7 +57,7 @@ data class PriceItem(
     val staple: Boolean = false,
     /**
      * True when this item's price is a placeholder guess, not a shelf
-     * price anyone has seen (Battles's correction, 2026-10-24): an
+     * price anyone has seen (user correction, 2026-10-24): an
      * ingredient that matched nothing at recipe import becomes a real
      * price book item at its guessed price — everything is in the
      * pricing book — and the first scan or price correction writes the
@@ -63,9 +71,6 @@ data class PriceItem(
     val perUnitCents: Double
         get() = pricePerUnitCents ?: (packPriceCents.toDouble() / packQuantity.amount)
 
-    /** Cheapest known non-Sam's per-unit price, or null when no alternate is known. */
-    fun cheapestRegularAlternate(): StorePrice? =
-        alternates.filter { it.store != Store.SAMS_CLUB }.minByOrNull { it.pricePerUnitCents }
 }
 
 @Serializable
@@ -85,7 +90,7 @@ data class RecipeIngredient(
     val quantity: Quantity,
     val note: String? = null,
     /**
-     * Battles's won't-eat rule: true when the dish cannot be made without
+     * the user's won't-eat rule: true when the dish cannot be made without
      * this ingredient, false when the dish works fine without it. Defaults
      * to true so an unmarked ingredient is treated as needed, never dropped.
      */
@@ -148,7 +153,7 @@ data class PlannedNight(
     val notCookingReason: String? = null,
     /**
      * Tonight-only ingredient edits for this night (Phase RI-1, ruling
-     * D1): the night's full ingredient list as Andrea edited it for
+     * D1): the night's full ingredient list as the user edited it for
      * tonight only. Rides inside the plan's nights JSON, so no plan
      * written before this field existed changes shape; a night without
      * edits reads null and cooks the saved recipe. The edits leave with
@@ -171,7 +176,7 @@ data class MealPlan(
 data class GroceryLine(
     val itemId: String,
     val displayName: String,
-    val store: Store,
+    val store: String,
     val needed: Quantity,
     val packsToBuy: Int,
     val estimatedPackPriceCents: Int,
@@ -197,7 +202,7 @@ data class GroceryLine(
      */
     val substitutedForItemId: String? = null,
     /**
-     * The owned pantry entry covering this line (Phase RI-3, Battles's
+     * The owned pantry entry covering this line (Phase RI-3, the user's
      * weekly-list ruling): the line is on the list because a planned
      * dinner needs the item, but the pantry already has it, so it renders
      * grayed and crossed through at $0 with the pantry entry's name shown
@@ -206,7 +211,7 @@ data class GroceryLine(
      */
     val coveredByPantryName: String? = null,
     /**
-     * True when this buy line exists because Andrea uncrossed a covered
+     * True when this buy line exists because the user uncrossed a covered
      * line for this week (Phase RI-3): the item is in her pantry AND on
      * this week's list at its book price, because the pantry's version is
      * the wrong kind or she wants more. The flag rides the plan's rows so
@@ -215,7 +220,7 @@ data class GroceryLine(
      */
     val uncrossed: Boolean = false,
     /**
-     * Retired with Battles's 2026-10-24 correction: v0.5.2's computed,
+     * Retired with the user's 2026-10-24 correction: v0.5.2's computed,
      * never-persisted line guess. Guesses now live on the price book
      * item itself ([PriceItem.guessPriced]) and lines price from the
      * item like any other. The field stays only so plans stored by
@@ -241,7 +246,7 @@ data class PantryItem(
     val owned: Boolean = true,
 )
 
-/** Quantity-tracked stock for Sam's Club bulk items only. */
+/** Quantity-tracked stock for bulk items (see PriceItem.freezeNote). */
 @Serializable
 data class BulkStock(
     val itemId: String,
@@ -268,11 +273,15 @@ data class HouseholdSettings(
      * same week is never reconciled twice.
      */
     val reconciledPlanIds: List<String> = emptyList(),
-)
-
-object HouseholdRules {
-    /** Battles 2026-10-21: this household never buys beef; ground turkey is always used instead. */
-    const val GROUND_MEAT_SUBSTITUTION =
-        "We never buy beef. Ground turkey is always used in place of ground beef."
-    const val SUBSTITUTE_ITEM_ID = "ground-turkey"
+    /**
+     * The user's stores, in the order they shop them (Phase C1). The
+     * first is the default wherever a store must be picked before the
+     * user has chosen one. Persisted in the stores table, not in the
+     * settings row; the data layer combines the two on load.
+     */
+    val stores: List<Store> = emptyList(),
+) {
+    /** The user's first chosen store: the only default the app has (Phase C1). */
+    val firstStore: Store? get() = stores.firstOrNull()
 }
+

@@ -21,7 +21,7 @@ import org.junit.Test
 class ReconciliationMergeRi3Test {
 
     private val eggs = PriceItem(
-        id = "eggs", name = "Eggs", category = "Test", homeStore = Store.ALDI,
+        id = "eggs", name = "Eggs", category = "Test", homeStore = "aldi",
         packDescription = "12 ct", packQuantity = Quantity(12.0, MeasureUnit.COUNT),
         packPriceCents = 185, pricePerUnitCents = 15.4,
         checkedDate = "2026-10-24", source = "test",
@@ -29,7 +29,7 @@ class ReconciliationMergeRi3Test {
     private val book = listOf(eggs)
 
     private val coveredEggs = GroceryLine(
-        itemId = "eggs", displayName = "Eggs", store = Store.ALDI,
+        itemId = "eggs", displayName = "Eggs", store = "aldi",
         needed = Quantity(6.0, MeasureUnit.COUNT), packsToBuy = 0,
         estimatedPackPriceCents = 185, portionCostCents = 92,
         coveredByPantryName = "Eggs",
@@ -53,7 +53,6 @@ class ReconciliationMergeRi3Test {
     ) = ReconciliationMerge.merge(
         lines = lines, resolvedOuts = outs, priceItems = book,
         plannedItemIds = plannedItemIds, plannedNeedsBase = plannedNeedsBase,
-        samsGateMet = false, samsMonthlySavingsCents = 0,
     )
 
     @Test fun coveredStapleConfirmedOutIsReplacedByOneBuyLine() {

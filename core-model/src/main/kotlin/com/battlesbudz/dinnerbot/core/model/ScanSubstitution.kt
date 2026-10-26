@@ -3,10 +3,10 @@ package com.battlesbudz.dinnerbot.core.model
 import kotlinx.serialization.Serializable
 
 /**
- * One remembered barcode-scan substitution (PR v0.4.4, Battles's field
+ * One remembered barcode-scan substitution (PR v0.4.4, the user's field
  * report from the v0.4.2 barcode build).
  *
- * Battles's rule, in substance: a substitution made from a shopping line
+ * the user's rule, in substance: a substitution made from a shopping line
  * is THIS WEEK ONLY — the planned line comes off this week's list, the
  * scanned product goes on at the typed price, and the recipe and future
  * weeks are never changed. But the app should remember the swap in a

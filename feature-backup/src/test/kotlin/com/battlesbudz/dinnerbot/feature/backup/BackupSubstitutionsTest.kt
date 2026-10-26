@@ -24,14 +24,14 @@ class BackupSubstitutionsTest {
 
     private val breast = PriceItem(
         id = "chicken-breast", name = "Boneless skinless chicken breast", category = "Meat",
-        homeStore = Store.ALDI, packDescription = "Fresh family pack",
+        homeStore = "aldi", packDescription = "Fresh family pack",
         packQuantity = Quantity(4.2, MeasureUnit.POUND), packPriceCents = 836,
         pricePerUnitCents = 199.0, checkedDate = "2026-10-21", source = "test",
     )
 
     private val drumsticks = PriceItem(
         id = "user-chicken-drumsticks", name = "Chicken drumsticks", category = "Meat",
-        homeStore = Store.ALDI, packDescription = "Family pack, about 4 lb",
+        homeStore = "aldi", packDescription = "Family pack, about 4 lb",
         packQuantity = Quantity(4.0, MeasureUnit.POUND), packPriceCents = 499,
         pricePerUnitCents = 124.75, checkedDate = "2026-10-23",
         source = "Added by barcode scan", userCorrected = true,
@@ -39,7 +39,7 @@ class BackupSubstitutionsTest {
 
     private val sugar = PriceItem(
         id = "user-granulated-sugar", name = "Granulated sugar", category = "Dry and canned",
-        homeStore = Store.WALMART, packDescription = "Bag, 4 lb",
+        homeStore = "walmart", packDescription = "Bag, 4 lb",
         packQuantity = Quantity(4.0, MeasureUnit.POUND), packPriceCents = 342,
         pricePerUnitCents = 85.5, checkedDate = "2026-10-23",
         source = "Added by barcode scan", userCorrected = true,

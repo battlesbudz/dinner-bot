@@ -6,7 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * The import fetch (Phase RI-2, scope B2, plan ruling 10): when Andrea
+ * The import fetch (Phase RI-2, scope B2, plan ruling 10): when the user
  * shares or pastes a link, the phone fetches that page ONCE, at her
  * action, to read the structured recipe data inside it. This is the
  * epic's only added network use and it lives in this package and
@@ -21,7 +21,7 @@ object RecipePageFetcher {
     private const val READ_TIMEOUT_MS = 8_000
     private const val MAX_CHARS = 1_500_000
 
-    /** True when [text] reads as a single web address Andrea can import from. */
+    /** True when [text] reads as a single web address the user can import from. */
     fun looksLikeUrl(text: String): Boolean {
         val trimmed = text.trim()
         return (trimmed.startsWith("http://", ignoreCase = true) ||

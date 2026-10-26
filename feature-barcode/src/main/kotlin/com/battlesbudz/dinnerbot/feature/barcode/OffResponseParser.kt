@@ -7,7 +7,7 @@ import com.battlesbudz.dinnerbot.core.model.NutritionValues
  * One product as Open Food Facts reports it (Phase V2-5 name hint;
  * v0.6.3 adds the pack quantity and the label nutrition facts). Every
  * field is a suggestion OFF's crowd-sourced data offers: callers show
- * prefills for Andrea to edit, and the nutrition facts land on the
+ * prefills for the user to edit, and the nutrition facts land on the
  * price book item as its label facts only because she confirmed the
  * item. Any field OFF does not publish stays null.
  */
@@ -101,7 +101,7 @@ object OffResponseParser {
     /**
      * Pull a product name out of an Open Food Facts product response, or
      * null when the response holds none. The lookup is only ever a hint;
-     * a name found here is shown to Andrea as a suggestion and never
+     * a name found here is shown to the user as a suggestion and never
      * links or prices anything by itself.
      */
     fun parseProductName(responseBody: String): String? {

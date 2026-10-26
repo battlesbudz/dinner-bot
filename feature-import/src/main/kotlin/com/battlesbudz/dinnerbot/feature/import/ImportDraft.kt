@@ -12,7 +12,7 @@ import com.battlesbudz.dinnerbot.core.model.Quantity
  * ingredient as written, with prep language moved into [note]. A line
  * the parser could not resolve still exists whole here: failing toward
  * visible-as-written is the design, and the review screen is where
- * Andrea corrects the reading.
+ * the user corrects the reading.
  */
 data class ParsedIngredient(
     val amount: Double?,

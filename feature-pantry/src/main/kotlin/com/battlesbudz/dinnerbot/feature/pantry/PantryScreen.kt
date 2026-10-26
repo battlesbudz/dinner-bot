@@ -29,7 +29,7 @@ import com.battlesbudz.dinnerbot.core.model.PriceItem
 
 /**
  * Pantry: the owned/not-owned staple checklist the planner trusts, plus the
- * quantity-tracked Sam's Club bulk stock the planner draws down at $0 cash.
+ * quantity-tracked bulk stock the planner draws down at $0 cash.
  */
 @Composable
 fun PantryScreen(
@@ -86,7 +86,7 @@ fun PantryScreen(
         }
         item {
             Text(
-                "Sam's Club bulk stock",
+                "Bulk stock",
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(top = 16.dp),
             )
@@ -97,7 +97,7 @@ fun PantryScreen(
             )
         }
         if (bulkPriceItems.isEmpty()) {
-            item { Text("No Sam's Club items in the price book yet.", style = MaterialTheme.typography.bodyMedium) }
+            item { Text("No bulk-pack items in the price book yet.", style = MaterialTheme.typography.bodyMedium) }
         }
         items(bulkPriceItems, key = { it.id }) { item ->
             val current = stockByItem[item.id]?.onHand

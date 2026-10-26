@@ -7,7 +7,6 @@ import com.battlesbudz.dinnerbot.core.model.Quantity
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.ReminderSettings
 import com.battlesbudz.dinnerbot.core.model.ReminderTimes
-import com.battlesbudz.dinnerbot.core.model.Store
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -43,8 +42,8 @@ data class ReminderWeek(
  *   time, naming that night's dinner. A night marked not cooking is
  *   skipped, exactly like the planner skips it.
  * - DEFROST fires on the evening before a cook night whose dinner draws
- *   on frozen Sam's Club bulk stock, naming the item to move. "Draws on
- *   frozen stock" mirrors [Costing] precisely: Sam's items are drawn
+ *   on frozen bulk stock, naming the item to move. "Draws on
+ *   frozen stock" mirrors [Costing] precisely: bulk items are drawn
  *   from tracked stock first, in night order across the whole stored
  *   horizon, and only items carrying freeze guidance count as frozen.
  *   An item the week buys fresh draws nothing and gets no reminder, and
@@ -108,7 +107,7 @@ object ReminderPlanner {
                 val frozenDrawn = mutableListOf<PriceItem>()
                 for (need in needs) {
                     val item = need.item
-                    if (item.homeStore != Store.SAMS_CLUB) continue
+                    if (item.freezeNote == null) continue
                     val onHand = stockBase[item.id] ?: 0.0
                     if (onHand <= 0.0) continue
                     val covered = minOf(need.neededBase, onHand)

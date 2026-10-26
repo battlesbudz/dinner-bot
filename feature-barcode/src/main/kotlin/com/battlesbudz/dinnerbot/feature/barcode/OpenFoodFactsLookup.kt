@@ -6,13 +6,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * The one optional network assist in Dinner Bot (Phase V2-5, Battles's
+ * The one optional network assist in Dinner Bot (Phase V2-5, the user's
  * D-V2-3 decision): when the phone has a connection, a scanned barcode
  * may be looked up in Open Food Facts, the public product database.
  * What comes back only ever PREFILLS and SUGGESTS: the product name,
  * the pack size for the add-ingredient form (v0.6.3), and the label's
- * nutrition facts, which land on the price book item when Andrea
- * confirms it (also v0.6.3, Battles's call to prefer the label over
+ * nutrition facts, which land on the price book item when the user
+ * confirms it (also v0.6.3, the user's call to prefer the label over
  * the USDA generic). The lookup never links anything by itself and
  * never supplies a price.
  *

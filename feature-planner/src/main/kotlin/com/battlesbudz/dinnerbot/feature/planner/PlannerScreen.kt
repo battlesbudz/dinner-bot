@@ -189,7 +189,7 @@ internal fun NightCard(
 
 /**
  * Week view: one card per cook night, the two headline numbers (cash needed
- * and attributed food cost, always separate), the Sam's Club savings line,
+ * and attributed food cost, always separate), the week-cash-against-budget line,
  * and the planner's plain-language notes.
  */
 @Composable
@@ -213,7 +213,7 @@ fun PlannerScreen(
     photoFiles: Map<String, File> = emptyMap(),
     /**
      * Recipe ids whose cost is not accurately reflected yet (Phase
-     * RI-3): Andrea's own recipes with ingredients still unpriced. The
+     * RI-3): the user's own recipes with ingredients still unpriced. The
      * caller computes the set live from the price book; a night in the
      * set carries the not-accurate note and the cash card says the
      * total includes guesses.
@@ -267,24 +267,24 @@ fun PlannerScreen(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
+                // Phase C1: the cash card always shows week cash
+                // against the budget.
                 if (budgetCents > 0) {
                     Text(
-                        "Weekly budget: ${Money(budgetCents).format()}",
+                        "Week cash ${Money(plan.cashNeededCents).format()} against your " +
+                            "${Money(budgetCents).format()} weekly budget.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                } else {
+                    Text(
+                        "Week cash ${Money(plan.cashNeededCents).format()}. Set a weekly " +
+                            "budget in Settings to track it against a target.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
                 Text(
                     "Food cost of these dinners: ${Money(plan.foodCostCents).format()} " +
                         "(what the meals themselves use up; bulk packs bought this week count in cash, not here)",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                Text(
-                    if (plan.samsGateMet) {
-                        "Sam's Club saves about ${Money(plan.samsMonthlySavingsCents).format()} this month"
-                    } else {
-                        "Sam's Club would save about ${Money(plan.samsMonthlySavingsCents).format()} this month, " +
-                            "under the $15 mark, so bulk items are planned at regular stores this week"
-                    },
                     style = MaterialTheme.typography.bodySmall,
                 )
             }

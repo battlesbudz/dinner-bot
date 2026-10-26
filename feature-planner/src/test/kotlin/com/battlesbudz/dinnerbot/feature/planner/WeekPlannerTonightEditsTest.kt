@@ -23,7 +23,7 @@ import org.junit.Test
  */
 class WeekPlannerTonightEditsTest {
 
-    private fun item(id: String, store: Store, packAmount: Double, unit: MeasureUnit, packPrice: Int) =
+    private fun item(id: String, store: String, packAmount: Double, unit: MeasureUnit, packPrice: Int) =
         PriceItem(
             id = id, name = id, category = "Test", homeStore = store, packDescription = "pack",
             packQuantity = Quantity(packAmount, unit), packPriceCents = packPrice,
@@ -31,10 +31,10 @@ class WeekPlannerTonightEditsTest {
             checkedDate = "2026-10-23", source = "test",
         )
 
-    private val eggs = item("eggs", Store.ALDI, 12.0, MeasureUnit.COUNT, 185)
-    private val spaghetti = item("spaghetti", Store.ALDI, 32.0, MeasureUnit.OUNCE, 209)
-    private val broccoli = item("broccoli", Store.ALDI, 16.0, MeasureUnit.OUNCE, 130)
-    private val pork = item("pork-tenderloin", Store.SAMS_CLUB, 9.0, MeasureUnit.POUND, 2168)
+    private val eggs = item("eggs", "aldi", 12.0, MeasureUnit.COUNT, 185)
+    private val spaghetti = item("spaghetti", "aldi", 32.0, MeasureUnit.OUNCE, 209)
+    private val broccoli = item("broccoli", "aldi", 16.0, MeasureUnit.OUNCE, 130)
+    private val pork = item("pork-tenderloin", "sams-club", 9.0, MeasureUnit.POUND, 2168)
     private val book = listOf(eggs, spaghetti, broccoli, pork)
 
     private fun recipe(id: String, vararg ingredients: RecipeIngredient) = Recipe(
@@ -73,8 +73,8 @@ class WeekPlannerTonightEditsTest {
 
     private fun weekWith(nights: List<PlannedNight>) = WeekPlanner.WeekPlan(
         weekStart = "2026-10-19", nights = nights, lines = emptyList(),
-        cashNeededCents = 0, foodCostCents = 0, samsMonthlySavingsCents = 0,
-        samsGateMet = false, deferredRestocks = emptyList(), notes = emptyList(),
+        cashNeededCents = 0, foodCostCents = 0,
+        deferredRestocks = emptyList(), notes = emptyList(),
     )
 
     private fun withoutBroccoli(recipe: Recipe) = TonightOverrides(

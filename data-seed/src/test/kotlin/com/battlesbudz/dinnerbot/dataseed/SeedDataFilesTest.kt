@@ -41,22 +41,40 @@ class SeedDataFilesTest {
         assertTrue("ground-turkey" in ids)
         assertTrue("pork-tenderloin" in ids)
         assertEquals(36, recipes.recipes.size)
-        assertTrue(recipes.recipes.none { it.title.contains("beef", ignoreCase = true) })
+        // Phase C1: beef content is legal seed content now; the seed set
+        // happens to still be the household's 36 recipes, beef included
+        // only as a price book item (see the national-average test below).
     }
 
-    @Test fun everySamsBulkItemCarriesAFreezeNote() {
+    @Test fun bulkPackItemsCarryFreezeNotes() {
+        // The seed's one oversize bulk pack carries the freeze guidance
+        // that marks it stock-tracked (Phase C1: the note, not the store,
+        // is the bulk marker).
         val priceBook = json.decodeFromString<PriceBookFile>(seedFile("pricebook.json").readText())
-        val samsItems = priceBook.items.filter { it.homeStore == Store.SAMS_CLUB }
-        assertTrue("expected at least one Sam's Club item", samsItems.isNotEmpty())
-        for (item in samsItems) {
-            assertTrue(
-                "Sam's item ${item.id} must carry freeze guidance (Phase V2-2)",
-                !item.freezeNote.isNullOrBlank(),
-            )
-        }
-        // No other store's items carry freeze notes: the guidance exists for
-        // oversize bulk packs only.
-        assertTrue(priceBook.items.filter { it.homeStore != Store.SAMS_CLUB }.all { it.freezeNote == null })
+        val tenderloin = priceBook.items.single { it.id == "pork-tenderloin" }
+        assertTrue(!tenderloin.freezeNote.isNullOrBlank())
+    }
+
+    @Test fun seedPricesAreNationalAveragesWithNoPersonalProvenance() {
+        // Phase C1 item 4: the shipped price book is national averages.
+        // Every provenance string reads as the national average, no
+        // personal or store-specific note survives anywhere in the file,
+        // and the in-app disclosure copy says exactly that.
+        val raw = seedFile("pricebook.json").readText()
+        val priceBook = json.decodeFromString<PriceBookFile>(raw)
+        assertTrue(priceBook.items.all { it.source == "National average" })
+        assertTrue(priceBook.items.none { it.packDescription.contains("6539") })
+        assertTrue(!raw.contains("Battles, household"))
+        assertTrue(!raw.contains("Instacart"))
+        assertTrue("ground-beef" in priceBook.items.map { it.id })
+        assertTrue(
+            com.battlesbudz.dinnerbot.core.model.SeedPrices.DISCLOSURE
+                .contains("national average", ignoreCase = true),
+        )
+        assertTrue(
+            com.battlesbudz.dinnerbot.core.model.SeedPrices.DISCLOSURE
+                .contains("first time you scan"),
+        )
     }
 
     @Test fun dietPresetsAreValidAgainstTheLibrary() {

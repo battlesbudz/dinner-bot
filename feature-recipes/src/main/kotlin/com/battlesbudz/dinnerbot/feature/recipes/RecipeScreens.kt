@@ -164,7 +164,7 @@ private fun StatPill(text: String) {
 /**
  * The standard back control (v0.6.0 redesign): a filled pill with a back
  * arrow and its label, big enough to see and tap, sitting at the top of
- * the screen it leaves. Battles reported the old text-only back links
+ * the screen it leaves. the user reported the old text-only back links
  * were easy to miss and could hide under the phone's own bars.
  */
 @Composable
@@ -461,7 +461,7 @@ fun RecipeDetailScreen(
         }
 
         Text("Ingredients", style = MaterialTheme.typography.titleMedium)
-        // Household editing (Phase RI-1): Andrea can correct any recipe,
+        // Household editing (Phase RI-1): the user can correct any recipe,
         // built-in library included, and the correction is saved as the
         // recipe's household version, surviving every app update.
         if (hasHouseholdEdits) {

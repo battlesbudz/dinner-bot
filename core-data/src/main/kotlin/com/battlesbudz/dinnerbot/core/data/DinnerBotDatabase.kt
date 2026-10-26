@@ -67,7 +67,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *
  * Version 10 (v0.4.3) adds the price_items.staple column through
  * [MIGRATION_9_10]: the eleven pantry staples became priced price book
- * items (Battles: "everything should be in the pricing book"), and the
+ * items (the user: "everything should be in the pricing book"), and the
  * flag carries their staple identity for pantry coverage and Sunday
  * restock now that recipes reference them as priced items. The column
  * defaults to 0; the seed refresh inserts the new staple rows (flagged)
@@ -84,7 +84,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * proves from a populated v10 database.
  *
  * Version 12 (Phase RI-1, v0.5.0) adds the recipe_overrides table
- * through [MIGRATION_11_12]: Andrea's saved household ingredient list
+ * through [MIGRATION_11_12]: the user's saved household ingredient list
  * for one library recipe per row, created empty on upgrade — no recipe
  * has household edits until she makes one. Tonight-only edits need NO
  * table: they ride inside the plans' existing nightsJson as a new
@@ -94,17 +94,26 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * from a populated v11 database.
  *
  * Version 13 (Phase RI-2, v0.5.1) adds the imported_recipes table
- * through [MIGRATION_12_13]: Andrea's own imported and hand-made
+ * through [MIGRATION_12_13]: the user's own imported and hand-made
  * recipes, one full recipe per row, created empty on upgrade — the app
  * gains no recipes until she brings one in. The table is household
  * data: the seed refresh never touches it. Every v12 table and row
  * carries over untouched, which the instrumented migration test
  * proves from a populated v12 database.
  *
- * Version 15 (Phase RI-3, Battles's correction 2026-10-24) adds the
+ * Version 15 (Phase RI-3, the user's correction 2026-10-24) adds the
  * guess-priced mark to price_items through [MIGRATION_14_15]: an item
  * that entered the book from a recipe import carries its guessed price
  * until the first real price write clears the mark.
+ *
+ * Version 17 (Phase C1) makes stores user data through
+ * [MIGRATION_16_17]: the stores table is created and seeded with the
+ * three chains pre-C1 installs could reference, and stored store
+ * values are rewritten from enum names ("ALDI", "SAMS_CLUB") to store
+ * ids ("aldi", "sams-club") in price_items.homeStore,
+ * grocery_items.store, and inside price_items.alternatesJson. No user
+ * row is deleted or reset; every price, recipe, plan, and setting
+ * carries over, which the populated-v16 upgrade test proves.
  *
  * Version 16 (v0.6.3) carries two household additions through
  * [MIGRATION_15_16]: recipe_overrides gains stepsJson (her household
@@ -118,7 +127,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * Version 14 (Phase RI-3, v0.5.2) carries the weekly list's new line
  * state through [MIGRATION_13_14]: grocery_items gains
  * coveredByPantryName (the pantry entry a crossed-out line names; null
- * on every stored buy line), uncrossed (a buy line Andrea uncrossed
+ * on every stored buy line), uncrossed (a buy line the user uncrossed
  * for its week; 0 on every stored row), and priceGuessCents (the
  * placeholder guess a priced-less line carries; null on priced lines),
  * and the keep_prompt_asked table is created empty (the first-cook
@@ -153,8 +162,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ImportedRecipeEntity::class,
         KeepPromptEntity::class,
         LabelNutritionEntity::class,
+        StoreEntity::class,
     ],
-    version = 16,
+    version = 17,
     exportSchema = false,
 )
 abstract class DinnerBotDatabase : RoomDatabase() {
@@ -176,6 +186,7 @@ abstract class DinnerBotDatabase : RoomDatabase() {
     abstract fun importedRecipeDao(): ImportedRecipeDao
     abstract fun keepPromptDao(): KeepPromptDao
     abstract fun labelNutritionDao(): LabelNutritionDao
+    abstract fun storeDao(): StoreDao
 
     companion object {
         /** v2 to v3: create the recipe_ratings table. Nothing else changes. */
@@ -367,7 +378,7 @@ abstract class DinnerBotDatabase : RoomDatabase() {
 
         /**
          * v14 to v15: the guess-priced mark on price book items
-         * (Battles's correction, 2026-10-24). Additive with a default:
+         * (the user's correction, 2026-10-24). Additive with a default:
          * every existing item starts unmarked — its price is a real
          * one. The backfill that creates items for pre-correction
          * imports runs in the app's load path, not here: it needs the
@@ -390,6 +401,38 @@ abstract class DinnerBotDatabase : RoomDatabase() {
          * upgrade on, one per item whose barcode she scans. Additive
          * only.
          */
+        /**
+         * v16 to v17 (Phase C1): stores become user data. The stores
+         * table is created and seeded with the three legacy chains (in
+         * the old enum's order) so every store value a v16 install can
+         * hold has a name; stored values in price_items, grocery_items
+         * and the alternates JSON are rewritten from enum names to
+         * store ids. Nothing else moves: no row is deleted, no user
+         * value is reset.
+         */
+        val MIGRATION_16_17: Migration = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `stores` (" +
+                        "`id` TEXT NOT NULL, `name` TEXT NOT NULL, " +
+                        "`sortOrder` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+                )
+                db.execSQL("INSERT OR IGNORE INTO `stores` (`id`, `name`, `sortOrder`) VALUES ('aldi', 'Aldi', 0)")
+                db.execSQL("INSERT OR IGNORE INTO `stores` (`id`, `name`, `sortOrder`) VALUES ('walmart', 'Walmart', 1)")
+                db.execSQL("INSERT OR IGNORE INTO `stores` (`id`, `name`, `sortOrder`) VALUES ('sams-club', 'Sam''s Club', 2)")
+                db.execSQL("UPDATE `price_items` SET `homeStore` = 'aldi' WHERE `homeStore` = 'ALDI'")
+                db.execSQL("UPDATE `price_items` SET `homeStore` = 'walmart' WHERE `homeStore` = 'WALMART'")
+                db.execSQL("UPDATE `price_items` SET `homeStore` = 'sams-club' WHERE `homeStore` = 'SAMS_CLUB'")
+                db.execSQL("UPDATE `grocery_items` SET `store` = 'aldi' WHERE `store` = 'ALDI'")
+                db.execSQL("UPDATE `grocery_items` SET `store` = 'walmart' WHERE `store` = 'WALMART'")
+                db.execSQL("UPDATE `grocery_items` SET `store` = 'sams-club' WHERE `store` = 'SAMS_CLUB'")
+                db.execSQL(
+                    "UPDATE `price_items` SET `alternatesJson` = " +
+                        "REPLACE(REPLACE(REPLACE(`alternatesJson`, 'ALDI', 'aldi'), 'WALMART', 'walmart'), 'SAMS_CLUB', 'sams-club')",
+                )
+            }
+        }
+
         val MIGRATION_15_16: Migration = object : Migration(15, 16) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `recipe_overrides` ADD COLUMN `stepsJson` TEXT")
@@ -410,6 +453,7 @@ abstract class DinnerBotDatabase : RoomDatabase() {
                     MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
                     MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
                     MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
+                    MIGRATION_16_17,
                 )
                 .fallbackToDestructiveMigration()
                 .build()

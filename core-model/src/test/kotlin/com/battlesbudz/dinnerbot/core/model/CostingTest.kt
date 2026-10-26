@@ -9,7 +9,7 @@ class CostingTest {
 
     private fun item(
         id: String,
-        store: Store,
+        store: String,
         packAmount: Double,
         unit: MeasureUnit,
         packPrice: Int,
@@ -29,15 +29,15 @@ class CostingTest {
         alternates = alternates,
     )
 
-    private val turkey = item("ground-turkey", Store.WALMART, 1.0, MeasureUnit.POUND, 198)
-    private val beef = item("ground-beef", Store.WALMART, 1.0, MeasureUnit.POUND, 500)
+    private val turkey = item("ground-turkey", "walmart", 1.0, MeasureUnit.POUND, 198)
+    private val beef = item("ground-beef", "walmart", 1.0, MeasureUnit.POUND, 500)
     private val tenderloin = item(
-        "pork-tenderloin", Store.SAMS_CLUB, 9.0, MeasureUnit.POUND, 2168,
+        "pork-tenderloin", "sams-club", 9.0, MeasureUnit.POUND, 2168,
         perUnit = 240.9,
-        alternates = listOf(StorePrice(Store.ALDI, 297.0), StorePrice(Store.WALMART, 417.0)),
+        alternates = listOf(StorePrice("aldi", 297.0), StorePrice("walmart", 417.0)),
     )
-    private val spaghetti = item("spaghetti", Store.ALDI, 32.0, MeasureUnit.OUNCE, 209, perUnit = 6.53)
-    private val eggs = item("eggs", Store.ALDI, 12.0, MeasureUnit.COUNT, 185, perUnit = 15.4)
+    private val spaghetti = item("spaghetti", "aldi", 32.0, MeasureUnit.OUNCE, 209, perUnit = 6.53)
+    private val eggs = item("eggs", "aldi", 12.0, MeasureUnit.COUNT, 185, perUnit = 15.4)
 
     private fun recipe(id: String, vararg ingredients: RecipeIngredient) = Recipe(
         id = id, title = id, servings = 4, activeMinutes = 10, cuisine = "Test",
@@ -49,13 +49,15 @@ class CostingTest {
 
     private val book = listOf(turkey, beef, tenderloin, spaghetti, eggs).associateBy { it.id }
 
-    @Test fun groundBeefIsAlwaysSubstitutedWithTurkey() {
-        assertEquals("ground-turkey", Costing.substituteItemId("ground-beef"))
+    @Test fun groundBeefCostsAsItselfWithNoSubstitution() {
+        // Phase C1: automatic substitution is gone entirely. A beef item
+        // costs, plans and lists as itself, at its own price.
         val dinner = recipe("meatloaf", priced("ground-beef", 1.0, MeasureUnit.POUND))
         val costed = Costing.costRecipes(listOf(dinner), 4, book, emptyMap())
         assertEquals(1, costed.lines.size)
-        assertEquals("ground-turkey", costed.lines[0].itemId)
-        assertEquals(198, costed.cashNeededCents)
+        assertEquals("ground-beef", costed.lines[0].itemId)
+        assertEquals("walmart", costed.lines[0].store)
+        assertEquals(500, costed.cashNeededCents)
     }
 
     @Test fun bulkStockCoversNeedAtZeroCash() {
@@ -69,38 +71,37 @@ class CostingTest {
         assertEquals(301, costed.foodCostCents)
     }
 
-    @Test fun samsPackChargesFullPriceInBuyWeekWhenGateIsMet() {
-        // 7 lb used this week -> 28 lb/month x (297 - 240.9)c = $15.71 >= $15 gate.
+    @Test fun bulkPackChargesFullPriceInBuyWeek() {
+        // Bulk pack costing is ordinary pantry logic (Phase C1): the full
+        // pack is charged in the buy week at the item's home store.
         val dinner = recipe("pork-feast", priced("pork-tenderloin", 7.0, MeasureUnit.POUND))
         val costed = Costing.costRecipes(listOf(dinner), 4, book, emptyMap())
-        assertTrue(costed.gate.useSams)
         val line = costed.lines.single { it.itemId == "pork-tenderloin" }
-        assertEquals(Store.SAMS_CLUB, line.store)
+        assertEquals("sams-club", line.store)
         assertEquals(1, line.packsToBuy)
         assertEquals(2168, costed.cashNeededCents)
     }
 
-    @Test fun gateOffReroutesSamsItemToCheapestRegularStore() {
-        // 1.25 lb this week -> 5 lb/month x 56.1c = $2.80 < $15 gate.
+    @Test fun smallBulkNeedIsNeverReroutedToAnotherStore() {
+        // Phase C1: the warehouse gate and its rerouting are deleted. Even
+        // a small need buys the full pack at the item's own home store;
+        // no line is ever moved to a cheaper alternate store.
         val dinner = recipe("pork-skillet", priced("pork-tenderloin", 1.25, MeasureUnit.POUND))
         val costed = Costing.costRecipes(listOf(dinner), 4, book, emptyMap())
-        assertFalse(costed.gate.useSams)
-        // 5 lb/month x 56.1c = about $2.80.
-        assertTrue(costed.gate.projectedMonthlySavingsCents in 278..283)
         val line = costed.lines.single { it.itemId == "pork-tenderloin" }
-        assertEquals(Store.ALDI, line.store)
-        // Bought by weight at Aldi's $2.97/lb: 1.25 x 297 = 371c.
-        assertEquals(371, costed.cashNeededCents)
+        assertEquals("sams-club", line.store)
+        assertEquals(1, line.packsToBuy)
+        assertEquals(2168, costed.cashNeededCents)
     }
 
     @Test fun partialStockCoverBuysOnlyTheRemainder() {
-        // Gate-met usage (7 lb) with 5 lb on hand: still buys one full pack.
+        // Heavy usage (7 lb) with 5 lb on hand: still buys one full pack.
         val dinner = recipe("pork-feast", priced("pork-tenderloin", 7.0, MeasureUnit.POUND))
         val stock = mapOf("pork-tenderloin" to Quantity.pounds(5.0))
         val costed = Costing.costRecipes(listOf(dinner), 4, book, stock)
         assertTrue(costed.stockCoveredItemIds.contains("pork-tenderloin"))
         val line = costed.lines.single { it.itemId == "pork-tenderloin" }
-        assertEquals(Store.SAMS_CLUB, line.store)
+        assertEquals("sams-club", line.store)
         assertEquals(2168, line.estimatedPackPriceCents)
     }
 

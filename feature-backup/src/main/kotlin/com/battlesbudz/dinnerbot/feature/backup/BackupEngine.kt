@@ -45,7 +45,7 @@ data class BackupScanSubstitution(
 
 /**
  * One household recipe edit inside a backup file (Phase RI-1): the full
- * ingredient list Andrea saved over a library recipe. The recipe itself
+ * ingredient list the user saved over a library recipe. The recipe itself
  * is seed content and is not carried; the override names it by id and
  * applies on the phone that imports the file, whose seed library
  * carries the recipe. [steps] rides from format v9 (v0.6.3): her
@@ -77,7 +77,7 @@ data class BackupLabelNutrition(
 )
 
 /**
- * One recipe Andrea brought into the app herself, inside a backup file
+ * One recipe the user brought into the app, inside a backup file
  * (Phase RI-2): the full recipe as she saved it, its source link, and
  * when it was added. Unlike a library recipe this one is household
  * data through and through (there is no seed copy anywhere), so the
@@ -92,12 +92,12 @@ data class BackupImportedRecipe(
 
 /**
  * One JSON file carrying the user's own data: settings, the full price book
- * (including Andrea's corrections), the pantry checklist, Sam's bulk stock,
+ * (including the user's corrections), the pantry checklist, bulk stock,
  * recipe thumbs ratings, learned barcode links, and the Sunday
  * reconciliation state (ran-out events and cook check-offs, Phase V2-7, so
  * a phone swap mid-week does not lose the ran-out list). Moving it goes
  * through the Android system file picker only; a backup can never leave
- * the phone unless the user picks a destination herself.
+ * the phone unless the user picks a destination.
  *
  * Format version 2 (v0.2.0) adds recipeRatings. Version 1 files carry no
  * ratings field and import with ratings empty.
@@ -110,23 +110,23 @@ data class BackupImportedRecipe(
  *
  * Format version 5 (v0.4.4) adds scanSubstitutions, the remembered
  * barcode-scan swaps. The price book section already carries items
- * Andrea added from scans wholesale (they are ordinary book items), so
+ * the user added from scans wholesale (they are ordinary book items), so
  * their links and swaps keep resolving after a restore. Older files
  * import with substitutions empty.
  *
- * Format version 6 (v0.5.0) adds recipeOverrides, Andrea's saved
+ * Format version 6 (v0.5.0) adds recipeOverrides, the user's saved
  * household ingredient lists for library recipes (Phase RI-1), so a
  * phone swap never silently loses the corrections she made forever.
  * Older files import with overrides empty. Tonight-only edits do not
  * ride, consistently with plans not riding.
  *
- * Format version 7 (v0.5.1) adds importedRecipes, the recipes Andrea
+ * Format version 7 (v0.5.1) adds importedRecipes, the recipes the user
  * brought into the app herself (Phase RI-2): imported from a page or a
  * paste, or created by hand. They are household data with no seed copy
  * anywhere, so the file carries each one whole. Older files import
  * with imported recipes empty.
  *
- * Format version 8 (Phase RI-3, Battles's correction 2026-10-24) marks
+ * Format version 8 (Phase RI-3, the user's correction 2026-10-24) marks
  * guess-priced price book items: an item a recipe import created
  * carries its guessed price and its guess mark, and the mark has to
  * survive a phone swap like the price does. The mark rides on the

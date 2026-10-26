@@ -29,7 +29,7 @@ class BackupBarcodeLinksTest {
         priceItems = listOf(
             PriceItem(
                 id = "rotini", name = "Rotini", category = "Pantry",
-                homeStore = Store.ALDI, packDescription = "16 oz",
+                homeStore = "aldi", packDescription = "16 oz",
                 packQuantity = Quantity(16.0, MeasureUnit.OUNCE), packPriceCents = 129,
                 pricePerUnitCents = 8.1, checkedDate = "2026-10-22", source = "test",
             ),

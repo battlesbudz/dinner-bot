@@ -73,7 +73,7 @@ class PlanMapperTest {
         val line = GroceryLine(
             itemId = "ground-turkey",
             displayName = "Ground turkey",
-            store = Store.WALMART,
+            store = "walmart",
             needed = Quantity(2.0, MeasureUnit.POUND),
             packsToBuy = 2,
             estimatedPackPriceCents = 198,
@@ -90,7 +90,7 @@ class PlanMapperTest {
         val line = GroceryLine(
             itemId = "user-chicken-drumsticks",
             displayName = "Chicken drumsticks",
-            store = Store.ALDI,
+            store = "aldi",
             needed = Quantity(4.0, MeasureUnit.POUND),
             packsToBuy = 1,
             estimatedPackPriceCents = 499,

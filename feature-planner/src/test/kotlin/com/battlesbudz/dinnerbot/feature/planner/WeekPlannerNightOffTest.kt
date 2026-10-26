@@ -20,7 +20,7 @@ import org.junit.Test
  */
 class WeekPlannerNightOffTest {
 
-    private fun item(id: String, store: Store, packAmount: Double, unit: MeasureUnit, packPrice: Int) =
+    private fun item(id: String, store: String, packAmount: Double, unit: MeasureUnit, packPrice: Int) =
         PriceItem(
             id = id, name = id, category = "Test", homeStore = store, packDescription = "pack",
             packQuantity = Quantity(packAmount, unit), packPriceCents = packPrice,
@@ -28,9 +28,9 @@ class WeekPlannerNightOffTest {
             checkedDate = "2026-10-22", source = "test",
         )
 
-    private val eggs = item("eggs", Store.ALDI, 12.0, MeasureUnit.COUNT, 185)
-    private val spaghetti = item("spaghetti", Store.ALDI, 32.0, MeasureUnit.OUNCE, 209)
-    private val turkey = item("ground-turkey", Store.WALMART, 1.0, MeasureUnit.POUND, 198)
+    private val eggs = item("eggs", "aldi", 12.0, MeasureUnit.COUNT, 185)
+    private val spaghetti = item("spaghetti", "aldi", 32.0, MeasureUnit.OUNCE, 209)
+    private val turkey = item("ground-turkey", "walmart", 1.0, MeasureUnit.POUND, 198)
     private val book = listOf(eggs, spaghetti, turkey)
     private val itemsById = book.associateBy { it.id }
 

@@ -14,19 +14,18 @@ import com.battlesbudz.dinnerbot.core.model.RanOutSource
 import com.battlesbudz.dinnerbot.core.model.RanOutState
 import com.battlesbudz.dinnerbot.core.model.Recipe
 import com.battlesbudz.dinnerbot.core.model.ReconciledOut
-import com.battlesbudz.dinnerbot.core.model.Store
 
 /**
  * The Sunday reconciliation engine (Phase V2-7, scope B4). Pure and
  * deterministic, like the planner it gates: the same inputs always
- * produce the same session and outcome, which is what makes Battles's
+ * produce the same session and outcome, which is what makes the user's
  * flow testable end to end.
  *
  * The flow, in his order:
  * 0. During the week, the cook view records ingredient check-offs and
  *    ran-out marks ([RanOutEvent]s in state PENDING).
  * 1. Starting a new week opens reconciliation BEFORE planning, with three
- *    lists: what Andrea marked ran out, what the inference believes may
+ *    lists: what the user marked ran out, what the inference believes may
  *    also be out ([inferPossibleOuts]), and the pantry she owns.
  * 2. Only after reconciliation is the week planned, from the corrected
  *    pantry and stock state (the write-back lives in feature-pantry).
@@ -58,7 +57,7 @@ object Reconciliation {
     )
 
     /**
-     * A prepared reconciliation: the three lists in Battles's order.
+     * A prepared reconciliation: the three lists in the user's order.
      * [pantryChecklist] and [bulkChecklist] are list 3 and are populated
      * only for [CheckKind.FULL]; the top-up check asks lists 1 and 2.
      */
@@ -71,20 +70,20 @@ object Reconciliation {
         val possibleOuts: List<PossibleOut>,
         /** List 3, part 1: the pantry staples the app believes she owns. */
         val pantryChecklist: List<PantryItem>,
-        /** List 3, part 2: Sam's bulk items with stock on hand. */
+        /** List 3, part 2: bulk items with stock on hand. */
         val bulkChecklist: List<PriceItem>,
     ) {
         /** The flow's steps in display order; list 3 exists only in a full check. */
         val stepCount: Int get() = if (kind == CheckKind.FULL) 3 else 2
     }
 
-    /** What Andrea answered inside the flow. Undecided possibles stay undecided. */
+    /** What the user answered inside the flow. Undecided possibles stay undecided. */
     data class SessionChoices(
         val confirmedPossibleKeys: Set<String> = emptySet(),
         val dismissedPossibleKeys: Set<String> = emptySet(),
         /** Pantry checklist entries (pantry item ids) she checked as actually missing. */
         val missingPantryIds: Set<String> = emptySet(),
-        /** Sam's bulk item ids she checked as all gone. */
+        /** Bulk item ids the user checked as all gone. */
         val missingBulkItemIds: Set<String> = emptySet(),
     )
 
@@ -128,9 +127,9 @@ object Reconciliation {
      * nothing and proposes nothing.
      *
      * "Never restocked since" reads the evidence the app actually keeps:
-     * - Sam's bulk items: current tracked stock above zero is the item
+     * - Bulk items: current tracked stock above zero is the item
      *   restocked (or never finished); stock at zero includes stock the
-     *   plan itself drew to zero, one of the cases Battles named.
+     *   plan itself drew to zero, one of the cases the user named.
      * - Priced items an owned pantry entry covers by name are asserted on
      *   hand by the pantry itself; list 3 is where that gets corrected.
      * - Pantry staples (the unpriced names, and since v0.4.3 the priced
@@ -226,8 +225,8 @@ object Reconciliation {
                         reason = "Used by ${used.usedBy}; not bought since.",
                     )
                 }
-                // Sam's bulk: tracked stock is the truth; above zero, it is home.
-                item != null && item.homeStore == Store.SAMS_CLUB -> {
+                // Bulk: tracked stock is the truth; above zero, it is home.
+                item != null && item.freezeNote != null -> {
                     val onHand = stockOnHand[item.id]?.toBase() ?: 0.0
                     if (onHand > EPSILON) continue
                     possibles += PossibleOut(
@@ -270,7 +269,7 @@ object Reconciliation {
                 }
             }
         }
-        // Staples first (Battles's inference order), then by name for stability.
+        // Staples first (the user's inference order), then by name for stability.
         return possibles.sortedWith(compareBy({ !it.stapleSide }, { it.displayName.lowercase() }))
     }
 
@@ -288,9 +287,9 @@ object Reconciliation {
     // ------------------------------------------------------------------
 
     /**
-     * Assemble the three lists in Battles's order. Lists 1 and 2 come
+     * Assemble the three lists in the user's order. Lists 1 and 2 come
      * from the caller's event and inference passes; list 3 is the owned
-     * pantry plus the Sam's bulk items with stock on hand, full checks
+     * pantry plus the bulk items with stock on hand, full checks
      * only.
      */
     fun buildSession(
@@ -321,7 +320,7 @@ object Reconciliation {
             },
             bulkChecklist = if (full) {
                 priceItems
-                    .filter { it.homeStore == Store.SAMS_CLUB }
+                    .filter { it.freezeNote != null }
                     .filter { (stockOnHand[it.id]?.toBase() ?: 0.0) > EPSILON }
                     .sortedBy { it.name.lowercase() }
             } else {
@@ -411,7 +410,7 @@ object Reconciliation {
                         displayName = covered.name,
                         stapleSide = true,
                         priceItemId = covered.id,
-                        bulkItemId = covered.takeIf { it.homeStore == Store.SAMS_CLUB }?.id,
+                        bulkItemId = covered.takeIf { it.freezeNote != null }?.id,
                     ),
                 )
             }

@@ -11,7 +11,7 @@ import org.junit.Test
 
 class SeedValidatorTest {
     private fun item(id: String, price: Int) = PriceItem(
-        id = id, name = id, category = "Meat", homeStore = Store.WALMART,
+        id = id, name = id, category = "Meat", homeStore = "walmart",
         packDescription = "pack", packQuantity = Quantity.pounds(1.0),
         packPriceCents = price, pricePerUnitCents = price.toDouble(),
         checkedDate = "2026-10-22", source = "test",
@@ -26,6 +26,14 @@ class SeedValidatorTest {
 
     @Test fun validDataPasses() {
         assertTrue(SeedValidator.validate(listOf(item("ground-turkey", 198)), listOf(recipe("ground-turkey"))).isEmpty())
+    }
+
+    @Test fun beefItemsAndRecipesAreLegalSeedContent() {
+        // Phase C1: the seed validator's beef ban is deleted. A beef item
+        // and a beef recipe validate exactly like any other food.
+        val beef = item("ground-beef", 549)
+        val beefRecipe = recipe("ground-beef").copy(title = "Beef meatloaf", mainProtein = "Ground beef")
+        assertTrue(SeedValidator.validate(listOf(beef), listOf(beefRecipe)).isEmpty())
     }
 
     @Test fun zeroPriceFails() {

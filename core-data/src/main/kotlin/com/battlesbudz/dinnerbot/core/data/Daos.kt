@@ -22,7 +22,7 @@ interface PriceItemDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(item: PriceItemEntity)
 
-    /** Andrea's in-app correction: her number always wins and is flagged as user-corrected. */
+    /** the user's in-app correction: her number always wins and is flagged as user-corrected. */
     @Query(
         "UPDATE price_items SET packPriceCents = :packPriceCents, pricePerUnitCents = :pricePerUnitCents, " +
             "userCorrected = 1 WHERE id = :id"
@@ -378,4 +378,17 @@ interface SettingsDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(settings: SettingsEntity)
+}
+
+/** The user's stores (Phase C1), read back in shopping order. */
+@Dao
+interface StoreDao {
+    @Query("SELECT * FROM stores ORDER BY sortOrder, name")
+    suspend fun getAll(): List<StoreEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(stores: List<StoreEntity>)
+
+    @Query("DELETE FROM stores")
+    suspend fun deleteAll()
 }

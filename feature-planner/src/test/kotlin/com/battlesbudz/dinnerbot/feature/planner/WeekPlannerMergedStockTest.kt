@@ -20,20 +20,20 @@ class WeekPlannerMergedStockTest {
 
     private val tenderloin = PriceItem(
         id = "pork-tenderloin", name = "Pork tenderloin", category = "Meat",
-        homeStore = Store.SAMS_CLUB, packDescription = "9 lb pack",
+        homeStore = "sams-club", packDescription = "9 lb pack",
         packQuantity = Quantity(9.0, MeasureUnit.POUND), packPriceCents = 2168,
         pricePerUnitCents = 240.9, checkedDate = "2026-10-23", source = "test",
     )
     private val salt = PriceItem(
         id = "salt", name = "Salt", category = "Dry and canned",
-        homeStore = Store.ALDI, packDescription = "26 oz canister",
+        homeStore = "aldi", packDescription = "26 oz canister",
         packQuantity = Quantity(26.0, MeasureUnit.OUNCE), packPriceCents = 89,
         pricePerUnitCents = 3.4, checkedDate = "2026-10-23", source = "test",
         staple = true,
     )
     private val samsChicken = PriceItem(
         id = "sams-chicken", name = "Sam's chicken", category = "Meat",
-        homeStore = Store.SAMS_CLUB, packDescription = "10 lb pack",
+        homeStore = "sams-club", packDescription = "10 lb pack",
         packQuantity = Quantity(10.0, MeasureUnit.POUND), packPriceCents = 1800,
         pricePerUnitCents = 180.0, checkedDate = "2026-10-23", source = "test",
     )
@@ -86,7 +86,7 @@ class WeekPlannerMergedStockTest {
         // used, leaves 6 lb. Week 2 must start from the chicken.
         val swapLine = GroceryLine(
             itemId = samsChicken.id, displayName = samsChicken.name,
-            store = Store.SAMS_CLUB, needed = Quantity(4.0, MeasureUnit.POUND),
+            store = "sams-club", needed = Quantity(4.0, MeasureUnit.POUND),
             packsToBuy = 1, estimatedPackPriceCents = 1800,
             substitutedForItemId = "pork-tenderloin",
         )
@@ -109,13 +109,13 @@ class WeekPlannerMergedStockTest {
         // leftover is 2 lb, and the projection moves by the delta.
         val mergedSwap = GroceryLine(
             itemId = samsChicken.id, displayName = samsChicken.name,
-            store = Store.SAMS_CLUB, needed = Quantity(8.0, MeasureUnit.POUND),
+            store = "sams-club", needed = Quantity(8.0, MeasureUnit.POUND),
             packsToBuy = 1, estimatedPackPriceCents = 1800,
             substitutedForItemId = "pork-tenderloin",
         )
         val costed = GroceryLine(
             itemId = samsChicken.id, displayName = samsChicken.name,
-            store = Store.SAMS_CLUB, needed = Quantity(4.0, MeasureUnit.POUND),
+            store = "sams-club", needed = Quantity(4.0, MeasureUnit.POUND),
             packsToBuy = 1, estimatedPackPriceCents = 1800,
         )
         val result = WeekPlanner.stockWithMergedPacks(
