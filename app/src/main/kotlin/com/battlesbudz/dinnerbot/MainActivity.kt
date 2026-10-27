@@ -457,9 +457,11 @@ private fun DinnerBotApp(
             // the ordinary photo plumbing below. A failure here must
             // never block loading; the seeder retries on a later start.
             runCatching {
-                BundledPhotoSeeder.seedIfNeeded(context, database) { name ->
-                    context.assets.open(name)
-                }
+                BundledPhotoSeeder.seedIfNeeded(
+                    context = context,
+                    database = database,
+                    openAsset = { name -> context.assets.open(name) },
+                )
             }
             val loadedPresets = runCatching {
                 SeedDataParser.parseDietPresets(loadAsset("diet-presets.json"))
