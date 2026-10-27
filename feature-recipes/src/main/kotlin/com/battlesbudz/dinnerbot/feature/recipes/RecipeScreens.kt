@@ -276,12 +276,14 @@ fun RecipeDetailScreen(
         }
 
         // The recipe's photo heads the screen (v0.6.0 redesign), the way
-        // it heads the approved mockups. Household photo plumbing is
-        // unchanged (Epic issue #10, D-V2-2): the household's own photo
-        // of this dinner, attached from the phone's photos through the
-        // system photo picker (no permission needed) and stored on this
-        // phone only. No photo is bundled with the app; a recipe with
-        // none shows a clean placeholder and the add entry.
+        // it heads the approved mockups. Photo plumbing is unchanged
+        // (Epic issue #10, D-V2-2): a photo attached from the phone's
+        // photos through the system photo picker (no permission needed)
+        // is stored on this phone only. Starter recipes also arrive
+        // with a bundled photo and its credit (Phase C2), recorded the
+        // same way at first install; the user can replace or remove it
+        // like any photo. A recipe with none shows a clean placeholder
+        // and the add entry.
         val photoPicker = rememberLauncherForActivityResult(
             ActivityResultContracts.PickVisualMedia(),
         ) { picked -> if (picked != null) onPhotoPicked(picked) }

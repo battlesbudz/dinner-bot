@@ -21,9 +21,11 @@ import java.io.FileOutputStream
  * Android Auto Backup never uploads it, so a photo can never leave
  * this phone through a backup or reappear on another device — the
  * recipe screens say the photo is stored on this phone only, and this
- * is what makes that true. Nothing here touches the network, no photo
- * is bundled with the app, and importing a backup neither creates nor
- * deletes photo files.
+ * is what makes that true. Nothing here touches the network, and
+ * importing a backup neither creates nor deletes photo files. The
+ * bundled starter photos (Phase C2) are copied into this same folder
+ * at first install by [BundledPhotoSeeder]; after that they are
+ * ordinary local photo files like any other.
  */
 object RecipePhotoStore {
 

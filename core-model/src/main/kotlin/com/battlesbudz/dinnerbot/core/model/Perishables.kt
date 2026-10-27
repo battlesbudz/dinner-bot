@@ -8,7 +8,8 @@ package com.battlesbudz.dinnerbot.core.model
  * categories, and lives here so the planner, the grocery list, and the app
  * can never disagree about which list a line belongs on:
  *
- * - Perishable categories: "Produce", "Dairy and eggs", "Meat". Fresh food
+ * - Perishable categories: "Produce", "Dairy and eggs", "Meat", "Seafood"
+ *   (the seafood category arrived with the Phase C2 library). Fresh food
  *   with a fridge life measured in days.
  * - Everything else ("Dry and canned", "Frozen", "Bread") keeps for the
  *   fortnight and rides the big trip.
@@ -22,7 +23,7 @@ package com.battlesbudz.dinnerbot.core.model
 object Perishables {
 
     /** Price book categories whose food spoils too fast to buy a week ahead. */
-    val PERISHABLE_CATEGORIES: Set<String> = setOf("Produce", "Dairy and eggs", "Meat")
+    val PERISHABLE_CATEGORIES: Set<String> = setOf("Produce", "Dairy and eggs", "Meat", "Seafood")
 
     fun isPerishable(item: PriceItem): Boolean = item.category in PERISHABLE_CATEGORIES
 

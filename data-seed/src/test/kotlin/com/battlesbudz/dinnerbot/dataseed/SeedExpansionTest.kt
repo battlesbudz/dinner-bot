@@ -10,11 +10,12 @@ import org.junit.Test
 import java.io.File
 
 /**
- * v0.1.2 content expansion guarantees, checked against the REAL canonical
- * seed files in repo-root seed-data/: the library grew from 12 to 36 recipes,
- * the price book covers every ingredient the new recipes use (with matching
- * units), per-serving costs compute for every recipe, and the essential /
- * removable marks the won't-eat rule depends on are present and sane.
+ * Content expansion guarantees, checked against the REAL canonical
+ * seed files in repo-root seed-data/: the library grew from 12 to 36
+ * recipes in v0.1.2 and to 100 in Phase C2, the price book covers every
+ * ingredient the recipes use (with matching units), per-serving costs
+ * compute for every recipe, and the essential / removable marks the
+ * won't-eat rule depends on are present and sane.
  */
 class SeedExpansionTest {
     private val json = Json { ignoreUnknownKeys = true }
@@ -60,23 +61,41 @@ class SeedExpansionTest {
         "canned-diced-tomatoes", "bell-peppers", "frozen-broccoli", "egg-noodles",
     )
 
-    @Test fun libraryGrewTo36RecipesAnd31PriceItems() {
-        assertEquals(36, recipesFile.recipes.size)
-        // v0.4.3: the eleven pantry staples became priced items, 31 + 11.
-        assertEquals(43, priceBook.items.size)
+    @Test fun libraryGrewTo100RecipesAnd78PriceItems() {
+        // Phase C2: the starter library is 100 recipes. The price book
+        // is the C1 book of 43 (31 original + 11 staples + ground beef)
+        // plus C2's 35 items for the broader library.
+        assertEquals(100, recipesFile.recipes.size)
+        assertEquals(78, priceBook.items.size)
         val recipeIds = recipesFile.recipes.map { it.id }.toSet()
         for (id in newRecipeIds) assertTrue("missing new recipe $id", id in recipeIds)
         val itemIds = priceBook.items.map { it.id }.toSet()
         for (id in newItemIds) assertTrue("missing new price item $id", id in itemIds)
     }
 
-    @Test fun proteinSpreadAcrossAll36() {
+    @Test fun proteinSpreadAcrossTheLibrary() {
         val counts = recipesFile.recipes.groupingBy { it.mainProtein }.eachCount()
-        assertEquals(10, counts["Ground turkey"])
-        assertEquals(7, counts["Chicken"])
-        assertEquals(8, counts["Pork"])
-        assertEquals(5, counts["Egg"])
-        assertEquals(6, counts["Cheese"])
+        // The household's original 36 (turkey 10, chicken 7, pork 8,
+        // egg 5, cheese 6) plus the Phase C2 spread: beef, seafood,
+        // and a meatless bench the public library needs.
+        assertEquals(14, counts["Ground turkey"])
+        assertEquals(18, counts["Chicken"])
+        assertEquals(17, counts["Pork"])
+        assertEquals(8, counts["Egg"])
+        assertEquals(12, counts["Cheese"])
+        assertEquals(8, counts["Ground beef"])
+        assertEquals(5, counts["Beef"])
+        assertEquals(4, counts["Shrimp"])
+        assertEquals(3, counts["Beans"])
+        assertEquals(2, counts["Cod"])
+        assertEquals(2, counts["Tuna"])
+        assertEquals(2, counts["Vegetables"])
+        assertEquals(1, counts["Bacon"])
+        assertEquals(1, counts["Salmon"])
+        assertEquals(1, counts["Lentils"])
+        assertEquals(1, counts["Chickpeas"])
+        assertEquals(1, counts["Tofu"])
+        assertEquals(100, counts.values.sum())
     }
 
     @Test fun everyPricedIngredientResolvesWithMatchingUnit() {

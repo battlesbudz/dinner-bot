@@ -153,11 +153,22 @@ class ReconciliationInstrumentedTest {
             waitForText("Swap")
 
             // Swap that night's dinner, then open the replacement's cook
-            // view: the old dinner's check-off must not carry over.
+            // view: the old dinner's check-off must not carry over. The
+            // swap persists and clears the night's check-offs
+            // asynchronously, so wait until the cleared state is what
+            // the reopened view shows, then assert it outright.
             composeRule.onAllNodesWithText("Swap").onFirst()
                 .performScrollTo().performClick()
             waitForText("Swap")
             openFirstCookView()
+            composeRule.waitUntil(timeoutMillis = 15_000) {
+                val nodes = composeRule.onAllNodes(hasTagPrefix(USED_PREFIX))
+                    .fetchSemanticsNodes()
+                nodes.isNotEmpty() && nodes.all {
+                    it.config.getOrNull(SemanticsProperties.ToggleableState) ==
+                        androidx.compose.ui.state.ToggleableState.Off
+                }
+            }
             val reopened = composeRule.onAllNodes(hasTagPrefix(USED_PREFIX))
             val count = reopened.fetchSemanticsNodes().size
             assertTrue(count >= 1)

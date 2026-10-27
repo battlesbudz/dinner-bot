@@ -160,7 +160,7 @@ class Migration1213Test {
             val loader = SeedLoader(db)
             db.recipeDao().deleteAll()
             loader.seedIfEmpty(priceJson, recipesJson)
-            assertEquals(36, db.recipeDao().count())
+            assertEquals(100, db.recipeDao().count())
 
             val hers = ImportedRecipe(
                 recipe = Recipe(
@@ -214,7 +214,7 @@ class Migration1213Test {
             val effective = EffectiveRecipes.mergeUserRecipes(
                 library, storedImported.map { it.recipe },
             )
-            assertEquals(37, effective.size)
+            assertEquals(101, effective.size)
             assertEquals(hers.recipe, effective.last())
             // Her override on the bundle recipe is untouched too.
             assertEquals(

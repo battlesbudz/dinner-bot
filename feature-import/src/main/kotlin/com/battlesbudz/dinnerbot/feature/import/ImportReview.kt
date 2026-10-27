@@ -218,7 +218,11 @@ object ImportReview {
             id.contains("pork") || name.contains("pork") -> "Pork"
             id.contains("egg") || name.contains("egg") -> "Egg"
             id.contains("cheese") || name.contains("cheese") -> "Cheese"
+            id.contains("salmon") || name.contains("salmon") -> "Salmon"
+            id.contains("cod") || name.contains("cod") -> "Cod"
+            id.contains("shrimp") || name.contains("shrimp") -> "Shrimp"
             item.category.equals("Meat", ignoreCase = true) -> item.name
+            item.category.equals("Seafood", ignoreCase = true) -> item.name
             else -> null
         }
     }

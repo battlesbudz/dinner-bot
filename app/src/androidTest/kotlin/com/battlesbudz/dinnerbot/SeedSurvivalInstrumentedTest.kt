@@ -142,7 +142,7 @@ class SeedSurvivalInstrumentedTest {
             // one-row recipe table stands in for it until here.)
             db.recipeDao().deleteAll()
             loader.seedIfEmpty(priceJson, recipesJson)
-            assertEquals(36, db.recipeDao().count())
+            assertEquals(100, db.recipeDao().count())
 
             // Her household edit on Turkey Spaghetti, made the way the
             // editor saves it: onions and garlic toast out, turkey doubled.
@@ -203,7 +203,7 @@ class SeedSurvivalInstrumentedTest {
             // Additions and unedited updates flow in normally.
             assertEquals("Egg Fried Rice Deluxe", storedById.getValue("egg-fried-rice").title)
             assertTrue("brand-new-dinner" in storedById)
-            assertEquals(37, storedById.size)
+            assertEquals(101, storedById.size)
 
             // Every other kind of user data is intact after it all.
             assertEquals(799, db.priceItemDao().getById("chicken-breast")!!.packPriceCents)

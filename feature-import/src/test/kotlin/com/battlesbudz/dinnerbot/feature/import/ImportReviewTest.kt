@@ -40,6 +40,8 @@ class ImportReviewTest {
         item("pasta-sauce", "Pasta sauce", pack = Quantity(1.0, MeasureUnit.COUNT)),
         item("chicken-breast", "Chicken breast"),
         item("ground-turkey", "Ground turkey"),
+        item("salmon-fillets", "Salmon fillets"),
+        item("shrimp", "Shrimp"),
     )
     private val itemsById = book.associateBy { it.id }
 
@@ -162,6 +164,13 @@ class ImportReviewTest {
 
     @Test fun mainProteinFallsBackToOther() {
         assertEquals("Other", build(draftOf("1 cup flour")).mainProtein)
+    }
+
+    // Phase C2: the seed book gained a Seafood category; imports matched
+    // to those items classify as their protein, not "Other".
+    @Test fun mainProteinRecognizesSeafoodItems() {
+        assertEquals("Salmon", build(draftOf("1 pound salmon fillets")).mainProtein)
+        assertEquals("Shrimp", build(draftOf("1 pound shrimp")).mainProtein)
     }
 
     @Test fun duplicateSourceFindsTheEarlierImport() {

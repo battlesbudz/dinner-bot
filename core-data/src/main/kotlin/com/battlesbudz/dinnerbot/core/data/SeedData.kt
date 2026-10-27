@@ -22,6 +22,8 @@ import com.battlesbudz.dinnerbot.core.model.RecipeOrigin
 import com.battlesbudz.dinnerbot.core.model.RecipeOverride
 import com.battlesbudz.dinnerbot.core.model.RecipePhoto
 import com.battlesbudz.dinnerbot.core.model.RecipesFile
+import com.battlesbudz.dinnerbot.core.model.SeedPhotoCredit
+import com.battlesbudz.dinnerbot.core.model.SeedPhotosFile
 import com.battlesbudz.dinnerbot.core.model.ReminderSettings
 import com.battlesbudz.dinnerbot.core.model.Store
 import com.battlesbudz.dinnerbot.core.model.StoreIds
@@ -48,6 +50,8 @@ object SeedDataParser {
     fun parseDietPresets(text: String): List<DietPreset> =
         json.decodeFromString<DietPresetsFile>(text).presets
     fun parseNutrition(text: String): NutritionFile = json.decodeFromString<NutritionFile>(text)
+    fun parsePhotoCredits(text: String): List<SeedPhotoCredit> =
+        json.decodeFromString<SeedPhotosFile>(text).photos
 }
 
 /** Pure conversions between core-model types and Room entities. Unit-testable on the JVM. */

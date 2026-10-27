@@ -12,7 +12,7 @@ import java.io.File
 
 /**
  * The v0.1.2 promise, tested against the REAL canonical seed files in
- * repo-root seed-data/: with the library at 36 recipes, the planner fills a
+ * repo-root seed-data/: with the library at 100 recipes, the planner fills a
  * full week of cook nights with no repeated dinner, across regenerate
  * variations, for both a 5-night and a 7-night week, with and without a
  * weekly cash cap.
@@ -89,11 +89,12 @@ class SeedPoolPlannerTest {
         }
     }
 
-    @Test fun poolIsTheFull36() {
-        assertEquals(36, recipesFile.recipes.size)
+    @Test fun poolIsTheFullLibrary() {
+        assertEquals(100, recipesFile.recipes.size)
         // 31 original items plus the eleven staples priced in v0.4.3,
-        // plus ground beef added with the C1 national-average book.
-        assertEquals(43, priceBook.items.size)
+        // ground beef from the C1 national-average book, and the 35
+        // items Phase C2 added for the broader library.
+        assertEquals(78, priceBook.items.size)
     }
 
     @Test fun fortnightFromTheRealPoolFillsBothWeeksWithoutCrossWeekRepeats() {

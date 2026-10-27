@@ -84,6 +84,17 @@ class RecipePhotoInstrumentedTest {
             photoRecipeTitle = photoRecipe.title
             plainRecipeTitle = recipes[1].title
 
+            // Since Phase C2 every library recipe ships with a bundled
+            // photo, which MainActivity seeds on launch; that would hand
+            // the "no photo" recipe below a photo before the test can
+            // look at it. Pre-mark the bundled seeding as done so this
+            // test keeps covering the picked-photo and no-photo paths it
+            // was written for (BundledPhotoSeederTest covers the seeding
+            // itself).
+            val photoDir = RecipePhotoStore.directory(context)
+            photoDir.mkdirs()
+            File(photoDir, ".bundled-photos-seeded").writeText("seeded")
+
             // A "picked" photo: a real JPEG the store copies into place.
             val source = File(context.cacheDir, "picked-source.jpg")
             FileOutputStream(source).use { out ->

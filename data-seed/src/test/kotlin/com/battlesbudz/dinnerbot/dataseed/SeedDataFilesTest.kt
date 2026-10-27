@@ -40,10 +40,11 @@ class SeedDataFilesTest {
         val ids = priceBook.items.map { it.id }.toSet()
         assertTrue("ground-turkey" in ids)
         assertTrue("pork-tenderloin" in ids)
-        assertEquals(36, recipes.recipes.size)
-        // Phase C1: beef content is legal seed content now; the seed set
-        // happens to still be the household's 36 recipes, beef included
-        // only as a price book item (see the national-average test below).
+        assertEquals(100, recipes.recipes.size)
+        // Phase C1: beef content is legal seed content now (see the
+        // national-average test below). Phase C2 grew the library from
+        // the household's 36 recipes to a 100-recipe public starter
+        // library with beef, seafood, and vegetarian variety.
     }
 
     @Test fun bulkPackItemsCarryFreezeNotes() {
@@ -88,12 +89,16 @@ class SeedDataFilesTest {
         )
     }
 
-    /** The Phase V2-2 diet-tag audit (seed-data/DIET_TAG_AUDIT.md), pinned as assertions. */
+    /**
+     * The diet-tag audit (seed-data/DIET_TAG_AUDIT.md: the Phase V2-2
+     * audit plus the Phase C2 addendum), pinned as assertions.
+     */
     @Test fun dietTagsMatchTheAudit() {
         val recipes = json.decodeFromString<RecipesFile>(seedFile("recipes.json").readText())
         val byId = recipes.recipes.associateBy { it.id }
 
-        // Vegetarian: exactly the ten egg and cheese dinners, nothing with meat.
+        // Vegetarian: the audit's ten egg and cheese dinners plus the
+        // C2 meatless additions, nothing with meat or seafood.
         val vegetarian = recipes.recipes.filter { "Vegetarian" in it.dietTags }.map { it.id }.toSet()
         assertEquals(
             setOf(
@@ -101,17 +106,29 @@ class SeedDataFilesTest {
                 "veggie-frittata", "cheese-omelets-home-fries", "rotini-mac-and-cheese",
                 "cheese-quesadillas", "veggie-pasta-bake", "cheesy-potato-skillet",
                 "bean-cheese-burritos",
+                "veggie-lasagna", "lentil-vegetable-soup", "chickpea-tacos",
+                "black-bean-burgers", "tofu-stir-fry", "lasagna-roll-ups",
+                "mushroom-stroganoff", "sweet-potato-chili", "veggie-lo-mein",
+                "potato-corn-chowder", "broccoli-cheddar-soup", "rice-bean-bowls",
+                "broccoli-cheddar-quiche", "shakshuka", "breakfast-hash-eggs",
+                "cheese-enchiladas",
             ),
             vegetarian,
         )
 
-        // Gluten-free: the audit's eight, including the three added in V2-2.
+        // Gluten-free: the audit's eight plus the C2 additions. Sausage
+        // and bacon dishes are never tagged (the addendum's judgment
+        // call), and neither is anything carrying a wheat carrier.
         val glutenFree = recipes.recipes.filter { "Gluten-free" in it.dietTags }.map { it.id }.toSet()
         assertEquals(
             setOf(
                 "turkey-chili", "turkey-bean-chili", "veggie-frittata",
                 "cheese-omelets-home-fries", "cheesy-potato-skillet",
                 "sheet-pan-pork-potatoes", "turkey-shepherds-pie", "potato-egg-skillet",
+                "beef-pot-roast", "beef-chili", "beef-cabbage-skillet",
+                "oven-bbq-chicken", "stuffed-bell-peppers", "turkey-sweet-potato-skillet",
+                "garlic-butter-salmon", "cajun-shrimp-rice", "lentil-vegetable-soup",
+                "sweet-potato-chili", "rice-bean-bowls", "breakfast-hash-eggs",
             ),
             glutenFree,
         )
@@ -127,8 +144,9 @@ class SeedDataFilesTest {
      * and the file's known-incomplete list matches the seed (it is empty
      * while coverage is complete, and the validator fails the moment the
      * two drift apart). Since v0.4.3 the eleven staples are priced items,
-     * so all 42 entries key by price item id and none carries the old
-     * pantry flag: nutrition resolution covers all 42 items.
+     * so all entries key by price item id and none carries the old
+     * pantry flag. Phase C2 added 35 items and their entries alongside
+     * the C1 set: nutrition resolution covers all 78 items.
      */
     @Test fun nutritionSeedCoversTheShippedIngredientsExactly() {
         val priceBook = json.decodeFromString<PriceBookFile>(seedFile("pricebook.json").readText())
@@ -141,8 +159,8 @@ class SeedDataFilesTest {
             nutrition.entries, priceBook.items, recipes.recipes, nutrition.incomplete,
         )
         assertTrue("nutrition seed errors: $errors", errors.isEmpty())
-        assertEquals(43, nutrition.entries.size)
-        assertEquals(43, nutrition.entries.count { !it.pantryItem })
+        assertEquals(78, nutrition.entries.size)
+        assertEquals(78, nutrition.entries.count { !it.pantryItem })
         assertEquals(0, nutrition.entries.count { it.pantryItem })
         // Every price book item resolves a nutrition entry by its id.
         val entryIds = nutrition.entries.map { it.itemId }.toSet()

@@ -79,3 +79,30 @@ Three entries were checked digit-for-digit against independently published FoodD
 - The FDC spaghetti-specific Foundation record (fdcId 2758998) currently publishes only a partial nutrient set, so spaghetti uses the complete SR Legacy dry enriched pasta record (fdcId 169736), the same record as rotini; pasta shape does not change the values. Flagged closestMatch in the data.
 - Butter, white bread, salt, and vegetable oil likewise use complete SR Legacy records where the newer Foundation records publish partial nutrient sets.
 - This data is loaded by the app in Phase V2-6 (nutrition tab). Phase V2-0 is data only: no app code reads nutrition.json yet.
+
+---
+
+# Phase C2 additions (2026-10-27)
+
+The starter library's expansion to 100 recipes added 35 price book items;
+each was captured from USDA FoodData Central the same way as the V2-0 set
+(full food records, values per 100 g exactly as the record states, public
+domain). Coverage is again complete: all 78 priced items carry an entry
+and the known-incomplete list is empty.
+
+Foundation records (17): beef-chuck-roast (fdcId 2646174), salmon-fillets (fdcId 2684441), cod-fillets (fdcId 2684444), shrimp (fdcId 2684443), canned-tuna (fdcId 334194), parmesan (fdcId 325036), cream-cheese (fdcId 2346385), heavy-cream (fdcId 2346386), carrots (fdcId 2258586), mushrooms (fdcId 1999629), baby-spinach (fdcId 1750352), sweet-potatoes (fdcId 2346404), cabbage (fdcId 2346407), salsa (fdcId 324038), canned-chickpeas (fdcId 2644288), dry-lentils (fdcId 2644283), peanut-butter (fdcId 324860).
+
+SR Legacy records (18): italian-sausage (fdcId 171631), bacon (fdcId 168277), breakfast-sausage (fdcId 172934), pepperoni (fdcId 174575), mozzarella (fdcId 170845), zucchini (fdcId 169291), lemons (fdcId 167746), frozen-corn (fdcId 168398), frozen-hash-browns (fdcId 170043), penne (fdcId 169736), lasagna-noodles (fdcId 169736), breadcrumbs (fdcId 174928), tortilla-chips (fdcId 173143), honey (fdcId 169640), bbq-sauce (fdcId 174523), chicken-broth (fdcId 174536), beef-broth (fdcId 171538), tofu (fdcId 172475).
+
+Notes:
+- Penne and lasagna noodles use the generic dry enriched pasta record
+  (fdcId 169736), the same record spaghetti and rotini already used:
+  FDC publishes no shape-specific dry pasta record with a complete
+  nutrient set. Both are flagged closestMatch, as spaghetti was.
+- Canned tuna (one 5 oz can = 142 g), canned chickpeas (one 15 oz can
+  = 425 g), lemons (one fruit = 58 g), and tofu (one 14 oz block = 397 g)
+  carry COUNT gram weights from the records' own published portions;
+  the broths and heavy cream carry FLUID_OUNCE weights the same way.
+- Garlic remains the library's one partial line: its entry publishes no
+  gram weight for a head, so garlic lines resolve an entry but no gram
+  amount, and totals including garlic are marked partial, as before.
