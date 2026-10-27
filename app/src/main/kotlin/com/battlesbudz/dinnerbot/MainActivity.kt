@@ -57,6 +57,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -91,6 +92,9 @@ import com.battlesbudz.dinnerbot.core.model.IngredientNutrition
 import com.battlesbudz.dinnerbot.core.model.LabelNutrition
 import com.battlesbudz.dinnerbot.core.model.PantryItem
 import com.battlesbudz.dinnerbot.core.model.PossibleOut
+import com.battlesbudz.dinnerbot.core.model.PremiumFeature
+import com.battlesbudz.dinnerbot.core.model.PremiumLocalState
+import com.battlesbudz.dinnerbot.core.model.PremiumRules
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.RanOutEvent
 import com.battlesbudz.dinnerbot.core.model.RanOutKeys
@@ -106,6 +110,8 @@ import com.battlesbudz.dinnerbot.core.model.RecipePhoto
 import com.battlesbudz.dinnerbot.core.model.RecipePhotos
 import com.battlesbudz.dinnerbot.core.model.RecipeRating
 import com.battlesbudz.dinnerbot.core.model.ReconciledOut
+import com.battlesbudz.dinnerbot.core.model.SavingsHistory
+import com.battlesbudz.dinnerbot.core.model.SavingsWeek
 import com.battlesbudz.dinnerbot.core.model.ScanSubstitution
 import com.battlesbudz.dinnerbot.core.model.TonightOverrides
 import com.battlesbudz.dinnerbot.feature.backup.BackupBarcodeLink
@@ -117,6 +123,8 @@ import com.battlesbudz.dinnerbot.feature.backup.BackupRecipeRating
 import com.battlesbudz.dinnerbot.feature.backup.BackupEngine
 import com.battlesbudz.dinnerbot.feature.backup.BackupScanSubstitution
 import com.battlesbudz.dinnerbot.feature.backup.BackupShare
+import com.battlesbudz.dinnerbot.feature.barcode.LocalScanGate
+import com.battlesbudz.dinnerbot.feature.barcode.ScanGate
 import com.battlesbudz.dinnerbot.feature.grocerylist.GroceryRow
 import com.battlesbudz.dinnerbot.feature.grocerylist.GroceryListScreen
 import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.BarcodeScanLogic
@@ -137,6 +145,14 @@ import com.battlesbudz.dinnerbot.feature.planner.PlannerScreen
 import com.battlesbudz.dinnerbot.feature.planner.Reconciliation
 import com.battlesbudz.dinnerbot.feature.planner.ReconciliationScreen
 import com.battlesbudz.dinnerbot.feature.planner.WeekPlanner
+import com.battlesbudz.dinnerbot.feature.premium.PaywallScreen
+import com.battlesbudz.dinnerbot.feature.premium.PremiumBilling
+import com.battlesbudz.dinnerbot.feature.premium.PremiumGateDialog
+import com.battlesbudz.dinnerbot.feature.premium.PremiumPromptCard
+import com.battlesbudz.dinnerbot.feature.premium.PremiumSettingsSection
+import com.battlesbudz.dinnerbot.feature.premium.PurchaseResult
+import com.battlesbudz.dinnerbot.feature.premium.RevenueCatBilling
+import com.battlesbudz.dinnerbot.feature.premium.SavingsHistorySection
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceBookScreen
 import com.battlesbudz.dinnerbot.feature.pricebook.PriceCorrection
 import com.battlesbudz.dinnerbot.feature.recipes.CookScreen
@@ -386,6 +402,28 @@ private fun DinnerBotApp(
     // and the recipe the prompt is currently up for, if any.
     var keepPromptAskedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var keepPromptRecipeId by remember { mutableStateOf<String?>(null) }
+    // Premium state (Phase C3): the on-device freemium record — the
+    // cached entitlement, the free import/scan counters, and the
+    // periodic-prompt dismissal. The holder is kept beside the delegate
+    // because long-lived callbacks (the billing listener, the scan
+    // gate) must reach the live state, not the instance captured at
+    // their first composition. Premium status itself comes from
+    // RevenueCat; this record is its cache, and every gate fails soft
+    // on it (see PremiumRules).
+    val premiumStateHolder = remember { mutableStateOf(PremiumLocalState()) }
+    var premiumState by premiumStateHolder
+    // One accumulated record per planned week (Phase C3): plans are
+    // replaced on regeneration, so the savings history keeps its own.
+    var savingsWeeks by remember { mutableStateOf<List<SavingsWeek>>(emptyList()) }
+    // The premium gate prompt currently up, if any, and the paywall.
+    val gateFeatureHolder = remember { mutableStateOf<PremiumFeature?>(null) }
+    var gateFeature by gateFeatureHolder
+    var showPaywall by remember { mutableStateOf(false) }
+    var restoreBusy by remember { mutableStateOf(false) }
+    var restoreMessage by remember { mutableStateOf<String?>(null) }
+    // The billing seam (Phase C3): RevenueCat behind the PremiumBilling
+    // interface, unconfigured until a build supplies an API key.
+    val billing: PremiumBilling = remember { RevenueCatBilling(context.applicationContext) }
     // The generation disclaimer (Phase RI-3): titles of the
     // not-yet-priced dinners in the week just generated; non-empty
     // shows the pop-up once for that generation.
@@ -563,12 +601,46 @@ private fun DinnerBotApp(
                 .map { with(SeedMapper) { it.toModel() } }
             val loadedKeepPromptAsked = database.keepPromptDao().getAll()
                 .map { it.recipeId }.toSet()
+            // The premium record (Phase C3): created on first sight
+            // with its first-seen stamp, which anchors the periodic
+            // prompt's settle-in interval.
+            val storedPremium = database.premiumStateDao().get()
+                ?.let { with(SeedMapper) { it.toModel() } }
+                ?: PremiumLocalState(firstSeenAtMillis = System.currentTimeMillis()).also { fresh ->
+                    database.premiumStateDao().upsert(with(SeedMapper) { fresh.toEntity() })
+                }
+            // A premium update can land while this load is still
+            // reading (the billing listener's first report, a counted
+            // scan or import, a prompt dismissal): updates write the
+            // live holder, and adopting this slightly older snapshot
+            // over it would silently undo the update for the session.
+            // When the live record differs from the snapshot the live
+            // record wins; the snapshot only supplies the first-seen
+            // stamp the untouched composition default never had, and
+            // the merged record is written back so the disk agrees.
+            val livePremium = premiumStateHolder.value
+            val loadedPremium = if (livePremium == storedPremium) {
+                storedPremium
+            } else {
+                livePremium.copy(
+                    firstSeenAtMillis = if (livePremium.firstSeenAtMillis != 0L) {
+                        livePremium.firstSeenAtMillis
+                    } else {
+                        storedPremium.firstSeenAtMillis
+                    },
+                ).also { merged ->
+                    database.premiumStateDao().upsert(with(SeedMapper) { merged.toEntity() })
+                }
+            }
+            val loadedSavings = database.savingsRecordDao().getAll()
+                .map { with(SeedMapper) { it.toModel() } }
             LoadedState(
                 s, r, p, pantry, stocks, plan, rows, plan2, rows2,
                 loadedRatings, loadedPresets, loadedLinks, loadedNutrition,
                 loadedRanOut, loadedCheckoffs, loadedPhotoById, loadedPhotoFiles,
                 addedStaples, loadedSubstitutions, loadedOverrides, linkedImported,
                 loadedKeepPromptAsked, loadedLabelNutrition,
+                loadedPremium, loadedSavings,
             )
         }
         settings = loaded.settings
@@ -593,6 +665,8 @@ private fun DinnerBotApp(
         recipeOverrides = loaded.recipeOverrides
         importedRecipes = loaded.importedRecipes
         keepPromptAskedIds = loaded.keepPromptAsked
+        premiumState = loaded.premiumState
+        savingsWeeks = loaded.savingsWeeks
         staplesAddedAtLoad = loaded.staplesAdded
         loading = false
     }
@@ -674,10 +748,37 @@ private fun DinnerBotApp(
                 )
                 database.planDao().insert(with(PlanMapper) { stored.toEntity() })
                 database.groceryDao().insertAll(plan.lines.map { with(PlanMapper) { it.toEntity(id) } })
+                // The week's savings record (Phase C3): one per week
+                // start, refreshed whenever the week is (re)persisted,
+                // so swaps and re-plans keep the history honest.
+                database.savingsRecordDao().upsert(
+                    with(SeedMapper) {
+                        SavingsWeek(
+                            plan.weekStart,
+                            currentSettings.weeklyBudgetCents,
+                            plan.cashNeededCents,
+                        ).toEntity(System.currentTimeMillis())
+                    },
+                )
             }
             refresh()
         }
     }
+
+    /**
+     * The settings planning actually sees (Phase C3): diet presets are
+     * part of Premium, so while Premium is off the saved picks stay in
+     * the settings untouched but shape nothing — the planner receives
+     * the household's settings with the preset selection emptied. The
+     * household's own won't-eat entries are not presets and always
+     * apply, Premium or not.
+     */
+    fun gatedSettings(forSettings: HouseholdSettings): HouseholdSettings =
+        if (premiumState.cachedPremium) {
+            forSettings
+        } else {
+            forSettings.copy(dietPresets = emptyList())
+        }
 
     /**
      * The won't-eat rule, applied once for a given settings: removable
@@ -689,7 +790,7 @@ private fun DinnerBotApp(
     fun adaptationFor(forSettings: HouseholdSettings): RecipeAdaptation.Result =
         RecipeAdaptation.adapt(
             recipes,
-            DietPresets.effectiveWontEat(forSettings, presets),
+            DietPresets.effectiveWontEat(gatedSettings(forSettings), presets),
             priceItems.associateBy { it.id },
         )
 
@@ -701,7 +802,7 @@ private fun DinnerBotApp(
     fun plannerPool(forSettings: HouseholdSettings): List<Recipe> =
         DietPresets.applyTagFilters(
             adaptationFor(forSettings).plannable,
-            DietPresets.selected(forSettings, presets),
+            DietPresets.selected(gatedSettings(forSettings), presets),
         )
 
     /**
@@ -781,10 +882,92 @@ private fun DinnerBotApp(
                     )
                     database.planDao().insert(with(PlanMapper) { stored.toEntity() })
                     database.groceryDao().insertAll(week.lines.map { with(PlanMapper) { it.toEntity(id) } })
+                    // One savings record per week of the fortnight (Phase C3).
+                    database.savingsRecordDao().upsert(
+                        with(SeedMapper) {
+                            SavingsWeek(
+                                week.weekStart,
+                                forSettings.weeklyBudgetCents,
+                                week.cashNeededCents,
+                            ).toEntity(System.currentTimeMillis())
+                        },
+                    )
                 }
             }
             refresh()
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Premium (Phase C3)
+    //
+    // Every gate in the app consults the on-device premium record:
+    // its cached entitlement for status, its counters for the free
+    // import and scan allowances. RevenueCat is the source of truth
+    // and corrects the cache through [notePremiumStatus]; between
+    // corrections the cache stands (fail soft), so a store outage
+    // never locks a premium user out, and no free feature reads
+    // billing state at all.
+
+    /** Apply one transform to the premium record, in state and on disk together. */
+    fun updatePremiumState(transform: (PremiumLocalState) -> PremiumLocalState) {
+        val current = premiumStateHolder.value
+        var updated = transform(current)
+        // An update can arrive before the first load has stamped the
+        // record (the billing listener fires on its own schedule): a
+        // persisted record always carries its first-seen stamp.
+        if (updated.firstSeenAtMillis == 0L) {
+            updated = updated.copy(firstSeenAtMillis = System.currentTimeMillis())
+        }
+        if (updated == current) return
+        premiumStateHolder.value = updated
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                database.premiumStateDao().upsert(with(SeedMapper) { updated.toEntity() })
+            }
+        }
+    }
+
+    /** A premium status report from the store: the cache follows it; silence keeps the cache. */
+    fun notePremiumStatus(active: Boolean) {
+        updatePremiumState { current ->
+            current.copy(
+                cachedPremium = PremiumRules.resolvePremium(current.cachedPremium, active),
+                premiumCheckedAtMillis = System.currentTimeMillis(),
+            )
+        }
+    }
+
+    /** Count one decoded barcode against the free scan allowance; premium scans are not counted. */
+    fun recordScanUse() {
+        updatePremiumState { current ->
+            if (current.cachedPremium) {
+                current
+            } else {
+                current.copy(counters = PremiumRules.afterScan(current.counters, LocalDate.now()))
+            }
+        }
+    }
+
+    /** Count one saved import against the free monthly cap; premium imports are not counted. */
+    fun recordImportUse() {
+        updatePremiumState { current ->
+            if (current.cachedPremium) {
+                current
+            } else {
+                current.copy(counters = PremiumRules.afterImport(current.counters, LocalDate.now()))
+            }
+        }
+    }
+
+    // Billing (Phase C3): configure RevenueCat once and let its
+    // entitlement reports correct the on-device cache as they arrive.
+    // In an unconfigured build this never fires and the cache simply
+    // stands, which is the fail-soft rule every gate relies on. (This
+    // sits below the helpers it calls: Kotlin does not let a lambda
+    // reference a local function declared further down.)
+    LaunchedEffect(Unit) {
+        billing.start { active -> notePremiumStatus(active) }
     }
 
     /** Plan two weeks on one trip (Phase V2-3). */
@@ -979,6 +1162,15 @@ private fun DinnerBotApp(
     }
 
     fun requestGenerateFortnight(forSettings: HouseholdSettings) {
+        // Two-week planning is part of Premium (Phase C3): the gate
+        // fires before the Sunday check, so a free user meets the
+        // Premium prompt here and one-week planning stays one tap
+        // back. An existing fortnight on screen is untouched — only
+        // generating a new one is gated.
+        if (!premiumState.cachedPremium) {
+            gateFeature = PremiumFeature.TWO_WEEK_PLANNING
+            return
+        }
         scope.launch {
             reloadGateInputs()
             val session = fullReconSession(forSettings)
@@ -1348,6 +1540,25 @@ private fun DinnerBotApp(
      * is in the pricing book. No pantry row or barcode link is created.
      */
     fun saveImportedRecipe(recipe: Recipe, sourceLink: String?, updateExistingId: String?) {
+        // The import cap (Phase C3): a NEW import — not a hand-made
+        // recipe (manual entry is always free) and not an update of an
+        // import already counted — spends one of the month's free
+        // imports. When they are gone the save waits here, the review
+        // stays open behind the Premium prompt, and nothing is lost.
+        val isNewImport = recipe.origin == RecipeOrigin.IMPORTED && updateExistingId == null
+        if (isNewImport &&
+            !PremiumRules.canImport(premiumState.cachedPremium, premiumState.counters, LocalDate.now())
+        ) {
+            gateFeature = PremiumFeature.RECIPE_IMPORT
+            return
+        }
+        // Reserve the import against the cap BEFORE the save starts:
+        // the state update is synchronous, so a second save tapped
+        // while this one is still writing sees the allowance already
+        // spent and meets the gate instead of slipping a second
+        // recipe past it. The count stays spent even if the write
+        // were to fail — the safe direction for a quota.
+        if (isNewImport) recordImportUse()
         scope.launch {
             withContext(Dispatchers.IO) {
                 val existing = updateExistingId?.let { database.importedRecipeDao().getById(it) }
@@ -1618,6 +1829,29 @@ private fun DinnerBotApp(
         }
     }
 
+    // The scan gate every barcode surface consults (Phase C3): the
+    // allowance lives in the premium record, the prompt in the gate
+    // state, and the camera simply never opens when the month's free
+    // scans are spent. Recreated when the premium record changes so
+    // the answers it gives are never stale.
+    val scanGate = remember(premiumState) {
+        ScanGate(
+            canStartScan = {
+                val state = premiumStateHolder.value
+                when {
+                    state.cachedPremium -> true
+                    PremiumRules.scansRemaining(state.counters, LocalDate.now()) > 0 -> true
+                    else -> {
+                        gateFeatureHolder.value = PremiumFeature.BARCODE_SCAN
+                        false
+                    }
+                }
+            },
+            onScanCompleted = { recordScanUse() },
+        )
+    }
+
+    CompositionLocalProvider(LocalScanGate provides scanGate) {
     when {
         loading && settings == null -> Box(
             Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars).padding(16.dp),
@@ -1647,7 +1881,10 @@ private fun DinnerBotApp(
             val currentSettings = settings!!
             // Display and cost the ADAPTED recipes: removable won't-eat
             // ingredients are out everywhere; blocked recipes still browse.
-            val adaptation = remember(recipes, priceItems, currentSettings.wontEat, currentSettings.dietPresets, presets) {
+            val adaptation = remember(
+                recipes, priceItems, currentSettings.wontEat, currentSettings.dietPresets,
+                presets, premiumState.cachedPremium,
+            ) {
                 adaptationFor(currentSettings)
             }
             val displayRecipes = adaptation.recipes
@@ -2109,6 +2346,23 @@ private fun DinnerBotApp(
                     },
                 )
             }
+            // The premium gate prompt (Phase C3): shown when a gate
+            // stops an action — imports or scans spent, two-week
+            // planning or a diet preset or the savings history asked
+            // for. "See Premium plans" swaps it for the paywall; "Not
+            // now" returns to the free path, which every gate leaves
+            // fully working.
+            val activeGate = gateFeature
+            if (activeGate != null) {
+                PremiumGateDialog(
+                    feature = activeGate,
+                    onSeePremium = {
+                        gateFeature = null
+                        showPaywall = true
+                    },
+                    onDismiss = { gateFeature = null },
+                )
+            }
             // ---- Back navigation (v0.6.0 redesign) ----
             // the user: the system back button used to leave the app from
             // anywhere, because sub-screens were state, not destinations,
@@ -2128,10 +2382,11 @@ private fun DinnerBotApp(
             val cookOpen = tab == Tab.PLANNER && cookTarget != null
             val howItWorksOpen = tab == Tab.SETTINGS && showHowItWorks
             val priceBookOpen = tab == Tab.PANTRY && pantryShowPrices
-            val subScreenOpen = importStart != null || reconFlow != null ||
+            val subScreenOpen = importStart != null || reconFlow != null || showPaywall ||
                 recipeDetailOpen || cookOpen || howItWorksOpen || priceBookOpen
             fun goBackOneStep() {
                 when {
+                    showPaywall -> showPaywall = false
                     importStart != null -> importStart = null
                     reconFlow != null -> skipReconciliation(reconFlow!!)
                     howItWorksOpen -> showHowItWorks = false
@@ -2148,6 +2403,36 @@ private fun DinnerBotApp(
                 storedPlan?.let { NutritionWeekInput("This week's dinners", it.nights) },
                 storedPlan2?.let { NutritionWeekInput("Next week's dinners", it.nights) },
             )
+            // The Plan screens' extra sections (Phase C3): the
+            // periodic Premium prompt card, when the cadence rules in
+            // PremiumRules allow it, over the savings history section.
+            // The prompt is an in-app card only — never a notification —
+            // and dismissing it here is what starts its interval.
+            val planBelowSection: @Composable () -> Unit = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (PremiumRules.shouldShowPeriodicPrompt(
+                            premiumState,
+                            onboardingComplete = currentSettings.onboardingComplete,
+                            hasAnyPlan = savingsWeeks.isNotEmpty() || storedPlan != null,
+                            nowMillis = System.currentTimeMillis(),
+                        )
+                    ) {
+                        PremiumPromptCard(
+                            onSeePremium = { showPaywall = true },
+                            onDismiss = {
+                                updatePremiumState {
+                                    it.copy(lastPromptDismissedAtMillis = System.currentTimeMillis())
+                                }
+                            },
+                        )
+                    }
+                    SavingsHistorySection(
+                        report = SavingsHistory.report(savingsWeeks, LocalDate.now()),
+                        isPremium = premiumState.cachedPremium,
+                        onSeePremium = { showPaywall = true },
+                    )
+                }
+            }
             // Per-serving estimates for the Plan night cards, from the
             // same calculator the recipe screens use, at the servings
             // this household cooks.
@@ -2175,7 +2460,18 @@ private fun DinnerBotApp(
                 Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                     val activeImport = importStart
                     val activeFlow = reconFlow
-                    if (activeImport != null) {
+                    if (showPaywall) {
+                        // The paywall (Phase C3) takes the screen while
+                        // it is up, above whatever flow summoned it; the
+                        // flow's state is untouched, so closing the
+                        // paywall lands exactly where the user left off.
+                        PaywallScreen(
+                            billing = billing,
+                            isPremium = premiumState.cachedPremium,
+                            onPremiumChanged = { active -> notePremiumStatus(active) },
+                            onClose = { showPaywall = false },
+                        )
+                    } else if (activeImport != null) {
                         // A recipe import in progress (Phase RI-2) takes
                         // the screen until it saves or is cancelled.
                         RecipeImportFlow(
@@ -2450,6 +2746,7 @@ private fun DinnerBotApp(
                                         labelByItemId = labelNutritionByItemId,
                                     )
                                 },
+                                belowPlanSection = planBelowSection,
                             )
                             } else PlannerScreen(
                             plan = weekPlanView,
@@ -2514,6 +2811,7 @@ private fun DinnerBotApp(
                                     labelByItemId = labelNutritionByItemId,
                                 )
                             },
+                            belowPlanSection = planBelowSection,
                         )
                         }
                         Tab.LIST -> {
@@ -2800,6 +3098,10 @@ private fun DinnerBotApp(
                                 SettingsScreen(
                                     initial = currentSettings,
                                     dietPresets = presets,
+                                    dietPresetsLocked = !premiumState.cachedPremium,
+                                    onDietPresetLockedTap = {
+                                        gateFeature = PremiumFeature.DIET_PRESETS
+                                    },
                                     notificationsGranted = notificationsGranted,
                                     onRequestNotificationPermission = {
                                         if (Build.VERSION.SDK_INT >= 33) {
@@ -2864,6 +3166,32 @@ private fun DinnerBotApp(
                                     modifier = Modifier.fillMaxWidth(),
                                 ) { Text("Import backup") }
                             }
+                            // Premium (Phase C3): status, the paywall,
+                            // subscription management, and restore —
+                            // quiet and always reachable from Settings.
+                            PremiumSettingsSection(
+                                isPremium = premiumState.cachedPremium,
+                                billingConfigured = billing.isConfigured,
+                                onSeePremium = { showPaywall = true },
+                                onRestore = {
+                                    restoreBusy = true
+                                    restoreMessage = null
+                                    scope.launch {
+                                        restoreMessage = when (val result = billing.restorePurchases()) {
+                                            PurchaseResult.Purchased ->
+                                                "Your earlier purchase is restored. Premium is on."
+                                            PurchaseResult.Cancelled -> null
+                                            is PurchaseResult.Failed -> result.message
+                                            PurchaseResult.Unavailable ->
+                                                "Purchases are not available yet in this build."
+                                        }
+                                        restoreBusy = false
+                                    }
+                                },
+                                restoreBusy = restoreBusy,
+                                restoreMessage = restoreMessage,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            )
                             if (showImportConfirm) {
                                 AlertDialog(
                                     onDismissRequest = { showImportConfirm = false },
@@ -2889,6 +3217,7 @@ private fun DinnerBotApp(
                 }
             }
         }
+    }
     }
 }
 
@@ -2922,6 +3251,10 @@ private data class LoadedState(
     val keepPromptAsked: Set<String>,
     /** Scanned label facts by item id (v0.6.3). */
     val labelNutrition: Map<String, LabelNutrition>,
+    /** The on-device premium record: cached entitlement, counters, prompt cadence (Phase C3). */
+    val premiumState: PremiumLocalState,
+    /** One savings record per planned week, oldest first (Phase C3). */
+    val savingsWeeks: List<SavingsWeek>,
 )
 
 /** The Sunday gate's inputs, re-read from the store at request time. */

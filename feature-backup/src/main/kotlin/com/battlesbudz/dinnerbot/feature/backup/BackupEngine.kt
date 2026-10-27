@@ -137,6 +137,16 @@ data class BackupImportedRecipe(
  * household steps on recipeOverrides. Older files import with no
  * label facts and with every override's steps unset (the seed steps
  * stand), exactly as those phones behaved.
+ *
+ * Phase C3 changes nothing here, deliberately. The premium layer's
+ * device state (the cached entitlement, the free import and scan
+ * counters, the prompt-dismissal record) and the savings records are
+ * NOT backup content and the format does not gain a version for them:
+ * the counters are per-device free-tier state, so a restore starts
+ * them fresh on the new phone rather than carrying a spent allowance
+ * across, and premium itself is restored from the store account
+ * through Restore purchases, never from a file. Export and import stay
+ * free for every user, exactly as before.
  */
 @Serializable
 data class BackupData(

@@ -107,6 +107,17 @@ fun OnboardingForm(
      * never earlier.
      */
     onRequestNotificationPermission: () -> Unit = {},
+    /**
+     * Diet presets are part of Premium (Phase C3): while locked, the
+     * preset checkboxes show the picks as they stand and tapping one
+     * calls [onDietPresetLockedTap] (the caller shows the Premium
+     * prompt) instead of changing the pick. Picks already saved are
+     * never removed by the lock; they apply again with Premium. The
+     * first-run walkthrough leaves this unlocked: nothing is gated
+     * during onboarding.
+     */
+    dietPresetsLocked: Boolean = false,
+    onDietPresetLockedTap: () -> Unit = {},
 ) {
     var householdSize by remember { mutableStateOf(initial.householdSize) }
     var cookNights by remember { mutableStateOf(initial.cookNights.toSet()) }
@@ -266,12 +277,28 @@ fun OnboardingForm(
                     "Like the list, presets are planning filters only, not medical or allergen guarantees.",
                 style = MaterialTheme.typography.bodySmall,
             )
+            if (dietPresetsLocked) {
+                Text(
+                    "Diet presets are part of Premium. While Premium is off, saved picks " +
+                        "stay saved and apply again when Premium is on; tap a preset to " +
+                        "see the plans.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             dietPresets.forEach { preset ->
                 Row(verticalAlignment = Alignment.Top) {
                     Checkbox(
                         checked = preset.id in selectedPresets,
                         onCheckedChange = { checked ->
-                            selectedPresets = if (checked) selectedPresets + preset.id else selectedPresets - preset.id
+                            if (dietPresetsLocked) {
+                                onDietPresetLockedTap()
+                            } else {
+                                selectedPresets = if (checked) {
+                                    selectedPresets + preset.id
+                                } else {
+                                    selectedPresets - preset.id
+                                }
+                            }
                         },
                     )
                     Column {
@@ -408,6 +435,9 @@ fun SettingsScreen(
     dietPresets: List<DietPreset> = emptyList(),
     notificationsGranted: Boolean = true,
     onRequestNotificationPermission: () -> Unit = {},
+    /** Diet presets are part of Premium (Phase C3); see [OnboardingForm]. */
+    dietPresetsLocked: Boolean = false,
+    onDietPresetLockedTap: () -> Unit = {},
 ) = OnboardingForm(
     initial = initial,
     onSave = onSave,
@@ -415,6 +445,8 @@ fun SettingsScreen(
     dietPresets = dietPresets,
     notificationsGranted = notificationsGranted,
     onRequestNotificationPermission = onRequestNotificationPermission,
+    dietPresetsLocked = dietPresetsLocked,
+    onDietPresetLockedTap = onDietPresetLockedTap,
 )
 
 /** One reminder's switch row in the settings form's reminders block. */

@@ -47,6 +47,7 @@ import com.battlesbudz.dinnerbot.core.model.Store
 import com.battlesbudz.dinnerbot.core.model.StoreIds
 import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.BarcodeScanLogic
 import com.battlesbudz.dinnerbot.feature.barcode.BarcodeScannerDialog
+import com.battlesbudz.dinnerbot.feature.barcode.LocalScanGate
 import com.battlesbudz.dinnerbot.feature.barcode.OffProduct
 import com.battlesbudz.dinnerbot.feature.barcode.OpenFoodFactsLookup
 import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.LinkBarcodeDialog
@@ -165,6 +166,10 @@ fun GroceryListScreen(
     // The CAMERA permission is asked for only at the moment a scan is
     // tapped, never before; if it is declined, scanning quietly steps
     // aside and tap-to-correct remains, exactly as before this phase.
+    // Phase C3: the app's premium scan gate, consulted before the
+    // camera opens and told about each decoded barcode. Null here
+    // (tests, previews) means ungated, as before this phase.
+    val scanGate = LocalScanGate.current
     val context = LocalContext.current
     var cameraGranted by remember {
         mutableStateOf(
@@ -213,6 +218,11 @@ fun GroceryListScreen(
     }
 
     fun startScan(preferredItemId: String?, row: GroceryRow? = null) {
+        // The premium scan allowance (Phase C3): the gate decides
+        // before the camera opens. When it says no, the camera stays
+        // shut and the gate's owner shows the Premium prompt; typing a
+        // price in by hand remains one tap away on every line.
+        if (scanGate != null && !scanGate.canStartScan()) return
         scanPreferredItemId = preferredItemId
         scanRow = row
         pickedItem = null
@@ -249,6 +259,9 @@ fun GroceryListScreen(
     if (scanning) {
         BarcodeScannerDialog(
             onBarcode = { code ->
+                // One decoded barcode is one scan against the
+                // allowance (Phase C3); an abandoned camera is none.
+                scanGate?.onScanCompleted()
                 scanning = false
                 scannedCode = code
             },

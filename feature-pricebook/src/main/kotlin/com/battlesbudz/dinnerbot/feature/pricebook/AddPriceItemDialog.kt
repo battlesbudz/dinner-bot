@@ -38,6 +38,7 @@ import com.battlesbudz.dinnerbot.core.model.Quantity
 import com.battlesbudz.dinnerbot.core.model.PresetStores
 import com.battlesbudz.dinnerbot.core.model.Store
 import com.battlesbudz.dinnerbot.feature.barcode.BarcodeScannerDialog
+import com.battlesbudz.dinnerbot.feature.barcode.LocalScanGate
 import com.battlesbudz.dinnerbot.feature.barcode.OffPackParser
 import com.battlesbudz.dinnerbot.feature.barcode.OffProduct
 import com.battlesbudz.dinnerbot.feature.barcode.OpenFoodFactsLookup
@@ -116,6 +117,12 @@ fun AddPriceItemDialog(
     scannerContent: @Composable (onScanned: (String) -> Unit, onDismissScanner: () -> Unit) -> Unit =
         { onScanned, onDismissScanner -> BarcodeScannerDialog(onScanned, onDismissScanner) },
 ) {
+    // The premium scan allowance (Phase C3): the app's gate is asked
+    // before this form's camera opens and told about each barcode the
+    // camera decodes. A code handed in through [initialBarcode] was
+    // already counted where it was scanned, so it never passes here.
+    // Null (tests, previews) means ungated, as before this phase.
+    val scanGate = LocalScanGate.current
     val categories = remember(book) {
         (book.map { it.category }.distinct().sorted() + "Other").distinct()
     }
@@ -257,6 +264,9 @@ fun AddPriceItemDialog(
     }
     fun startScan() {
         if (handingOff) return
+        // The gate decides before the camera opens (Phase C3); when
+        // it says no, the form simply stays a form, filled in by hand.
+        if (scanGate != null && !scanGate.canStartScan()) return
         cameraDenied = false
         if (cameraGranted) {
             scanning = true
@@ -386,7 +396,12 @@ fun AddPriceItemDialog(
 
     if (scanning) {
         scannerContent(
-            { code -> handleBarcode(code) },
+            { code ->
+                // One decoded barcode is one scan against the
+                // allowance (Phase C3); an abandoned camera is none.
+                scanGate?.onScanCompleted()
+                handleBarcode(code)
+            },
             { scanning = false },
         )
     }
