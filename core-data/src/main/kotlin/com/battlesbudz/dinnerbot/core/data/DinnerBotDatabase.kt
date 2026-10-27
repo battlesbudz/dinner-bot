@@ -138,6 +138,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * check-off — so the migration ships instead, as the plan provided
  * for, with the populated-v13 upgrade test proving every row intact.
  *
+ * Version 18 (Phase C3) adds the premium_state and savings_records
+ * tables through [MIGRATION_17_18], both created empty/default on
+ * upgrade — no stored row anywhere is read, rewritten, or reset,
+ * proven by the populated-v17 upgrade test.
+ *
  * fallbackToDestructiveMigration remains only as a pre-1.0 safety net for
  * development installs; with a real migration registered for every version
  * step it never triggers on a real upgrade path.
@@ -163,8 +168,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         KeepPromptEntity::class,
         LabelNutritionEntity::class,
         StoreEntity::class,
+        PremiumStateEntity::class,
+        SavingsRecordEntity::class,
     ],
-    version = 17,
+    version = 18,
     exportSchema = false,
 )
 abstract class DinnerBotDatabase : RoomDatabase() {
@@ -187,6 +194,8 @@ abstract class DinnerBotDatabase : RoomDatabase() {
     abstract fun keepPromptDao(): KeepPromptDao
     abstract fun labelNutritionDao(): LabelNutritionDao
     abstract fun storeDao(): StoreDao
+    abstract fun premiumStateDao(): PremiumStateDao
+    abstract fun savingsRecordDao(): SavingsRecordDao
 
     companion object {
         /** v2 to v3: create the recipe_ratings table. Nothing else changes. */
@@ -446,6 +455,32 @@ abstract class DinnerBotDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v17 to v18 (Phase C3): create the premium_state and
+         * savings_records tables, both empty on upgrade. Nothing else
+         * changes: no stored row anywhere is read, rewritten, or reset.
+         */
+        val MIGRATION_17_18: Migration = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `premium_state` (" +
+                        "`id` INTEGER NOT NULL, `cachedPremium` INTEGER NOT NULL, " +
+                        "`premiumCheckedAtMillis` INTEGER NOT NULL, " +
+                        "`starterScansUsed` INTEGER NOT NULL, `scanMonth` TEXT, " +
+                        "`scansUsedInMonth` INTEGER NOT NULL, `importMonth` TEXT, " +
+                        "`importsUsedInMonth` INTEGER NOT NULL, " +
+                        "`lastPromptDismissedAtMillis` INTEGER NOT NULL, " +
+                        "`firstSeenAtMillis` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `savings_records` (" +
+                        "`weekStart` TEXT NOT NULL, `budgetCents` INTEGER NOT NULL, " +
+                        "`cashNeededCents` INTEGER NOT NULL, " +
+                        "`updatedAtMillis` INTEGER NOT NULL, PRIMARY KEY(`weekStart`))",
+                )
+            }
+        }
+
         fun create(context: Context): DinnerBotDatabase =
             Room.databaseBuilder(context.applicationContext, DinnerBotDatabase::class.java, "dinner-bot.db")
                 .addMigrations(
@@ -453,7 +488,7 @@ abstract class DinnerBotDatabase : RoomDatabase() {
                     MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
                     MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
                     MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
-                    MIGRATION_16_17,
+                    MIGRATION_16_17, MIGRATION_17_18,
                 )
                 .fallbackToDestructiveMigration()
                 .build()

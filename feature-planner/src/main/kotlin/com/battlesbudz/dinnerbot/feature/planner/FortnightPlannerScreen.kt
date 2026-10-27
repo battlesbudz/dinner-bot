@@ -61,6 +61,8 @@ fun FortnightPlannerScreen(
     perServingCentsByRecipeId: Map<String, Int> = emptyMap(),
     /** The weeks' nutrition summary card, composed by the caller (v0.6.0 redesign). */
     weekNutrition: @Composable () -> Unit = {},
+    /** Extra sections under the plan, composed by the caller (Phase C3); see PlannerScreen. */
+    belowPlanSection: @Composable () -> Unit = {},
 ) {
     // (weekIndex, day) whose not-cooking reason is being picked, if any.
     var reasonFor by remember { mutableStateOf<Pair<Int, String>?>(null) }
@@ -153,6 +155,8 @@ fun FortnightPlannerScreen(
         )
 
         weekNutrition()
+
+        belowPlanSection()
 
         if (outOfRotationCount > 0) {
             Card(modifier = Modifier.fillMaxWidth()) {

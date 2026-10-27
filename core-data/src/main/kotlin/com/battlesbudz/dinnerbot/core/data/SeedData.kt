@@ -13,6 +13,7 @@ import com.battlesbudz.dinnerbot.core.model.MeasureUnit
 import com.battlesbudz.dinnerbot.core.model.NutritionFile
 import com.battlesbudz.dinnerbot.core.model.NutritionValues
 import com.battlesbudz.dinnerbot.core.model.PantryItem
+import com.battlesbudz.dinnerbot.core.model.PremiumLocalState
 import com.battlesbudz.dinnerbot.core.model.PriceBookFile
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Quantity
@@ -25,9 +26,11 @@ import com.battlesbudz.dinnerbot.core.model.RecipesFile
 import com.battlesbudz.dinnerbot.core.model.SeedPhotoCredit
 import com.battlesbudz.dinnerbot.core.model.SeedPhotosFile
 import com.battlesbudz.dinnerbot.core.model.ReminderSettings
+import com.battlesbudz.dinnerbot.core.model.SavingsWeek
 import com.battlesbudz.dinnerbot.core.model.Store
 import com.battlesbudz.dinnerbot.core.model.StoreIds
 import com.battlesbudz.dinnerbot.core.model.StorePrice
+import com.battlesbudz.dinnerbot.core.model.UsageCounters
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
@@ -356,6 +359,46 @@ object SeedMapper {
     )
 
     fun StoreEntity.toModel(): Store = Store(id = id, name = name)
+
+    fun PremiumStateEntity.toModel(): PremiumLocalState = PremiumLocalState(
+        cachedPremium = cachedPremium,
+        premiumCheckedAtMillis = premiumCheckedAtMillis,
+        counters = UsageCounters(
+            starterScansUsed = starterScansUsed,
+            scanMonth = scanMonth,
+            scansUsedInMonth = scansUsedInMonth,
+            importMonth = importMonth,
+            importsUsedInMonth = importsUsedInMonth,
+        ),
+        lastPromptDismissedAtMillis = lastPromptDismissedAtMillis,
+        firstSeenAtMillis = firstSeenAtMillis,
+    )
+
+    fun PremiumLocalState.toEntity(): PremiumStateEntity = PremiumStateEntity(
+        id = 1,
+        cachedPremium = cachedPremium,
+        premiumCheckedAtMillis = premiumCheckedAtMillis,
+        starterScansUsed = counters.starterScansUsed,
+        scanMonth = counters.scanMonth,
+        scansUsedInMonth = counters.scansUsedInMonth,
+        importMonth = counters.importMonth,
+        importsUsedInMonth = counters.importsUsedInMonth,
+        lastPromptDismissedAtMillis = lastPromptDismissedAtMillis,
+        firstSeenAtMillis = firstSeenAtMillis,
+    )
+
+    fun SavingsRecordEntity.toModel(): SavingsWeek = SavingsWeek(
+        weekStart = weekStart,
+        budgetCents = budgetCents,
+        cashNeededCents = cashNeededCents,
+    )
+
+    fun SavingsWeek.toEntity(updatedAtMillis: Long): SavingsRecordEntity = SavingsRecordEntity(
+        weekStart = weekStart,
+        budgetCents = budgetCents,
+        cashNeededCents = cashNeededCents,
+        updatedAtMillis = updatedAtMillis,
+    )
 }
 
 /** First-launch seeding: fills an empty database from the bundled seed JSON. Called by the app. */

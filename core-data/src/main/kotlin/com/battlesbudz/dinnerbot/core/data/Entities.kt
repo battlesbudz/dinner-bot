@@ -356,3 +356,40 @@ data class StoreEntity(
     val name: String,
     val sortOrder: Int,
 )
+
+/**
+ * The single-row device state for the premium gates (Phase C3): the
+ * cached entitlement and when it was last checked, the free-tier
+ * counters (starter scans, and the scans and imports used in their
+ * current months), and the prompt cadence timestamps. This is device
+ * state for the freemium layer, NOT household data, and deliberately
+ * does not ride in backups.
+ */
+@Entity(tableName = "premium_state")
+data class PremiumStateEntity(
+    @PrimaryKey val id: Int = 1,
+    val cachedPremium: Boolean = false,
+    val premiumCheckedAtMillis: Long = 0,
+    val starterScansUsed: Int = 0,
+    val scanMonth: String? = null,
+    val scansUsedInMonth: Int = 0,
+    val importMonth: String? = null,
+    val importsUsedInMonth: Int = 0,
+    val lastPromptDismissedAtMillis: Long = 0,
+    val firstSeenAtMillis: Long = 0,
+)
+
+/**
+ * One accumulated savings record per planned week (Phase C3): what the
+ * week was budgeted and what it actually needed in cash. Plans
+ * themselves are replaced on regeneration, so the savings history
+ * keeps its own lightweight record. Also device-local history, not
+ * backup content.
+ */
+@Entity(tableName = "savings_records")
+data class SavingsRecordEntity(
+    @PrimaryKey val weekStart: String,
+    val budgetCents: Int,
+    val cashNeededCents: Int,
+    val updatedAtMillis: Long,
+)

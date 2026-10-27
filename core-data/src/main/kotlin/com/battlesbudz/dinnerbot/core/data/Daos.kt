@@ -392,3 +392,23 @@ interface StoreDao {
     @Query("DELETE FROM stores")
     suspend fun deleteAll()
 }
+
+/** The single-row premium gate state (Phase C3). */
+@Dao
+interface PremiumStateDao {
+    @Query("SELECT * FROM premium_state WHERE id = 1")
+    suspend fun get(): PremiumStateEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entity: PremiumStateEntity)
+}
+
+/** The accumulated per-week savings records (Phase C3), in week order. */
+@Dao
+interface SavingsRecordDao {
+    @Query("SELECT * FROM savings_records ORDER BY weekStart")
+    suspend fun getAll(): List<SavingsRecordEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entity: SavingsRecordEntity)
+}

@@ -227,6 +227,13 @@ fun PlannerScreen(
      * caller composes it; the planner screens stay nutrition-free.
      */
     weekNutrition: @Composable () -> Unit = {},
+    /**
+     * Extra sections under the plan (Phase C3): the caller composes
+     * the premium prompt card and the savings history here, the same
+     * way it composes the nutrition card, so this screen stays free
+     * of premium logic of its own.
+     */
+    belowPlanSection: @Composable () -> Unit = {},
 ) {
     // The day whose not-cooking reason is being picked, if any.
     var reasonForDay by remember { mutableStateOf<String?>(null) }
@@ -254,6 +261,7 @@ fun PlannerScreen(
                 style = MaterialTheme.typography.bodyMedium,
             )
             weekNutrition()
+            belowPlanSection()
             return@Column
         }
 
@@ -330,6 +338,7 @@ fun PlannerScreen(
         }
 
         weekNutrition()
+        belowPlanSection()
     }
 
     val pickingDay = reasonForDay
