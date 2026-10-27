@@ -262,5 +262,25 @@ fun PremiumSettingsSection(
                 modifier = Modifier.testTag("premium-settings-restore-message"),
             )
         }
+        OutlinedButton(
+            onClick = {
+                val intent = Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse(LegalLinks.PRIVACY_POLICY_URL),
+                )
+                runCatching { context.startActivity(intent) }
+            },
+            modifier = Modifier.fillMaxWidth().testTag("premium-settings-privacy"),
+        ) { Text("Privacy policy") }
+        TextButton(
+            onClick = {
+                val intent = Intent(
+                    Intent.ACTION_SENDTO,
+                    Uri.parse("mailto:${LegalLinks.SUPPORT_EMAIL}"),
+                )
+                runCatching { context.startActivity(intent) }
+            },
+            modifier = Modifier.fillMaxWidth().testTag("premium-settings-support"),
+        ) { Text("Contact support: ${LegalLinks.SUPPORT_EMAIL}") }
     }
 }
