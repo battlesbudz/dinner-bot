@@ -1,6 +1,8 @@
 package com.battlesbudz.dinnerbot.feature.premium
 
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -210,6 +212,17 @@ fun PaywallScreen(
                 modifier = Modifier.testTag("paywall-message"),
             )
         }
+
+        TextButton(
+            onClick = {
+                val intent = Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse(LegalLinks.PRIVACY_POLICY_URL),
+                )
+                runCatching { context.startActivity(intent) }
+            },
+            modifier = Modifier.fillMaxWidth().testTag("paywall-privacy"),
+        ) { Text("Privacy policy") }
 
         TextButton(
             onClick = onClose,
