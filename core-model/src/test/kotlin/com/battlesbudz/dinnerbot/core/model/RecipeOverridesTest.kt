@@ -15,7 +15,7 @@ import org.junit.Test
 class RecipeOverridesTest {
 
     private fun item(id: String, name: String, packPrice: Int = 100) = PriceItem(
-        id = id, name = name, category = "Test", homeStore = Store.ALDI,
+        id = id, name = name, category = "Test", homeStore = "aldi",
         packDescription = "pack", packQuantity = Quantity(1.0, MeasureUnit.POUND),
         packPriceCents = packPrice, pricePerUnitCents = packPrice.toDouble(),
         checkedDate = "2026-10-23", source = "test",

@@ -2,10 +2,10 @@ package com.battlesbudz.dinnerbot.core.model
 
 /**
  * Priced-ness and placeholder price guesses (Phase RI-3, plan section
- * 5.5, as corrected by Battles 2026-10-24).
+ * 5.5, as corrected by the user 2026-10-24).
  *
  * The original plan computed guesses on the fly and never persisted
- * them. Battles corrected the design: everything is in the pricing
+ * them. the user corrected the design: everything is in the pricing
  * book. An ingredient that matches nothing at import becomes a REAL
  * price book item at its guessed price (see [GuessPricer]), carrying
  * the persistent [PriceItem.guessPriced] mark until the first scan or
@@ -46,10 +46,9 @@ object RecipePricing {
 
     /**
      * The book item an ingredient resolves to, if any: by the id it
-     * carries (through the household beef substitution, then the raw id,
-     * exactly as [Costing.aggregateNeeds] resolves), or — for an
-     * as-written ingredient — by exact normalized-name equality with a
-     * book item's name.
+     * carries, exactly as [Costing.aggregateNeeds] resolves, or — for
+     * an as-written ingredient — by exact normalized-name equality with
+     * a book item's name.
      */
     fun resolvedItem(
         ingredient: RecipeIngredient,
@@ -57,7 +56,7 @@ object RecipePricing {
     ): PriceItem? {
         val rawId = ingredient.priceItemId
         if (rawId != null) {
-            return itemsById[Costing.substituteItemId(rawId)] ?: itemsById[rawId]
+            return itemsById[rawId]
         }
         val name = ingredient.pantryItem ?: return null
         val words = NameWords.of(name)
@@ -69,7 +68,7 @@ object RecipePricing {
      * True when [ingredient] counts as priced against the book as it
      * stands: it resolves to a book item, and that item's price is a
      * real one — an item still carrying its import guess does not make
-     * the ingredient priced (Battles's correction, 2026-10-24).
+     * the ingredient priced (user correction, 2026-10-24).
      */
     fun isIngredientPriced(
         ingredient: RecipeIngredient,
@@ -89,7 +88,7 @@ object RecipePricing {
     ): Boolean = unpricedIngredients(recipe, itemsById).isEmpty()
 
     /**
-     * True when [recipe] is one of Andrea's own (imported or hand-made)
+     * True when [recipe] is one of the user's own (imported or hand-made)
      * and not yet fully priced: the class the one-per-week generation
      * cap and the not-accurate note apply to (ruling 5). Library recipes
      * never count, whatever they contain.
@@ -132,9 +131,23 @@ object RecipePricing {
         }
     }
 
-    /** The store a guessed line is shelved under: the first equivalent item's home store, else Aldi. */
-    fun guessStore(name: String, priceItems: Collection<PriceItem>): Store =
-        equivalentsFor(name, priceItems).firstOrNull()?.homeStore ?: Store.ALDI
+    /**
+     * The store a guessed line is shelved under (Phase C1): the first
+     * equivalent item's home store, else the caller's [defaultStoreId]
+     * (the user's first chosen store), else the first book item's
+     * store. No chain is a code-level default; the final PresetStores
+     * fallback exists only so an empty book with no stores chosen
+     * still yields a value, and is unreachable in practice.
+     */
+    fun guessStore(
+        name: String,
+        priceItems: Collection<PriceItem>,
+        defaultStoreId: String? = null,
+    ): String =
+        equivalentsFor(name, priceItems).firstOrNull()?.homeStore
+            ?: defaultStoreId
+            ?: priceItems.firstOrNull()?.homeStore
+            ?: PresetStores.ALDI.id
 
     /** Median of a non-empty list of cent values; an even count averages the two middle values. */
     fun medianCents(values: List<Int>): Int {
@@ -150,7 +163,7 @@ object RecipePricing {
 }
 
 /**
- * Import-time price book creation (Battles's correction, 2026-10-24).
+ * Import-time price book creation (user correction, 2026-10-24).
  *
  * When a recipe is imported, created by hand, or edited into a new
  * as-written ingredient, every ingredient that still matches nothing in
@@ -184,6 +197,7 @@ object GuessPricer {
         recipe: Recipe,
         book: List<PriceItem>,
         checkedDate: String,
+        defaultStoreId: String? = null,
     ): Pair<Recipe, List<PriceItem>> {
         val working = book.toMutableList()
         val created = mutableListOf<PriceItem>()
@@ -195,7 +209,7 @@ object GuessPricer {
             if (match != null) {
                 ingredient.copy(priceItemId = match.id, pantryItem = null)
             } else {
-                val item = guessItemFor(ingredient, working, checkedDate)
+                val item = guessItemFor(ingredient, working, checkedDate, defaultStoreId)
                 working += item
                 created += item
                 ingredient.copy(priceItemId = item.id, pantryItem = null)
@@ -209,11 +223,12 @@ object GuessPricer {
         records: List<ImportedRecipe>,
         book: List<PriceItem>,
         checkedDate: String,
+        defaultStoreId: String? = null,
     ): LinkResult {
         val working = book.toMutableList()
         val created = mutableListOf<PriceItem>()
         val linked = records.map { record ->
-            val (recipe, made) = linkRecipe(record.recipe, working, checkedDate)
+            val (recipe, made) = linkRecipe(record.recipe, working, checkedDate, defaultStoreId)
             working += made
             created += made
             if (made.isEmpty() && recipe == record.recipe) record else record.copy(recipe = recipe)
@@ -231,6 +246,7 @@ object GuessPricer {
         ingredient: RecipeIngredient,
         book: List<PriceItem>,
         checkedDate: String,
+        defaultStoreId: String? = null,
     ): PriceItem {
         val name = ingredient.pantryItem?.trim().orEmpty()
         val guess = RecipePricing.guessFor(name, book)
@@ -242,7 +258,7 @@ object GuessPricer {
             name = name,
             category = RecipePricing.equivalentsFor(name, book).firstOrNull()?.category
                 ?: DEFAULT_CATEGORY,
-            homeStore = RecipePricing.guessStore(name, book),
+            homeStore = RecipePricing.guessStore(name, book, defaultStoreId),
             packDescription = "${formatAmount(amount)} ${pack.unit.label} (from a recipe)",
             packQuantity = pack,
             packPriceCents = priceCents,
@@ -285,13 +301,13 @@ object GuessPricer {
  * barcode scan of a product the book does not have — builds its item
  * here, so the record is identical wherever it was added.
  *
- * Two outcomes, by whether Andrea knows the price:
+ * Two outcomes, by whether the user knows the price:
  *
  * - A typed price is her number: the item is priced, flagged
  *   user-corrected like any price she enters, and carries the
  *   caller's [pricedSource] note.
  * - No price: the item is created anyway — a missing price must
- *   never block adding an ingredient (Andrea's dead end, 2026-10-25)
+ *   never block adding an ingredient (the dead end hit 2026-10-25)
  *   — at the [RecipePricing] median guess for its name, flagged
  *   [PriceItem.guessPriced] so every surface labels it a guess, and
  *   the first scan or price correction replaces it with the real
@@ -305,7 +321,7 @@ object GuessPricer {
  */
 object NewBookItem {
 
-    /** Source note on an item added by hand at a price Andrea typed. */
+    /** Source note on an item added by hand at a price the user typed. */
     const val HAND_PRICED_SOURCE: String = "Added by hand"
 
     /** Source note on an item added by hand with no price; its price is a guess. */
@@ -319,7 +335,7 @@ object NewBookItem {
 
     /**
      * Build the book item for one hand-added ingredient. [priceCents]
-     * is the pack price Andrea typed, or null when she does not know
+     * is the pack price the user typed, or null when they do not know
      * it and the item starts guess-priced. [category] blank stands in
      * with the category of an equivalent book item, else
      * [GuessPricer.DEFAULT_CATEGORY]; [packDescription] blank stands
@@ -328,7 +344,7 @@ object NewBookItem {
     fun build(
         name: String,
         category: String,
-        homeStore: Store,
+        homeStore: String,
         packDescription: String,
         packQuantity: Quantity,
         priceCents: Int?,

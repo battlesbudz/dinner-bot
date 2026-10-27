@@ -44,7 +44,7 @@ import com.battlesbudz.dinnerbot.feature.pricebook.AddPriceItemDialog
  * The ingredient editor (Phase RI-1): one component with three doors —
  * the recipe screen (saved-version edits), a planned night's cook view
  * (behind the tonight-only ask), and RI-2's import review. It edits a
- * recipe's full ingredient list with the operations Battles named:
+ * recipe's full ingredient list with the operations the user named:
  * substitute an ingredient for a price book item, remove one, change a
  * quantity, flip the essential / removable mark the won't-eat rule
  * reads, and add an ingredient from the price book.
@@ -64,7 +64,7 @@ import com.battlesbudz.dinnerbot.feature.pricebook.AddPriceItemDialog
  * immediately, before the caller's refresh lands. A price left blank
  * in the form creates the item guess-priced; there is no path in
  * this editor where an unknown ingredient blocks saving (the dead
- * end Andrea hit adding her own recipe, 2026-10-25). The form's own
+ * end hit adding a new recipe, 2026-10-25). The form's own
  * scan button rides along (v0.6.3): a barcode scanned there links to
  * the created item through [onBarcodeLinked], its label facts land
  * through [onLabelFacts], and a scan of an already-known barcode
@@ -255,7 +255,7 @@ private sealed interface PickerTarget {
     data object Add : PickerTarget
 }
 
-/** An add-new-ingredient request out of the picker: which pick it completes, and the name Andrea typed. */
+/** An add-new-ingredient request out of the picker: which pick it completes, and the name the user typed. */
 private data class CreateRequest(val target: PickerTarget, val prefilledName: String)
 
 private sealed interface QuantityTarget {
@@ -265,7 +265,7 @@ private sealed interface QuantityTarget {
 
 /**
  * Pick a price book item by name; the search filters the list as
- * Andrea types. The list only ever held book items — which is why an
+ * the user types. The list only ever held book items — which is why an
  * ingredient the book did not have was a dead end (v0.6.2 hotfix).
  * The "+ New ingredient" button is always on the list now and hands
  * the typed search text to [onAddNew] as the new item's name.
@@ -301,7 +301,7 @@ private fun ItemPickerDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().testTag("picker-search"),
                 )
-                // A real filled button (v0.6.3, Battles's field
+                // A real filled button (v0.6.3, the user's field
                 // report): the outlined entry read like a warning
                 // line, not something to tap. The form it opens
                 // explains prices and guesses itself.

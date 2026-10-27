@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -27,8 +26,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.battlesbudz.dinnerbot.core.model.HouseholdRules
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
+import com.battlesbudz.dinnerbot.core.model.PresetStores
+import com.battlesbudz.dinnerbot.core.model.Store
+import com.battlesbudz.dinnerbot.core.model.StoreIds
 
 /** One plain-words explanation page, shared by first run and the Settings replay. */
 data class ExplanationPage(val title: String, val body: String)
@@ -43,18 +44,18 @@ val EXPLANATION_PAGES: List<ExplanationPage> = listOf(
     ExplanationPage(
         "One cash budget for the week",
         "You set one weekly cash budget, and Dinner Bot keeps the week's shopping " +
-            "under it across every store combined. A big Sam's Club pack counts in " +
+            "under it across every store combined. A big bulk pack counts in " +
             "full the week you buy it, then costs $0 while the stock you have at " +
             "home lasts, so some weeks come out cheaper than others.",
     ),
     ExplanationPage(
-        "Three stores, one list",
-        "Ingredients come from Aldi, frozen foods from Walmart, and bulk meats and " +
-            "packaged goods from Sam's Club, the way your household already shops. " +
-            "The list is split by store so one trip can cover all three. Sam's Club " +
-            "is only planned in a month when it saves real money. If a price at the " +
-            "store is different, tap it on the list and your number becomes the " +
-            "price book's number.",
+        "Your stores, one list",
+        "You pick the stores you shop at — the big chains, a regional favorite, " +
+            "or your own local market — and the list splits by your stores so one " +
+            "trip can cover them all. Prices start at national averages: the " +
+            "first time you scan an item, set its correct local price, and the " +
+            "app remembers it from then on. If a price at the store is different, " +
+            "tap it on the list and your number becomes the price book's number.",
     ),
 )
 
@@ -109,13 +110,13 @@ fun HowItWorksScreen(
     }
 }
 
-private const val SETUP_STEP_COUNT = 6 // size, nights, budget, won't-eat, staples, finish
+private const val SETUP_STEP_COUNT = 7 // size, nights, budget, won't-eat, stores, staples, finish
 
 /**
  * First-run setup: the explanation pages first, then the household setup
  * questions as steps in order (household size, cook nights, weekly cash
- * budget, won't-eat list, pantry staples), ending on a "Generate my first
- * week" button. The caller owns persistence: [onFinish] receives the
+ * budget, won't-eat list, your stores, pantry staples), ending on a
+ * "Generate my first week" button. The caller owns persistence: [onFinish] receives the
  * completed settings (onboardingComplete = true) and is expected to save
  * them, generate the first week, and land the user on the Plan tab.
  */
@@ -132,11 +133,26 @@ fun SetupWalkthrough(
 
     var householdSize by remember { mutableStateOf(initial.householdSize) }
     var cookNights by remember { mutableStateOf(initial.cookNights.toSet()) }
-    var budgetText by remember {
-        mutableStateOf(if (initial.weeklyBudgetCents > 0) (initial.weeklyBudgetCents / 100).toString() else "")
+    // The budget step follows the suggested budget (Phase C1) until the
+    // user types their own figure.
+    var budgetOverride by remember {
+        mutableStateOf(
+            if (initial.weeklyBudgetCents > 0 &&
+                initial.weeklyBudgetCents !=
+                OnboardingDefaults.suggestedBudgetCents(initial.householdSize, initial.cookNights.size)
+            ) {
+                (initial.weeklyBudgetCents / 100).toString()
+            } else {
+                null
+            },
+        )
     }
+    val budgetText: String = budgetOverride
+        ?: (OnboardingDefaults.suggestedBudgetCents(householdSize, cookNights.size) / 100).toString()
     var wontEatText by remember { mutableStateOf(initial.wontEat.joinToString(", ")) }
     var dietNotes by remember { mutableStateOf(initial.dietNotes) }
+    var stores by remember { mutableStateOf(initial.stores) }
+    var customStoreName by remember { mutableStateOf("") }
     var staples by remember { mutableStateOf(initial.pantryStaples.toSet()) }
 
     fun buildSettings(): HouseholdSettings = initial.copy(
@@ -145,6 +161,7 @@ fun SetupWalkthrough(
         weeklyBudgetCents = (budgetText.toIntOrNull() ?: 0) * 100,
         wontEat = wontEatText.split(",").map { it.trim() }.filter { it.isNotEmpty() },
         dietNotes = dietNotes.trim(),
+        stores = stores,
         pantryStaples = staples.toList(),
         onboardingComplete = true,
     )
@@ -204,12 +221,14 @@ fun SetupWalkthrough(
             2 -> {
                 Text("Weekly dinner budget", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    "The budget caps the cash spent each week at Aldi, Walmart, and Sam's Club combined.",
+                    "Pre-filled with a suggestion for your household size and cook nights — " +
+                        "change it to whatever fits. The budget caps the cash spent each " +
+                        "week across all your stores combined.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 OutlinedTextField(
                     value = budgetText,
-                    onValueChange = { budgetText = it.filter { ch -> ch.isDigit() } },
+                    onValueChange = { budgetOverride = it.filter { ch -> ch.isDigit() } },
                     label = { Text("Dollars per week") },
                     prefix = { Text("$") },
                     singleLine = true,
@@ -237,14 +256,59 @@ fun SetupWalkthrough(
                     label = { Text("Diet notes (optional)") },
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text("Household substitution rule", style = MaterialTheme.typography.titleSmall)
-                        Text(HouseholdRules.GROUND_MEAT_SUBSTITUTION, style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
             }
             4 -> {
+                Text("Your stores", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Pick the stores you shop at, or add your own by name. Shopping " +
+                        "lists group by these stores, and the first one picked is the " +
+                        "default when a store is needed.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PresetStores.ALL.forEach { preset ->
+                        FilterChip(
+                            selected = stores.any { it.id == preset.id },
+                            onClick = {
+                                stores = if (stores.any { it.id == preset.id }) {
+                                    stores.filterNot { it.id == preset.id }
+                                } else {
+                                    stores + preset
+                                }
+                            },
+                            label = { Text(preset.name) },
+                        )
+                    }
+                }
+                stores.filter { store -> PresetStores.ALL.none { it.id == store.id } }.forEach { store ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(store.name, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { stores = stores - store }) { Text("Remove") }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = customStoreName,
+                        onValueChange = { customStoreName = it },
+                        label = { Text("Add your own store") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        onClick = {
+                            val name = customStoreName.trim()
+                            if (name.isNotEmpty()) {
+                                stores = stores + StoreIds.customStore(
+                                    name,
+                                    stores.map { it.id } + PresetStores.ALL.map { it.id },
+                                )
+                                customStoreName = ""
+                            }
+                        },
+                    ) { Text("Add") }
+                }
+            }
+            5 -> {
                 Text("Pantry staples you already have", style = MaterialTheme.typography.titleLarge)
                 Text(
                     "Ticked staples are treated as already owned and are never put on a shopping list.",

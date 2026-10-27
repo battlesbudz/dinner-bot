@@ -34,7 +34,7 @@ import org.junit.Test
 class BarcodeSubstitutionLogicTest {
 
     private fun item(id: String, name: String = id, packPrice: Int = 200) = PriceItem(
-        id = id, name = name, category = "Test", homeStore = Store.ALDI,
+        id = id, name = name, category = "Test", homeStore = "aldi",
         packDescription = "pack", packQuantity = Quantity(2.0, MeasureUnit.POUND),
         packPriceCents = packPrice, pricePerUnitCents = packPrice / 2.0,
         checkedDate = "2026-10-22", source = "seed",
@@ -44,7 +44,7 @@ class BarcodeSubstitutionLogicTest {
     private val rice = item("long-grain-white-rice", "Long grain white rice", 189)
 
     private fun line(item: PriceItem, packs: Int = 1, price: Int = item.packPriceCents) = GroceryLine(
-        itemId = item.id, displayName = item.name, store = Store.ALDI,
+        itemId = item.id, displayName = item.name, store = "aldi",
         needed = item.packQuantity, packsToBuy = packs,
         estimatedPackPriceCents = price, portionCostCents = price,
     )
@@ -55,7 +55,7 @@ class BarcodeSubstitutionLogicTest {
         val created = BarcodeScanLogic.buildUserItem(
             name = "Granulated sugar",
             category = "Dry and canned",
-            homeStore = Store.WALMART,
+            homeStore = "walmart",
             packDescription = "Bag, 4 lb",
             packQuantity = Quantity(4.0, MeasureUnit.POUND),
             shelfPriceCents = 342,
@@ -65,7 +65,7 @@ class BarcodeSubstitutionLogicTest {
         assertEquals("user-granulated-sugar", created.id)
         assertEquals("Granulated sugar", created.name)
         assertEquals("Dry and canned", created.category)
-        assertEquals(Store.WALMART, created.homeStore)
+        assertEquals("walmart", created.homeStore)
         assertEquals("Bag, 4 lb", created.packDescription)
         assertEquals(Quantity(4.0, MeasureUnit.POUND), created.packQuantity)
         assertEquals(342, created.packPriceCents)
@@ -91,7 +91,7 @@ class BarcodeSubstitutionLogicTest {
         // a scan is saved against that barcode and recalled on rescan.
         val created = BarcodeScanLogic.buildUserItem(
             name = "Granulated sugar", category = "Dry and canned",
-            homeStore = Store.ALDI, packDescription = "Bag, 4 lb",
+            homeStore = "aldi", packDescription = "Bag, 4 lb",
             packQuantity = Quantity(4.0, MeasureUnit.POUND),
             shelfPriceCents = 298, checkedDate = "2026-10-23",
             existingIds = setOf(breast.id, rice.id),
@@ -109,7 +109,7 @@ class BarcodeSubstitutionLogicTest {
     @Test fun substituteLineReplacesThePlannedLineAtTheTypedPrice() {
         val drumsticks = BarcodeScanLogic.buildUserItem(
             name = "Chicken drumsticks", category = "Meat",
-            homeStore = Store.ALDI, packDescription = "Family pack, about 4 lb",
+            homeStore = "aldi", packDescription = "Family pack, about 4 lb",
             packQuantity = Quantity(4.0, MeasureUnit.POUND),
             shelfPriceCents = 512, checkedDate = "2026-10-23",
             existingIds = setOf(breast.id),
@@ -118,7 +118,7 @@ class BarcodeSubstitutionLogicTest {
         val swapped = BarcodeScanLogic.substituteLine(planned, drumsticks, 499)
         assertEquals(drumsticks.id, swapped.itemId)
         assertEquals("Chicken drumsticks", swapped.displayName)
-        assertEquals(Store.ALDI, swapped.store)
+        assertEquals("aldi", swapped.store)
         assertEquals(1, swapped.packsToBuy)
         assertEquals(499, swapped.estimatedPackPriceCents)
         // The line's need is the dinner quantity (2 lb), not the pack
@@ -193,7 +193,7 @@ class BarcodeSubstitutionLogicTest {
         val drumsticks = item("user-chicken-drumsticks", "Chicken drumsticks", 499)
             .copy(packQuantity = Quantity(3.0, MeasureUnit.POUND))
         val existing = GroceryLine(
-            itemId = drumsticks.id, displayName = drumsticks.name, store = Store.ALDI,
+            itemId = drumsticks.id, displayName = drumsticks.name, store = "aldi",
             needed = Quantity(2.0, MeasureUnit.POUND), packsToBuy = 1,
             estimatedPackPriceCents = 525, portionCostCents = 350,
         )
@@ -221,7 +221,7 @@ class BarcodeSubstitutionLogicTest {
         // Codex's case on PR #24: a 5 lb pack replacing a 1 lb need must
         // not attribute the whole shelf price as food cost.
         val planned = GroceryLine(
-            itemId = breast.id, displayName = breast.name, store = Store.ALDI,
+            itemId = breast.id, displayName = breast.name, store = "aldi",
             needed = Quantity(1.0, MeasureUnit.POUND), packsToBuy = 1,
             estimatedPackPriceCents = 836, portionCostCents = 199,
         )
@@ -270,7 +270,7 @@ class BarcodeSubstitutionLogicTest {
         // fresh one-dinner line cannot price a combined purchase.
         val storedMerged = GroceryLine(
             itemId = "user-chicken-drumsticks", displayName = "Chicken drumsticks",
-            store = Store.ALDI, needed = Quantity(4.0, MeasureUnit.POUND),
+            store = "aldi", needed = Quantity(4.0, MeasureUnit.POUND),
             packsToBuy = 2, estimatedPackPriceCents = 499, portionCostCents = 850,
             substitutedForItemId = "chicken-breast",
         )
@@ -364,13 +364,13 @@ class BarcodeSubstitutionLogicTest {
         // stores. Both stand; only the displaced breast comes off.
         val drumsticks = item("user-chicken-drumsticks", "Chicken drumsticks", 499)
         val swappedLine = BarcodeScanLogic.substituteLine(line(breast), drumsticks, 499)
-        val walmartLine = line(drumsticks).copy(store = Store.WALMART)
+        val walmartLine = line(drumsticks).copy(store = "walmart")
         val fold = BarcodeScanLogic.foldSubstitutedLines(
             listOf(swappedLine),
             listOf(line(breast), walmartLine),
         )
         assertEquals(
-            listOf(Store.WALMART, Store.ALDI),
+            listOf("walmart", "aldi"),
             fold.lines.map { it.store },
         )
         assertEquals(998 - 1335, fold.cashDeltaCents)
@@ -483,16 +483,16 @@ class BarcodeSubstitutionLogicTest {
         // merged line takes the pack form every swap line uses, so a
         // later correction prices it per pack like any other swap.
         val samsItem = item("sams-chicken", "Sam's chicken", 800).copy(
-            homeStore = Store.SAMS_CLUB,
+            homeStore = "sams-club",
             packQuantity = Quantity(4.0, MeasureUnit.POUND),
         )
         val existing = GroceryLine(
-            itemId = samsItem.id, displayName = samsItem.name, store = Store.WALMART,
+            itemId = samsItem.id, displayName = samsItem.name, store = "walmart",
             needed = Quantity(2.0, MeasureUnit.POUND), packsToBuy = 1,
             estimatedPackPriceCents = 200, portionCostCents = 200,
         )
         val swap = BarcodeScanLogic.substituteLine(
-            line(breast).copy(store = Store.WALMART), samsItem, 400,
+            line(breast).copy(store = "walmart"), samsItem, 400,
         )
         val merged = BarcodeScanLogic.mergeSwapIntoLine(existing, swap, samsItem)
         assertEquals(Quantity(4.0, MeasureUnit.POUND), merged.needed)
@@ -518,11 +518,11 @@ class BarcodeSubstitutionLogicTest {
         // at Walmart for a Sam's item, a 2 lb need from a 4 lb pack
         // corrected to $4.00 a pack portions at 200, not the total.
         val samsPack = drumsticks.copy(
-            homeStore = Store.SAMS_CLUB,
+            homeStore = "sams-club",
             packQuantity = Quantity(4.0, MeasureUnit.POUND),
         )
         val walmartSwap = BarcodeScanLogic.substituteLine(
-            line(breast).copy(store = Store.WALMART), samsPack, 400,
+            line(breast).copy(store = "walmart"), samsPack, 400,
         )
         assertEquals(200, BarcodeScanLogic.correctedSwapPortion(walmartSwap, samsPack, 400))
     }

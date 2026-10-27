@@ -14,7 +14,7 @@ import org.junit.Test
 class SeedValidatorNutritionTest {
 
     private fun item(id: String) = PriceItem(
-        id = id, name = id, category = "Meat", homeStore = Store.WALMART,
+        id = id, name = id, category = "Meat", homeStore = "walmart",
         packDescription = "pack", packQuantity = Quantity.pounds(1.0),
         packPriceCents = 100, checkedDate = "2026-10-22", source = "test",
     )

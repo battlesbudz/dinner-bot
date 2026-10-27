@@ -15,13 +15,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * The Dinner Bot look (v0.6.0 redesign, Battles's approved mockups):
+ * The Dinner Bot look (v0.6.0 redesign, the user's approved mockups):
  * clean white surfaces, large plain bold type, rounded cards, pill-shaped
  * chips, buttons, and toggles, and prices set prominently at the right of
  * a row. Near-black is the working color (buttons, the selected tab's
  * pill); a muted green is the secondary accent for prices and checks.
  *
- * Dark mode (v0.6.1, Battles's direct ask after the redesign): a second
+ * Dark mode (v0.6.1, the user's direct ask after the redesign): a second
  * scheme in the same family, chosen automatically from the phone's own
  * dark setting (uiMode night) — no in-app toggle. Dark surfaces stay
  * warm near-black like the light scheme's warm whites; the working

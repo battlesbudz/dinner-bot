@@ -13,13 +13,11 @@ package com.battlesbudz.dinnerbot.core.model
  * - Everything else ("Dry and canned", "Frozen", "Bread") keeps for the
  *   fortnight and rides the big trip.
  *
- * One exception, by store rather than category: a line actually bought at
- * Sam's Club is a bulk stock purchase. It is bought on the big trip (the
- * Sam's run IS the big trip) and its leftovers are stored at home, which
- * is exactly what the freeze guidance on bulk packs describes. A Sam's
- * item the savings gate reroutes to a regular store is bought fresh like
- * anything else there, so a rerouted perishable line does split to the
- * top-up.
+ * One exception, by item rather than category (Phase C1): a bulk-pack
+ * item — one carrying freeze guidance ([PriceItem.freezeNote]) — is a
+ * stock purchase. It is bought on the big trip and its leftovers are
+ * stored at home, which is exactly what the freeze guidance describes,
+ * at whatever store the user buys it.
  */
 object Perishables {
 
@@ -30,9 +28,9 @@ object Perishables {
 
     /**
      * True when a week 2 [line] belongs on the fresh top-up list: its item
-     * is perishable and the line is not a Sam's Club stock purchase.
+     * is perishable and the item is not a bulk-pack (freeze-note) item.
      * Week 1 lines never split; they are all bought on the big trip.
      */
     fun isTopUpLine(line: GroceryLine, item: PriceItem?): Boolean =
-        line.store != Store.SAMS_CLUB && item != null && isPerishable(item)
+        item != null && item.freezeNote == null && isPerishable(item)
 }

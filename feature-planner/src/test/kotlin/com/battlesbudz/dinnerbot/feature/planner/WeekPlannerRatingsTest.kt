@@ -19,7 +19,7 @@ import org.junit.Test
 class WeekPlannerRatingsTest {
 
     private fun item(
-        id: String, store: Store, packAmount: Double, unit: MeasureUnit,
+        id: String, store: String, packAmount: Double, unit: MeasureUnit,
         packPrice: Int, perUnit: Double? = null,
     ) = PriceItem(
         id = id, name = id, category = "Test", homeStore = store, packDescription = "pack",
@@ -28,9 +28,9 @@ class WeekPlannerRatingsTest {
         checkedDate = "2026-10-22", source = "test",
     )
 
-    private val spaghetti = item("spaghetti", Store.ALDI, 32.0, MeasureUnit.OUNCE, 209, perUnit = 6.53)
-    private val eggs = item("eggs", Store.ALDI, 12.0, MeasureUnit.COUNT, 185, perUnit = 15.4)
-    private val turkey = item("ground-turkey", Store.WALMART, 1.0, MeasureUnit.POUND, 198)
+    private val spaghetti = item("spaghetti", "aldi", 32.0, MeasureUnit.OUNCE, 209, perUnit = 6.53)
+    private val eggs = item("eggs", "aldi", 12.0, MeasureUnit.COUNT, 185, perUnit = 15.4)
+    private val turkey = item("ground-turkey", "walmart", 1.0, MeasureUnit.POUND, 198)
     private val book = listOf(spaghetti, eggs, turkey)
 
     private fun recipe(id: String, title: String, vararg ingredients: RecipeIngredient) = Recipe(

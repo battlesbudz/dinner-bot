@@ -17,8 +17,7 @@ import kotlinx.serialization.Serializable
  * Presets are picked in setup or settings and combine with the household's
  * own entries. They only ever add filtering on top of the household's rules;
  * they never remove a household entry, and they never touch the standing
- * rules (no beef ever; ground turkey substitutes for ground beef in
- * [Costing]). As the app already states for the won't-eat list: presets are
+ * rules. As the app already states for the won't-eat list: presets are
  * planning filters, not medical or allergen guarantees.
  */
 @Serializable

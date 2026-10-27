@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * Nutrition facts captured from a product's own label through an
- * Open Food Facts barcode lookup (v0.6.3, Battles's call: "rather grab
+ * Open Food Facts barcode lookup (v0.6.3, the user's call: "rather grab
  * the nutrition facts from the barcode instead of just guessing off of
  * National data"). One record per price book item, keyed by item id,
  * refreshed every time the item's barcode is scanned again.

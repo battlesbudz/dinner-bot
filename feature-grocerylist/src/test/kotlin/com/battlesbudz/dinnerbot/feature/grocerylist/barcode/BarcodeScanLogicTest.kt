@@ -20,7 +20,7 @@ import org.junit.Test
 class BarcodeScanLogicTest {
 
     private fun item(id: String, name: String = id, packPrice: Int = 200) = PriceItem(
-        id = id, name = name, category = "Test", homeStore = Store.ALDI,
+        id = id, name = name, category = "Test", homeStore = "aldi",
         packDescription = "pack", packQuantity = Quantity(2.0, MeasureUnit.POUND),
         packPriceCents = packPrice, pricePerUnitCents = packPrice / 2.0,
         checkedDate = "2026-10-22", source = "seed",

@@ -7,23 +7,18 @@ import kotlin.math.roundToInt
  * Shared costing engine for the planner and the grocery list. Pure functions:
  * no Android, no database, fully unit-testable on the JVM.
  *
- * Locked household rules (Battles 2026-10-21/22) implemented here:
- * - Ground beef is always substituted with ground turkey (see [substituteItemId]).
- * - Sam's Club bulk packs charge their FULL price in the week they are bought
- *   and $0 in weeks where tracked bulk stock covers the need. Portion cost is
- *   information only; the budget only ever sees cash.
- * - Sam's Club items are bought at Sam's only when the projected monthly
- *   savings reach [SAMS_MONTHLY_GATE_CENTS]; otherwise the need reroutes to
- *   the cheapest regular store that sells it.
+ * Costing rules (Phase C1):
+ * - Every item costs as itself, at its own home store. There is no
+ *   automatic substitution of one item for another, anywhere.
+ * - Bulk packs charge their FULL price in the week they are bought and
+ *   $0 in weeks where tracked bulk stock covers the need. Portion cost
+ *   is information only; the budget only ever sees cash.
+ * - No purchase is ever rerouted to another store: the $15 monthly
+ *   warehouse savings gate and its rerouting were deleted in Phase C1.
+ *   A store is just a store (see Stores.kt).
  */
 object Costing {
-    const val SAMS_MONTHLY_GATE_CENTS: Int = 1500
-    const val WEEKS_PER_MONTH: Double = 4.0
     private const val EPSILON = 1e-9
-
-    /** Household substitution: any beef item id resolves to ground turkey. */
-    fun substituteItemId(itemId: String): String =
-        if (itemId.contains("beef", ignoreCase = true)) HouseholdRules.SUBSTITUTE_ITEM_ID else itemId
 
     /**
      * Ids of priced items already on hand because an owned pantry entry
@@ -148,8 +143,7 @@ object Costing {
                     continue
                 }
                 val rawId = ingredient.priceItemId ?: continue
-                val id = substituteItemId(rawId)
-                val item = itemsById[id] ?: itemsById[rawId] ?: continue
+                val item = itemsById[rawId] ?: continue
                 baseByItem[item.id] = (baseByItem[item.id] ?: 0.0) + ingredient.quantity.toBase()
             }
         }
@@ -159,45 +153,6 @@ object Costing {
         return needs to pantryNames.toList()
     }
 
-    /** Result of the Sam's Club $15/month gate for one set of weekly needs. */
-    data class SamsGateResult(
-        /** Projected savings this month, in cents, summed over Sam's items with a known alternate. */
-        val projectedMonthlySavingsCents: Int,
-        /** True when the gate is met and Sam's items are planned at Sam's Club. */
-        val useSams: Boolean,
-        /** Per-item projected monthly savings in cents (only items with a known alternate). */
-        val savingsByItemCents: Map<String, Int>,
-    )
-
-    /**
-     * Gate math (Battles): savings per item = (cheapest regular per-unit price
-     * minus Sam's per-unit price) x quantity actually used that month. Monthly
-     * use is projected from this week's use x [WEEKS_PER_MONTH]. An item with
-     * no known regular alternate proves no savings and contributes $0, which
-     * means ground turkey (cheaper at Walmart) can never carry the gate.
-     */
-    fun evaluateSamsGate(needs: List<ItemNeed>): SamsGateResult {
-        val savings = linkedMapOf<String, Int>()
-        for (need in needs) {
-            val item = need.item
-            if (item.homeStore != Store.SAMS_CLUB) continue
-            val alternate = item.cheapestRegularAlternate() ?: continue
-            val perUnitSaving = alternate.pricePerUnitCents - item.perUnitCents
-            if (perUnitSaving <= 0.0) {
-                savings[item.id] = 0
-                continue
-            }
-            val monthlyUsed = need.neededInPackUnit * WEEKS_PER_MONTH
-            savings[item.id] = (perUnitSaving * monthlyUsed).roundToInt()
-        }
-        val total = savings.values.sum()
-        return SamsGateResult(
-            projectedMonthlySavingsCents = total,
-            useSams = total >= SAMS_MONTHLY_GATE_CENTS,
-            savingsByItemCents = savings,
-        )
-    }
-
     /** A fully costed week: grocery lines plus the two headline numbers. */
     data class CostedWeek(
         val lines: List<GroceryLine>,
@@ -205,8 +160,7 @@ object Costing {
         val cashNeededCents: Int,
         /** Attributed food cost of what the week's dinners actually use. Information only. */
         val foodCostCents: Int,
-        val gate: SamsGateResult,
-        /** Sam's items whose need was (partly) covered by bulk stock at home. */
+        /** Items whose need was (partly) covered by tracked bulk stock at home. */
         val stockCoveredItemIds: Set<String>,
         /** Priced items whose need was covered by a matching owned pantry entry. */
         val pantryCoveredItemIds: Set<String> = emptySet(),
@@ -215,27 +169,23 @@ object Costing {
     /**
      * Price one set of needs into grocery lines.
      *
-     * @param stockOnHand tracked Sam's bulk stock, item id -> quantity on hand
-     *   (quantities may be in any unit of the right dimension).
+     * @param stockOnHand tracked bulk stock, item id -> quantity on hand
+     *   (quantities may be in any unit of the right dimension). Stock is
+     *   drawn for ANY item that has some tracked, whatever store it
+     *   comes from (Phase C1).
      * @param pantryCoveredItemIds priced items an owned pantry entry matches
      *   (see [pantryCoveredItemIds] for the matching rule). A covered item is
-     *   already home, so it gets the same on-hand treatment as Sam's stock:
+     *   already home, so it gets the same on-hand treatment as bulk stock:
      *   no shopping line and $0 cash, with its portion cost still reported
-     *   as information. Sam's bulk stock behavior is unchanged.
-     * @param gateOverride a Sam's gate evaluated by the caller over a wider
-     *   horizon than [needs] (Phase V2-3: the two-week planner evaluates the
-     *   gate once over the combined fortnight and holds it fixed for both
-     *   weeks' costings, so a week's Sam's routing never depends on which
-     *   week of the pair is being priced). Null keeps the original behavior:
-     *   the gate is evaluated from [needs] themselves.
+     *   as information.
      * @param pantryOwnedNames the owned pantry entry names, passed when the
      *   caller is building a shopping list (Phase RI-3): a covered item then
      *   stays ON the list as a covered line (packsToBuy 0, $0 cash, the
      *   covering entry named on the line) instead of silently leaving it,
-     *   per Battles's weekly-list ruling. Callers that only need the money
+     *   per the weekly-list ruling. Callers that only need the money
      *   (stock projections, food-cost reads) pass no names and get no
      *   covered lines, exactly as before.
-     * @param uncrossedItemIds covered items Andrea uncrossed for this week
+     * @param uncrossedItemIds covered items the user uncrossed for this week
      *   (Phase RI-3): they cost as ordinary buy lines, flagged
      *   [GroceryLine.uncrossed], and the pantry itself is never written.
      */
@@ -243,11 +193,9 @@ object Costing {
         needs: List<ItemNeed>,
         stockOnHand: Map<String, Quantity>,
         pantryCoveredItemIds: Set<String> = emptySet(),
-        gateOverride: SamsGateResult? = null,
         pantryOwnedNames: Set<String> = emptySet(),
         uncrossedItemIds: Set<String> = emptySet(),
     ): CostedWeek {
-        val gate = gateOverride ?: evaluateSamsGate(needs)
         val lines = mutableListOf<GroceryLine>()
         val coveredLines = mutableListOf<GroceryLine>()
         val stockCovered = mutableSetOf<String>()
@@ -259,7 +207,7 @@ object Costing {
             val item = need.item
             val portionCost = (need.neededInPackUnit * item.perUnitCents).roundToInt()
             foodCost += portionCost
-            // A covered item she uncrossed is a buy line with a memory:
+            // A covered item the user uncrossed is a buy line with a memory:
             // the flag is how a later reprice keeps it bought (RI-3).
             val wasUncrossed = item.id in pantryCoveredItemIds && item.id in uncrossedItemIds
 
@@ -292,106 +240,52 @@ object Costing {
             }
 
             var remainingBase = need.neededBase
-            if (item.homeStore == Store.SAMS_CLUB) {
-                val onHand = stockOnHand[item.id]
-                if (onHand != null && onHand.toBase() > 0.0) {
-                    val covered = minOf(remainingBase, onHand.toBase())
-                    if (covered > EPSILON) stockCovered += item.id
-                    remainingBase -= covered
-                }
+            val onHand = stockOnHand[item.id]
+            if (onHand != null && onHand.toBase() > 0.0) {
+                val covered = minOf(remainingBase, onHand.toBase())
+                if (covered > EPSILON) stockCovered += item.id
+                remainingBase -= covered
             }
             if (remainingBase <= EPSILON) continue
 
+            // Every remaining need is bought as whole packs at the item's
+            // own home store: full pack price in the buy week, no routing
+            // to any other store, ever (Phase C1).
             val packBase = item.packQuantity.toBase()
-            when {
-                item.homeStore == Store.SAMS_CLUB && gate.useSams -> {
-                    val packs = ceil(remainingBase / packBase - EPSILON).toInt().coerceAtLeast(1)
-                    val lineCash = packs * item.packPriceCents
-                    cash += lineCash
-                    lines += GroceryLine(
-                        itemId = item.id,
-                        displayName = item.name,
-                        store = Store.SAMS_CLUB,
-                        needed = Quantity(remainingBase / item.packQuantity.unit.toBaseFactor, item.packQuantity.unit),
-                        packsToBuy = packs,
-                        estimatedPackPriceCents = item.packPriceCents,
-                        portionCostCents = portionCost,
-                        uncrossed = wasUncrossed,
-                    )
-                }
-                item.homeStore == Store.SAMS_CLUB -> {
-                    // Gate not met: reroute to the cheapest regular store, bought
-                    // by quantity at that store's per-unit price. No Sam's trip.
-                    val alternate = item.cheapestRegularAlternate()
-                    if (alternate == null) {
-                        // No known alternate: fall back to the home store pack math.
-                        val packs = ceil(remainingBase / packBase - EPSILON).toInt().coerceAtLeast(1)
-                        val lineCash = packs * item.packPriceCents
-                        cash += lineCash
-                        lines += GroceryLine(
-                            itemId = item.id,
-                            displayName = item.name,
-                            store = item.homeStore,
-                            needed = Quantity(remainingBase / item.packQuantity.unit.toBaseFactor, item.packQuantity.unit),
-                            packsToBuy = packs,
-                            estimatedPackPriceCents = item.packPriceCents,
-                            portionCostCents = portionCost,
-                            uncrossed = wasUncrossed,
-                        )
-                    } else {
-                        val remainingInPackUnit = remainingBase / item.packQuantity.unit.toBaseFactor
-                        val lineCash = (remainingInPackUnit * alternate.pricePerUnitCents).roundToInt()
-                        cash += lineCash
-                        lines += GroceryLine(
-                            itemId = item.id,
-                            displayName = item.name,
-                            store = alternate.store,
-                            needed = Quantity(remainingInPackUnit, item.packQuantity.unit),
-                            packsToBuy = 1,
-                            estimatedPackPriceCents = lineCash,
-                            portionCostCents = (remainingInPackUnit * alternate.pricePerUnitCents).roundToInt(),
-                            uncrossed = wasUncrossed,
-                        )
-                    }
-                }
-                else -> {
-                    val packs = ceil(remainingBase / packBase - EPSILON).toInt().coerceAtLeast(1)
-                    val lineCash = packs * item.packPriceCents
-                    cash += lineCash
-                    lines += GroceryLine(
-                        itemId = item.id,
-                        displayName = item.name,
-                        store = item.homeStore,
-                        needed = Quantity(remainingBase / item.packQuantity.unit.toBaseFactor, item.packQuantity.unit),
-                        packsToBuy = packs,
-                        estimatedPackPriceCents = item.packPriceCents,
-                        portionCostCents = portionCost,
-                        uncrossed = wasUncrossed,
-                    )
-                }
-            }
+            val packs = ceil(remainingBase / packBase - EPSILON).toInt().coerceAtLeast(1)
+            val lineCash = packs * item.packPriceCents
+            cash += lineCash
+            lines += GroceryLine(
+                itemId = item.id,
+                displayName = item.name,
+                store = item.homeStore,
+                needed = Quantity(remainingBase / item.packQuantity.unit.toBaseFactor, item.packQuantity.unit),
+                packsToBuy = packs,
+                estimatedPackPriceCents = item.packPriceCents,
+                portionCostCents = portionCost,
+                uncrossed = wasUncrossed,
+            )
         }
         return CostedWeek(
             lines = lines + coveredLines,
             cashNeededCents = cash,
             foodCostCents = foodCost,
-            gate = gate,
             stockCoveredItemIds = stockCovered,
             pantryCoveredItemIds = pantryCovered,
         )
     }
 
     /**
-     * What is left of a bought Sam's Club pack after this week's dinners use
-     * what they need from it (Phase V2-2 freeze guidance): the packs bought
+     * What is left of a bought pack after this week's dinners use what
+     * they need from it (Phase V2-2 freeze guidance): the packs bought
      * for [line] minus the line's needed amount, in the item's pack unit.
-     * Null when the line is not a Sam's purchase of a Sam's item, or when the
-     * packs are used up exactly. The line's needed amount is what remained
-     * after home stock was drawn, so this is the NEW leftover the purchase
-     * creates, the amount the freeze note is about.
+     * Null when the line is not a purchase at the item's home store, or
+     * when the packs are used up exactly. The line's needed amount is
+     * what remained after home stock was drawn, so this is the NEW
+     * leftover the purchase creates, the amount the freeze note is about.
      */
     fun buyLeftover(line: GroceryLine, item: PriceItem): Quantity? {
-        if (line.store != Store.SAMS_CLUB || item.homeStore != Store.SAMS_CLUB) return null
+        if (line.store != item.homeStore) return null
         if (line.packsToBuy <= 0) return null
         val boughtBase = item.packQuantity.toBase() * line.packsToBuy
         val leftoverBase = boughtBase - line.needed.toBase()
@@ -405,7 +299,7 @@ object Costing {
      * (Phase RI-3): an as-written ingredient no book item prices, when
      * the pantry covers it by name, still appears on the list as a
      * covered line — the list shows everything a dinner needs. Since
-     * Battles's 2026-10-24 correction, imported ingredients always
+     * the 2026-10-24 correction, imported ingredients always
      * carry real book items (guess-priced until shopped), so an
      * unresolved as-written ingredient outside the pantry's cover is
      * a legacy corner: it prices nothing and lists nothing, while the
@@ -422,14 +316,13 @@ object Costing {
         itemsById: Map<String, PriceItem>,
         stockOnHand: Map<String, Quantity>,
         pantryCoveredItemIds: Set<String> = emptySet(),
-        gateOverride: SamsGateResult? = null,
         pantryOwnedNames: Set<String> = emptySet(),
         uncrossedItemIds: Set<String> = emptySet(),
         forList: Boolean = false,
     ): CostedWeek {
         val (needs, _) = aggregateNeeds(recipes, forServings, itemsById)
         val costed = costNeeds(
-            needs, stockOnHand, pantryCoveredItemIds, gateOverride,
+            needs, stockOnHand, pantryCoveredItemIds,
             pantryOwnedNames = pantryOwnedNames,
             uncrossedItemIds = uncrossedItemIds,
         )

@@ -56,7 +56,7 @@ class BackupReconciliationTest {
         priceItems = listOf(
             PriceItem(
                 id = "pork-tenderloin", name = "Pork tenderloin", category = "Meat",
-                homeStore = Store.SAMS_CLUB, packDescription = "9 lb",
+                homeStore = "sams-club", packDescription = "9 lb",
                 packQuantity = Quantity(9.0, MeasureUnit.POUND), packPriceCents = 2168,
                 pricePerUnitCents = 240.9, checkedDate = "2026-10-22", source = "test",
             ),

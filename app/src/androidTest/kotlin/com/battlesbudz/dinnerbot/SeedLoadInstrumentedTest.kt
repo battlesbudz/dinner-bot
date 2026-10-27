@@ -31,7 +31,7 @@ class SeedLoadInstrumentedTest {
             assertEquals(result.priceItemsInserted, db.priceItemDao().count())
             assertEquals(result.recipesInserted, db.recipeDao().count())
             val tenderloin = db.priceItemDao().getById("pork-tenderloin")!!
-            assertEquals("SAMS_CLUB", tenderloin.homeStore)
+            assertEquals("sams-club", tenderloin.homeStore)
         } finally {
             db.close()
         }

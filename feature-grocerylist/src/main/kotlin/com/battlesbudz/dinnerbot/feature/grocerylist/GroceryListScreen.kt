@@ -44,6 +44,7 @@ import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.ScanSubstitution
 import com.battlesbudz.dinnerbot.core.model.Store
+import com.battlesbudz.dinnerbot.core.model.StoreIds
 import com.battlesbudz.dinnerbot.feature.grocerylist.barcode.BarcodeScanLogic
 import com.battlesbudz.dinnerbot.feature.barcode.BarcodeScannerDialog
 import com.battlesbudz.dinnerbot.feature.barcode.OffProduct
@@ -63,10 +64,19 @@ data class GroceryRow(
     val planId: String = "",
 )
 
-private fun storeLabel(store: Store): String = when (store) {
-    Store.ALDI -> "Aldi"
-    Store.WALMART -> "Walmart"
-    Store.SAMS_CLUB -> "Sam's Club"
+/** Display name for a store id: the user's own store, else a preset, else the id. */
+private fun storeLabel(storeId: String, stores: List<Store>): String =
+    StoreIds.displayName(storeId, stores)
+
+/**
+ * Store ids in display order: the user's stores in their chosen order
+ * first (only those present), then any other id in first-appearance
+ * order, so a list always groups by the user's stores (Phase C1).
+ */
+private fun orderedStoreIds(rows: List<GroceryRow>, stores: List<Store>): List<String> {
+    val present = rows.map { it.line.store }.distinct()
+    val userOrder = stores.map { it.id }.filter { it in present }
+    return userOrder + present.filter { it !in userOrder }
 }
 
 /**
@@ -86,15 +96,17 @@ fun GroceryListScreen(
     onToggleChecked: (GroceryRow, Boolean) -> Unit,
     onPriceCorrected: (GroceryRow, Int) -> Unit,
     modifier: Modifier = Modifier,
-    /** Price book, for the Sam's bulk lines' leftover + freeze note (Phase V2-2). */
+    /** Price book, for the bulk lines' leftover + freeze note (Phase V2-2). */
     priceItems: List<PriceItem> = emptyList(),
+    /** The user's stores, for section names and order (Phase C1). */
+    stores: List<Store> = emptyList(),
     /** Week 2's fresh top-up rows of a two-week plan (Phase V2-3); empty for a one-week plan. */
     topUpRows: List<GroceryRow> = emptyList(),
     /** True when the plan covers two weeks, even if nothing landed on the top-up. */
     twoWeekTrip: Boolean = false,
     /** Learned barcode links (Phase V2-5); a scanned code resolves through these. */
     barcodeLinks: List<BarcodeLink> = emptyList(),
-    /** A link Andrea just taught the app; the caller persists it as her data. */
+    /** A link the user just taught the app; the caller persists it as her data. */
     onBarcodeLinkLearned: (BarcodeLink) -> Unit = {},
     /**
      * A price correction that arrived by scanning (Phase V2-5): the item
@@ -252,7 +264,10 @@ fun GroceryListScreen(
             showNewItemForm -> NewItemFormDialog(
                 barcode = activeCode,
                 suggestedName = formPrefillName,
-                initialStore = scanRow?.line?.store ?: Store.ALDI,
+                initialStore = scanRow?.line?.store
+                    ?: stores.firstOrNull()?.id
+                    ?: priceItems.firstOrNull()?.homeStore
+                    ?: "",
                 today = todayIso,
                 book = priceItems,
                 initialProduct = formPrefillProduct,
@@ -328,7 +343,7 @@ fun GroceryListScreen(
                     val lineCash = GroceryListBuilder.lineCashCents(lineRow.line)
                     ScanPriceDialog(
                         item = displayItem,
-                        headerText = "Scanned from your ${storeLabel(lineRow.line.store)} line, " +
+                        headerText = "Scanned from your ${storeLabel(lineRow.line.store, stores)} line, " +
                             "priced at ${Money(lineCash).format()} right now. Type what this " +
                             "line actually cost; your number is saved to the price book, the " +
                             "same as tapping the price.",
@@ -441,7 +456,7 @@ fun GroceryListScreen(
                 CameraDeniedNote(modifier = Modifier.padding(top = 8.dp))
             }
             // Guess-priced items are part of the total (Phase RI-3,
-            // Battles's correction 2026-10-24): say so where the total
+            // the user's correction 2026-10-24): say so where the total
             // is said, and each guessed line is marked on its own row.
             if ((rows + topUpRows).any { priceItemsById[it.line.itemId]?.guessPriced == true }) {
                 Text(
@@ -459,21 +474,21 @@ fun GroceryListScreen(
             // set it. The per-store sections below keep their own
             // subtotal headers; these cards are the at-a-glance totals.
             val allRows = rows + topUpRows
-            Store.entries.forEach { store ->
+            orderedStoreIds(allRows, stores).forEach { store ->
                 val storeRows = allRows.filter { it.line.store == store }
                 if (storeRows.isNotEmpty()) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 12.dp)
-                            .testTag("store-total-${store.name}"),
+                            .testTag("store-total-$store"),
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(storeLabel(store), style = MaterialTheme.typography.titleMedium)
+                                Text(storeLabel(store, stores), style = MaterialTheme.typography.titleMedium)
                                 Text(
                                     "${storeRows.size} ${if (storeRows.size == 1) "item" else "items"}",
                                     style = MaterialTheme.typography.bodySmall,
@@ -503,7 +518,7 @@ fun GroceryListScreen(
         }
         storeSections(rows, priceItemsById, onToggleChecked, onUncross, onScanRow = { row ->
             startScan(row.line.itemId, row)
-        }) { editing = it }
+        }, onEditPrice = { editing = it }, stores = stores)
         if (topUpRows.isNotEmpty()) {
             item {
                 Text(
@@ -518,7 +533,7 @@ fun GroceryListScreen(
             }
             storeSections(topUpRows, priceItemsById, onToggleChecked, onUncross, onScanRow = { row ->
                 startScan(row.line.itemId, row)
-            }) { editing = it }
+            }, onEditPrice = { editing = it }, stores = stores)
         }
     }
 
@@ -543,14 +558,15 @@ private fun LazyListScope.storeSections(
     onUncross: (GroceryRow) -> Unit,
     onScanRow: (GroceryRow) -> Unit,
     onEditPrice: (GroceryRow) -> Unit,
+    stores: List<Store> = emptyList(),
 ) {
     val byStore = rows.groupBy { it.line.store }
-    Store.entries.forEach { store ->
+    orderedStoreIds(rows, stores).forEach { store ->
         val storeRows = byStore[store] ?: return@forEach
         item {
             val subtotal = storeRows.sumOf { GroceryListBuilder.lineCashCents(it.line) }
             Text(
-                "${storeLabel(store)} — about ${Money(subtotal).format()}",
+                "${storeLabel(store, stores)} — about ${Money(subtotal).format()}",
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(top = 12.dp),
             )
@@ -622,7 +638,7 @@ private fun GroceryRowView(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            // A guess-priced item (Phase RI-3, Battles's correction
+            // A guess-priced item (Phase RI-3, the user's correction
             // 2026-10-24): the item is in the book at a guessed price
             // from its recipe import. The line says so plainly; the
             // price still corrects by scan or tap like any other, and
@@ -646,7 +662,7 @@ private fun GroceryRowView(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            // Freeze guidance (Phase V2-2): when a Sam's bulk pack
+            // Freeze guidance (Phase V2-2): when a bulk pack
             // is being bought, say how much will be left over and
             // how to freeze it. Guidance only, no tracking.
             val pricedItem = priceItemsById[line.itemId]
@@ -682,7 +698,7 @@ private fun GroceryRowView(
 }
 
 /**
- * A pantry-covered row (Phase RI-3, Battles's weekly-list ruling): the
+ * A pantry-covered row (Phase RI-3, the user's weekly-list ruling): the
  * dinner needs this item and the pantry already has it, so the row is
  * grayed and crossed through at $0 — the recipe ingredient's name on
  * top, the covering pantry entry's name crossed out beneath it, marked

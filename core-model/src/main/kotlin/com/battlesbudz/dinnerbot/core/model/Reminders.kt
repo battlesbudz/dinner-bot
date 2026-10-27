@@ -28,7 +28,7 @@ data class ReminderSettings(
     val shoppingTime: String = "09:00",
     /**
      * Defrost reminder on the evening before a cook night whose dinner
-     * draws on frozen Sam's Club bulk stock, naming the item to move.
+     * draws on frozen bulk stock, naming the item to move.
      */
     val defrostEnabled: Boolean = false,
     val defrostTime: String = "20:00",

@@ -21,7 +21,7 @@ import org.junit.Test
 class ReconciliationMergeTest {
 
     private fun item(
-        id: String, name: String, store: Store, packAmount: Double, unit: MeasureUnit,
+        id: String, name: String, store: String, packAmount: Double, unit: MeasureUnit,
         packPrice: Int, alternates: List<StorePrice> = emptyList(),
     ) = PriceItem(
         id = id, name = name, category = "Test", homeStore = store, packDescription = "pack",
@@ -31,11 +31,11 @@ class ReconciliationMergeTest {
     )
 
     private val tenderloin = item(
-        "pork-tenderloin", "Pork tenderloin", Store.SAMS_CLUB, 9.0, MeasureUnit.POUND, 2168,
-        alternates = listOf(StorePrice(Store.ALDI, 297.0)),
+        "pork-tenderloin", "Pork tenderloin", "sams-club", 9.0, MeasureUnit.POUND, 2168,
+        alternates = listOf(StorePrice("aldi", 297.0)),
     )
-    private val spaghetti = item("spaghetti", "Spaghetti", Store.ALDI, 32.0, MeasureUnit.OUNCE, 209)
-    private val eggs = item("eggs", "Eggs", Store.ALDI, 12.0, MeasureUnit.COUNT, 185)
+    private val spaghetti = item("spaghetti", "Spaghetti", "aldi", 32.0, MeasureUnit.OUNCE, 209)
+    private val eggs = item("eggs", "Eggs", "aldi", 12.0, MeasureUnit.COUNT, 185)
     private val book = listOf(tenderloin, spaghetti, eggs)
 
     private fun line(item: PriceItem, needed: Quantity, packs: Int, price: Int) = GroceryLine(
@@ -46,7 +46,7 @@ class ReconciliationMergeTest {
     private fun stapleOut(item: PriceItem) = ReconciledOut(
         itemKey = "item:${item.id}", displayName = item.name, stapleSide = true,
         priceItemId = item.id,
-        bulkItemId = item.takeIf { it.homeStore == Store.SAMS_CLUB }?.id,
+        bulkItemId = item.takeIf { it.homeStore == "sams-club" }?.id,
     )
 
     private fun ingredientOut(item: PriceItem) = ReconciledOut(
@@ -59,15 +59,12 @@ class ReconciliationMergeTest {
         outs: List<ReconciledOut>,
         plannedItemIds: Set<String> = emptySet(),
         plannedNeedsBase: Map<String, Double> = emptyMap(),
-        gateMet: Boolean = true,
     ) = ReconciliationMerge.merge(
         lines = lines,
         resolvedOuts = outs,
         priceItems = book,
         plannedItemIds = plannedItemIds,
         plannedNeedsBase = plannedNeedsBase,
-        samsGateMet = gateMet,
-        samsMonthlySavingsCents = if (gateMet) 505 else 0,
     )
 
     @Test fun ranOutStapleIsAlwaysListedEvenWhenNoRecipeNeedsIt() {
@@ -90,15 +87,13 @@ class ReconciliationMergeTest {
         // reads the resolved out's staple side). No planned dinner uses
         // it and the plan carries no line for it: it is still listed,
         // priced, because a staple out is always restocked.
-        val salt = item("salt", "Salt", Store.ALDI, 26.0, MeasureUnit.OUNCE, 89)
+        val salt = item("salt", "Salt", "aldi", 26.0, MeasureUnit.OUNCE, 89)
         val result = ReconciliationMerge.merge(
             lines = listOf(line(spaghetti, Quantity.ounces(16.0), packs = 1, price = 209)),
             resolvedOuts = listOf(stapleOut(salt)),
             priceItems = book + salt,
             plannedItemIds = emptySet(),
             plannedNeedsBase = emptyMap(),
-            samsGateMet = true,
-            samsMonthlySavingsCents = 0,
         )
         val added = result.lines.single { it.itemId == "salt" }
         assertEquals(1, added.packsToBuy)
@@ -145,24 +140,25 @@ class ReconciliationMergeTest {
     }
 
     @Test fun stapleMergeTopsQuantityToTheMaxNeverTheSum() {
-        // Gate off: the plan's tenderloin need (2 lb) was rerouted to
-        // Aldi by weight at 297c/lb (594c). The staple reason wants one
-        // full 9 lb pack: the merged quantity is 9 lb (the max), priced
-        // the same rerouted way, never 11 lb (the sum).
-        val rerouted = GroceryLine(
-            itemId = "pork-tenderloin", displayName = "Pork tenderloin", store = Store.ALDI,
+        // The plan's tenderloin line holds 2 lb bought by weight at
+        // another store (594c). The staple reason wants one full 9 lb
+        // pack: the merged quantity is 9 lb (the max), never 11 lb
+        // (the sum), and the topped line is the item's own home-store
+        // pack at its pack price — no store rerouting exists anymore.
+        val byWeight = GroceryLine(
+            itemId = "pork-tenderloin", displayName = "Pork tenderloin", store = "aldi",
             needed = Quantity.pounds(2.0), packsToBuy = 1, estimatedPackPriceCents = 594,
         )
         val result = merge(
-            lines = listOf(rerouted),
+            lines = listOf(byWeight),
             outs = listOf(stapleOut(tenderloin)),
-            gateMet = false,
         )
         assertEquals(1, result.lines.size)
         val merged = result.lines.single()
         assertEquals(9.0, merged.needed.amount, 0.001)
-        assertEquals(9 * 297, merged.estimatedPackPriceCents)
-        assertEquals(9 * 297 - 594, result.cashDeltaCents)
+        assertEquals("sams-club", merged.store)
+        assertEquals(2168, merged.estimatedPackPriceCents)
+        assertEquals(2168 - 594, result.cashDeltaCents)
         assertTrue(merged.reconciliationAdded)
         // A top-up is not an addition.
         assertTrue(result.addedNames.isEmpty())

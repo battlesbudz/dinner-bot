@@ -15,8 +15,8 @@ import java.time.format.DateTimeFormatter
  * Validates the canonical seed data (repo-root seed-data/). Rules come from the
  * Scope and Implementation Plans: every recipe ingredient must map to a priced
  * price book item (or be an explicit pantry staple), no zero prices, every item
- * has a home store (enum, so presence is structural), pack sizes present, and
- * the household rule: nothing references beef.
+ * has a home store, pack sizes present. Any food is legal seed content,
+ * beef included (Phase C1: no household rules are baked into the data).
  */
 object SeedValidator {
     fun validate(priceItems: List<PriceItem>, recipes: List<Recipe>): List<String> {
@@ -32,18 +32,13 @@ object SeedValidator {
             if (item.source.isBlank()) errors += "price item ${item.id}: missing source"
             runCatching { LocalDate.parse(item.checkedDate, DateTimeFormatter.ISO_LOCAL_DATE) }
                 .onFailure { errors += "price item ${item.id}: checkedDate '${item.checkedDate}' is not yyyy-MM-dd" }
-            if (item.name.contains("beef", ignoreCase = true) || item.id.contains("beef", ignoreCase = true)) {
-                errors += "price item ${item.id}: beef is banned by the household rule"
-            }
+            if (item.homeStore.isBlank()) errors += "price item ${item.id}: missing home store"
         }
 
         val recipeIds = recipes.map { it.id }
         if (recipeIds.size != recipeIds.toSet().size) errors += "duplicate recipe ids"
         val byId = priceItems.associateBy { it.id }
         for (recipe in recipes) {
-            if (recipe.title.contains("beef", ignoreCase = true)) {
-                errors += "recipe ${recipe.id}: beef is banned by the household rule"
-            }
             if (recipe.servings <= 0) errors += "recipe ${recipe.id}: servings must be positive"
             if (recipe.steps.isEmpty()) errors += "recipe ${recipe.id}: no steps"
             if (recipe.ingredients.isEmpty()) errors += "recipe ${recipe.id}: no ingredients"
@@ -109,7 +104,7 @@ object SeedValidator {
         val bySlug = entries.filter { it.pantryItem }.map { it.itemId }.toSet()
         val usedPriced = recipes.flatMap { it.ingredients }
             .mapNotNull { it.priceItemId }
-            .map { Costing.substituteItemId(it) }.toSet()
+            .toSet()
         val usedPantrySlugs = recipes.flatMap { it.ingredients }
             .mapNotNull { it.pantryItem }
             .map { NutritionCalculator.pantrySlug(it) }.toSet()

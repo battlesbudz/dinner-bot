@@ -19,15 +19,16 @@ import org.junit.Test
  */
 class ReconciliationWriteBackTest {
 
-    private fun item(id: String, name: String, store: Store) = PriceItem(
+    private fun item(id: String, name: String, store: String) = PriceItem(
         id = id, name = name, category = "Test", homeStore = store, packDescription = "pack",
         packQuantity = Quantity(1.0, MeasureUnit.POUND), packPriceCents = 100,
         pricePerUnitCents = 100.0, checkedDate = "2026-10-22", source = "test",
+        freezeNote = if (id == "pork-tenderloin") "Portioned into bags." else null,
     )
 
-    private val tenderloin = item("pork-tenderloin", "Pork tenderloin", Store.SAMS_CLUB)
-    private val potatoes = item("russet-potatoes", "Russet potatoes", Store.ALDI)
-    private val spaghetti = item("spaghetti", "Spaghetti", Store.ALDI)
+    private val tenderloin = item("pork-tenderloin", "Pork tenderloin", "sams-club")
+    private val potatoes = item("russet-potatoes", "Russet potatoes", "aldi")
+    private val spaghetti = item("spaghetti", "Spaghetti", "aldi")
     private val book = listOf(tenderloin, potatoes, spaghetti)
 
     private val pantry = listOf(

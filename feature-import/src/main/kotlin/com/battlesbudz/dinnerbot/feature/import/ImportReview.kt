@@ -16,7 +16,7 @@ import com.battlesbudz.dinnerbot.core.model.RecipeOrigin
  * section 5.4): the source line beside the app's reading of it.
  * [ingredient] is the current reading as a recipe ingredient (a matched
  * book item, or the parsed name staying as written text); [suggestion]
- * and [quantitySuggestion] are offers Andrea can accept, never silent
+ * and [quantitySuggestion] are offers the user can accept, never silent
  * applications; [pantryCovered] is read from the costing layer, the
  * same computation the weekly list uses, so the review and the list
  * can never disagree about what is already home.
@@ -35,7 +35,7 @@ data class ReviewIngredient(
 
 /**
  * The review screen's non-editor half (Phase RI-2): turning a parsed
- * draft into rows, applying Andrea's confirmations, and building the
+ * draft into rows, applying the user's confirmations, and building the
  * recipe she saves. Pure, so every rule is testable on the JVM.
  */
 object ImportReview {
@@ -126,7 +126,7 @@ object ImportReview {
         return Costing.pantryNameCoversName(pantryOwnedNames, name)
     }
 
-    /** Andrea confirmed the near-match suggestion: the row now reads as that book item. */
+    /** the user confirmed the near-match suggestion: the row now reads as that book item. */
     fun applySuggestion(
         row: ReviewIngredient,
         priceItems: List<PriceItem>,
@@ -144,7 +144,7 @@ object ImportReview {
         )
     }
 
-    /** Andrea accepted the container reading of the row's amount. */
+    /** the user accepted the container reading of the row's amount. */
     fun applyQuantitySuggestion(
         row: ReviewIngredient,
         priceItems: List<PriceItem>,

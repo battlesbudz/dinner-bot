@@ -19,7 +19,7 @@ import com.battlesbudz.dinnerbot.core.model.PriceItem
  *   direction for a pantry claim; import matching errs toward asking,
  *   because a wrong silent match puts the wrong food in a recipe. A
  *   word-ending near-match may be offered as a review suggestion,
- *   which Andrea confirms or it stays unmatched.
+ *   which the user confirms or it stays unmatched.
  * - Matching dedupes against the price book only. Nothing here creates
  *   a book item, edits the pantry, or writes a barcode link.
  */

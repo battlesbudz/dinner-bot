@@ -3,7 +3,7 @@ package com.battlesbudz.dinnerbot.core.model
 import kotlinx.serialization.Serializable
 
 /**
- * A recipe Andrea brought into the app herself (Phase RI-2): imported
+ * A recipe the user brought into the app (Phase RI-2): imported
  * from a page or a paste, or created by hand. User-owned data in every
  * sense (plan ruling 11): it lives in its own table, no seed refresh
  * ever touches it, it rides in backups, and its ratings and photos key

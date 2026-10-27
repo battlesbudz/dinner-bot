@@ -53,7 +53,7 @@ sealed interface ImportStart {
  * links, and the review screen every import lands on before anything
  * saves. A review abandoned midway saves nothing. On save, an
  * ingredient with no match joins the price book at a guessed price
- * (Battles's correction, 2026-10-24); no pantry row and no barcode
+ * (the user's correction, 2026-10-24); no pantry row and no barcode
  * link is ever written by an import.
  */
 @Composable

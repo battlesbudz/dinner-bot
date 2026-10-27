@@ -14,13 +14,14 @@ class PantryLogicTest {
 
     private val tenderloin = PriceItem(
         id = "pork-tenderloin", name = "Pork tenderloin", category = "Meat",
-        homeStore = Store.SAMS_CLUB, packDescription = "9 lb",
+        homeStore = "sams-club", packDescription = "9 lb",
         packQuantity = Quantity(9.0, MeasureUnit.POUND), packPriceCents = 2168,
         pricePerUnitCents = 240.9, checkedDate = "2026-10-22", source = "test",
+        freezeNote = "Portioned into 1.25 lb bags.",
     )
     private val turkey = tenderloin.copy(
-        id = "ground-turkey", name = "Ground turkey", homeStore = Store.WALMART,
-        packQuantity = Quantity(1.0, MeasureUnit.POUND),
+        id = "ground-turkey", name = "Ground turkey", homeStore = "walmart",
+        packQuantity = Quantity(1.0, MeasureUnit.POUND), freezeNote = null,
     )
 
     @Test fun toggleFlipsOwned() {
@@ -47,7 +48,16 @@ class PantryLogicTest {
         assertEquals(1.0, fromNothing.onHand.amount, 0.001)
     }
 
-    @Test fun bulkItemsAreOnlySamsClubItems() {
+    @Test fun bulkItemsAreFreezeNoteItemsOrStockedItems() {
+        // Phase C1: bulk is a property of the item (its freeze note) or of
+        // its tracked stock, never of the store it comes from.
         assertEquals(listOf(tenderloin), PantryLogic.bulkItems(listOf(tenderloin, turkey)))
+        val stockedTurkey = com.battlesbudz.dinnerbot.core.model.BulkStock(
+            "ground-turkey", Quantity.pounds(2.0),
+        )
+        assertEquals(
+            listOf(turkey),
+            PantryLogic.bulkItems(listOf(turkey), listOf(stockedTurkey)),
+        )
     }
 }

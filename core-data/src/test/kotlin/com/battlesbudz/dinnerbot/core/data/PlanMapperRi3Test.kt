@@ -21,7 +21,7 @@ class PlanMapperRi3Test {
         val line = GroceryLine(
             itemId = "russet-potatoes",
             displayName = "Russet potatoes",
-            store = Store.ALDI,
+            store = "aldi",
             needed = Quantity(2.0, MeasureUnit.POUND),
             packsToBuy = 0,
             estimatedPackPriceCents = 349,
@@ -39,7 +39,7 @@ class PlanMapperRi3Test {
         val line = GroceryLine(
             itemId = "aswritten:white-onion",
             displayName = "White onion",
-            store = Store.ALDI,
+            store = "aldi",
             needed = Quantity(1.0, MeasureUnit.POUND),
             packsToBuy = 1,
             estimatedPackPriceCents = 0,

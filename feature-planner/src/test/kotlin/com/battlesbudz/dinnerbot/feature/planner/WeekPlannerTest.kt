@@ -15,7 +15,7 @@ import org.junit.Test
 class WeekPlannerTest {
 
     private fun item(
-        id: String, store: Store, packAmount: Double, unit: MeasureUnit,
+        id: String, store: String, packAmount: Double, unit: MeasureUnit,
         packPrice: Int, perUnit: Double? = null, alternates: List<StorePrice> = emptyList(),
     ) = PriceItem(
         id = id, name = id, category = "Test", homeStore = store, packDescription = "pack",
@@ -24,13 +24,13 @@ class WeekPlannerTest {
         checkedDate = "2026-10-22", source = "test", alternates = alternates,
     )
 
-    private val turkey = item("ground-turkey", Store.WALMART, 1.0, MeasureUnit.POUND, 198)
+    private val turkey = item("ground-turkey", "walmart", 1.0, MeasureUnit.POUND, 198)
     private val tenderloin = item(
-        "pork-tenderloin", Store.SAMS_CLUB, 9.0, MeasureUnit.POUND, 2168,
-        perUnit = 240.9, alternates = listOf(StorePrice(Store.ALDI, 297.0)),
+        "pork-tenderloin", "sams-club", 9.0, MeasureUnit.POUND, 2168,
+        perUnit = 240.9, alternates = listOf(StorePrice("aldi", 297.0)),
     )
-    private val spaghetti = item("spaghetti", Store.ALDI, 32.0, MeasureUnit.OUNCE, 209, perUnit = 6.53)
-    private val eggs = item("eggs", Store.ALDI, 12.0, MeasureUnit.COUNT, 185, perUnit = 15.4)
+    private val spaghetti = item("spaghetti", "aldi", 32.0, MeasureUnit.OUNCE, 209, perUnit = 6.53)
+    private val eggs = item("eggs", "aldi", 12.0, MeasureUnit.COUNT, 185, perUnit = 15.4)
     private val book = listOf(turkey, tenderloin, spaghetti, eggs)
 
     private fun recipe(id: String, title: String, vararg ingredients: RecipeIngredient) = Recipe(
@@ -140,7 +140,7 @@ class WeekPlannerTest {
         // ingredient (onion). The old code filtered those recipes out whole,
         // leaving fewer dinners than cook nights: generation wrapped the
         // short list into repeats and swap had no candidates left at all.
-        val onionBook = book + item("yellow-onions", Store.ALDI, 3.0, MeasureUnit.POUND, 150)
+        val onionBook = book + item("yellow-onions", "aldi", 3.0, MeasureUnit.POUND, 150)
         val recipes = (1..6).map { i ->
             recipe(
                 "d$i", "Dinner $i",

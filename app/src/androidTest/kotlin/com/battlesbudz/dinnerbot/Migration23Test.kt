@@ -130,6 +130,7 @@ class Migration23Test {
                 DinnerBotDatabase.MIGRATION_13_14,
                 DinnerBotDatabase.MIGRATION_14_15,
                 DinnerBotDatabase.MIGRATION_15_16,
+                DinnerBotDatabase.MIGRATION_16_17,
             )
             .build()
         try {
@@ -146,7 +147,7 @@ class Migration23Test {
             val stored = db.recipeRatingDao().getAll().single()
             assertEquals("r1", stored.recipeId)
             assertEquals("DOWN", stored.rating)
-            assertEquals(16, db.openHelper.readableDatabase.version)
+            assertEquals(17, db.openHelper.readableDatabase.version)
         } finally {
             db.close()
         }

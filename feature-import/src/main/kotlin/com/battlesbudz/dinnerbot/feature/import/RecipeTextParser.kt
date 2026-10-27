@@ -4,7 +4,7 @@ package com.battlesbudz.dinnerbot.feature.`import`
  * Reading a recipe from pasted plain text (Phase RI-2): the intake
  * route that works with no connection at all and the fallback every
  * other route lands on. The reading is a first pass, not a verdict:
- * the review screen shows it whole and Andrea corrects it there.
+ * the review screen shows it whole and the user corrects it there.
  *
  * Shape rules, deliberately simple: the first line is the title unless
  * it reads as an ingredient; "Ingredients" and "Instructions" (and

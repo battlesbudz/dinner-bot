@@ -10,7 +10,7 @@ import com.battlesbudz.dinnerbot.core.model.ReconciledOut
  * the reconciled ran-out set merges into a planned week's lines, so the
  * list is built once, from the plan and the corrected state together.
  *
- * Battles's rules, exactly:
+ * the user's rules, exactly:
  * - A ran-out STAPLE is always on the list, whether or not a planned
  *   recipe uses it: one pack at its home store (or its gate-routed
  *   store, priced by the same Costing path as any planned line).
@@ -43,16 +43,8 @@ object ReconciliationMerge {
         plannedItemIds: Set<String>,
         /** Aggregated planned need per priced item, in base units (Costing.aggregateNeeds). */
         plannedNeedsBase: Map<String, Double>,
-        /** The Sam's gate the week was planned under; its routing is kept for merged lines. */
-        samsGateMet: Boolean,
-        samsMonthlySavingsCents: Int,
     ): Result {
         val itemsById = priceItems.associateBy { it.id }
-        val gate = Costing.SamsGateResult(
-            projectedMonthlySavingsCents = samsMonthlySavingsCents,
-            useSams = samsGateMet,
-            savingsByItemCents = emptyMap(),
-        )
         val byItem = lines.associateBy { it.itemId }.toMutableMap()
         val order = lines.map { it.itemId }.toMutableList()
         var delta = 0
@@ -65,7 +57,6 @@ object ReconciliationMerge {
                 listOf(Costing.ItemNeed(item, needBase)),
                 stockOnHand = emptyMap(),
                 pantryCoveredItemIds = emptySet(),
-                gateOverride = gate,
             ).lines.firstOrNull()
 
         for (out in resolvedOuts) {

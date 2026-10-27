@@ -15,7 +15,7 @@ import org.junit.Test
  */
 class RecipePricingTest {
 
-    private fun item(id: String, name: String, packPrice: Int, store: Store = Store.ALDI) = PriceItem(
+    private fun item(id: String, name: String, packPrice: Int, store: String = "aldi") = PriceItem(
         id = id, name = name, category = "Test", homeStore = store,
         packDescription = "pack", packQuantity = Quantity(1.0, MeasureUnit.POUND),
         packPriceCents = packPrice, pricePerUnitCents = packPrice.toDouble(),
@@ -48,7 +48,9 @@ class RecipePricingTest {
         assertTrue(RecipePricing.isIngredientPriced(priced("yellow-onion"), byId))
     }
 
-    @Test fun beefIngredientIsPricedThroughTheTurkeySubstitute() {
+    @Test fun beefIngredientIsPricedAsItself() {
+        // Phase C1: no substitution layer; beef prices through its own
+        // book entry like any other ingredient.
         val withBeef = byId + ("ground-beef" to item("ground-beef", "Ground beef", 500)) +
             ("ground-turkey" to item("ground-turkey", "Ground turkey", 198))
         assertTrue(RecipePricing.isIngredientPriced(priced("ground-beef"), withBeef))
@@ -111,12 +113,12 @@ class RecipePricingTest {
     }
 
     @Test fun guessStoreComesFromTheFirstEquivalentElseAldi() {
-        val walmartOnion = item("w-onion", "Sweet onion", 159, Store.WALMART)
+        val walmartOnion = item("w-onion", "Sweet onion", 159, "walmart")
         assertEquals(
-            Store.WALMART,
+            "walmart",
             RecipePricing.guessStore("White onion", listOf(walmartOnion, eggs)),
         )
-        assertEquals(Store.ALDI, RecipePricing.guessStore("Saffron", listOf(eggs)))
+        assertEquals("aldi", RecipePricing.guessStore("Saffron", listOf(eggs)))
     }
 
     @Test fun guessesNeverWriteIntoTheBook() {

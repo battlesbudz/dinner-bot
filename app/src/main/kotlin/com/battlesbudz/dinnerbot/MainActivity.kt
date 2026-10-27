@@ -174,7 +174,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Edge to edge, explicitly (v0.6.0 redesign): targetSdk 35 draws
         // behind the system bars whether the app asks or not, and the
-        // old build never accounted for them — Battles found the tabs
+        // old build never accounted for them — the user found the tabs
         // and back buttons hiding under the phone's back / home /
         // multitask bar. The app now opts in and every surface pads for
         // the bars it draws under (Scaffold insets for the main shell,
@@ -239,7 +239,7 @@ private fun Intent.sharedTextExtra(): String? =
     }
 
 /**
- * The five destinations (v0.6.0 redesign, Battles's decision): Recipes,
+ * The five destinations (v0.6.0 redesign, the user's decision): Recipes,
  * List, Plan in the middle (the most-used screen, his call), Pantry,
  * Settings. The old Prices tab folds into Pantry behind its pill toggle
  * and the old Nutrition tab folds into the recipe screens and the Plan
@@ -370,13 +370,13 @@ private fun DinnerBotApp(
     var storedPlan2 by remember { mutableStateOf<PlanMapper.StoredPlan?>(null) }
     var groceryRows2 by remember { mutableStateOf<List<GroceryRow>>(emptyList()) }
     var ratings by remember { mutableStateOf<Map<String, RecipeRating>>(emptyMap()) }
-    // Household recipe edits (Phase RI-1): Andrea's saved ingredient
+    // Household recipe edits (Phase RI-1): the user's saved ingredient
     // lists over library recipes, by recipe id. The recipes state below
     // is always the EFFECTIVE set (seed + these overrides merged on the
     // load path); this map is kept beside it so screens can show which
     // recipes carry her edits and offer restore-original.
     var recipeOverrides by remember { mutableStateOf<Map<String, RecipeOverride>>(emptyMap()) }
-    // Andrea's own recipes (Phase RI-2): imported and hand-made, kept
+    // the user's own recipes (Phase RI-2): imported and hand-made, kept
     // beside the effective set (which already contains them, merged on
     // the load path) so screens can show a recipe's source link and
     // the import flow can check for a duplicate source.
@@ -455,6 +455,10 @@ private fun DinnerBotApp(
                 SeedDataParser.parseDietPresets(loadAsset("diet-presets.json"))
             }.getOrDefault(emptyList())
             val s = database.settingsDao().get()?.let { with(SeedMapper) { it.toModel() } }
+                ?.copy(
+                    stores = database.storeDao().getAll()
+                        .map { with(SeedMapper) { it.toModel() } },
+                )
                 ?: OnboardingDefaults.initialSettings()
             SeedLoader(database).seedPantryIfEmpty(OnboardingDefaults.DEFAULT_STAPLES, s.pantryStaples)
             // THE recipe load path (Phase RI-1, plan section 5.1): stored
@@ -463,7 +467,7 @@ private fun DinnerBotApp(
             // list, nutrition) consumes this one effective set, so the
             // seed version of a corrected dish can never leak through a
             // second path. Phase RI-2 extends the same merge with
-            // Andrea's own imported and hand-made recipes, which live
+            // the user's own imported and hand-made recipes, which live
             // in their own table and are never seed-touched.
             val storedRecipes = database.recipeDao().getAll().map { with(SeedMapper) { it.toModel() } }
             val loadedOverrides = database.recipeOverrideDao().getAll()
@@ -472,7 +476,7 @@ private fun DinnerBotApp(
             val loadedImported = database.importedRecipeDao().getAll()
                 .map { with(SeedMapper) { it.toModel() } }
             val bookOnDisk = database.priceItemDao().getAll().map { with(SeedMapper) { it.toModel() } }
-            // The price-book backfill (Battles's correction, 2026-10-24):
+            // The price-book backfill (the user's correction, 2026-10-24):
             // imports saved before the correction hold ingredients with
             // no book item. They gain their items here — exact-name
             // links where the book already has the ingredient, new
@@ -481,6 +485,7 @@ private fun DinnerBotApp(
             // resolves, the pass creates and rewrites nothing.
             val linkResult = GuessPricer.linkRecipes(
                 loadedImported, bookOnDisk, LocalDate.now().toString(),
+                defaultStoreId = s.firstStore?.id,
             )
             if (linkResult.itemsToAdd.isNotEmpty() || linkResult.recipes != loadedImported) {
                 linkResult.itemsToAdd.forEach {
@@ -650,7 +655,7 @@ private fun DinnerBotApp(
                     budgetCents = currentSettings.weeklyBudgetCents,
                     cashNeededCents = plan.cashNeededCents,
                     foodCostCents = plan.foodCostCents,
-                    samsMonthlySavingsCents = plan.samsMonthlySavingsCents,
+                    samsMonthlySavingsCents = 0,
                     nights = plan.nights,
                     notes = plan.notes,
                     createdAtMillis = System.currentTimeMillis(),
@@ -689,7 +694,7 @@ private fun DinnerBotApp(
 
     /**
      * The generation disclaimer (Phase RI-3, ruling 5): when a week
-     * just generated contains a not-yet-priced dinner of Andrea's, the
+     * just generated contains a not-yet-priced dinner of the user's, the
      * pop-up fires once for that generation, naming the dinner. The
      * dinner's own card carries the standing note from there.
      */
@@ -757,7 +762,7 @@ private fun DinnerBotApp(
                         budgetCents = forSettings.weeklyBudgetCents,
                         cashNeededCents = week.cashNeededCents,
                         foodCostCents = week.foodCostCents,
-                        samsMonthlySavingsCents = week.samsMonthlySavingsCents,
+                        samsMonthlySavingsCents = 0,
                         nights = week.nights,
                         notes = week.notes,
                         createdAtMillis = createdAt,
@@ -880,8 +885,6 @@ private fun DinnerBotApp(
             priceItems = priceItems,
             plannedItemIds = needs.map { it.item.id }.toSet(),
             plannedNeedsBase = needs.associate { it.item.id to it.neededBase },
-            samsGateMet = plan.samsGateMet,
-            samsMonthlySavingsCents = plan.samsMonthlySavingsCents,
         )
         if (result.addedNames.isEmpty() && result.cashDeltaCents == 0) return plan
         val notes = if (result.addedNames.isNotEmpty()) {
@@ -983,8 +986,6 @@ private fun DinnerBotApp(
             lines = rows.map { it.line },
             cashNeededCents = plan.cashNeededCents,
             foodCostCents = plan.foodCostCents,
-            samsMonthlySavingsCents = plan.samsMonthlySavingsCents,
-            samsGateMet = plan.samsMonthlySavingsCents >= Costing.SAMS_MONTHLY_GATE_CENTS,
             deferredRestocks = emptyList(),
             notes = plan.notes,
         )
@@ -1009,9 +1010,8 @@ private fun DinnerBotApp(
         val dinners = (view1.nights + view2.nights)
             .filterNot { it.notCooking }
             .mapNotNull { adaptedById[it.recipeId] }
-        val gate = WeekPlanner.fortnightGateForDinners(forSettings, dinners, priceItems)
         val stock1 = WeekPlanner.projectedStockAfter(
-            forSettings, view1, adaptationFor(forSettings).recipes, priceItems, stock, owned, gate,
+            forSettings, view1, adaptationFor(forSettings).recipes, priceItems, stock, owned,
         )
         val repriced2 = WeekPlanner.recost(
             settings = forSettings,
@@ -1020,7 +1020,6 @@ private fun DinnerBotApp(
             priceItems = priceItems,
             stockOnHand = stock1,
             pantryOwnedNames = owned,
-            gateOverride = gate,
         )
         val merged2 = mergeResolvedIntoWeek(repriced2, resolvedOuts, forSettings)
         persistFortnight(
@@ -1084,7 +1083,7 @@ private fun DinnerBotApp(
                 val newSettings = forSettings.copy(
                     reconciledPlanIds = (forSettings.reconciledPlanIds + consumed).distinct(),
                 )
-                database.settingsDao().upsert(with(SeedMapper) { newSettings.toEntity() })
+                persistSettings(database, newSettings)
                 syncPantryStaples(database, newSettings)
             }
             when (flow.target) {
@@ -1168,7 +1167,7 @@ private fun DinnerBotApp(
      * A from-now-on ingredient edit (Phase RI-2 routing): where the
      * saved version lives depends on the recipe's origin. A library
      * recipe's edit is its override row (Phase RI-1); an imported or
-     * hand-made recipe is Andrea's own data, so the edit rewrites her
+     * hand-made recipe is the user's own data, so the edit rewrites her
      * recipe's own ingredient list in its table. Either way the saved
      * recipe is what every surface cooks from then on.
      */
@@ -1178,7 +1177,7 @@ private fun DinnerBotApp(
             withContext(Dispatchers.IO) {
                 // A from-now-on edit can name an ingredient the book
                 // has never seen; it joins the book guess-priced,
-                // exactly as at import (Battles's correction,
+                // exactly as at import (the user's correction,
                 // 2026-10-24) — everything is in the pricing book.
                 // Library recipes link too since v0.6.2: before, their
                 // override path skipped linking entirely, so an
@@ -1188,6 +1187,7 @@ private fun DinnerBotApp(
                 val (linked, created) = GuessPricer.linkRecipe(
                     recipe.copy(ingredients = ingredients),
                     book, LocalDate.now().toString(),
+                    defaultStoreId = database.storeDao().getAll().firstOrNull()?.id,
                 )
                 created.forEach {
                     database.priceItemDao().upsert(with(SeedMapper) { it.toEntity() })
@@ -1329,7 +1329,7 @@ private fun DinnerBotApp(
      * ratings and photos key off the recipe id, so they carry over an
      * update untouched).
      *
-     * Battles's correction (2026-10-24) supersedes the RI-2 rule that
+     * the user's correction (2026-10-24) supersedes the RI-2 rule that
      * the import created nothing: every ingredient still unmatched is
      * linked into the price book first — an exact-name item when one
      * exists, a new guess-priced item otherwise — because everything
@@ -1342,6 +1342,7 @@ private fun DinnerBotApp(
                 val book = database.priceItemDao().getAll().map { with(SeedMapper) { it.toModel() } }
                 val (linked, created) = GuessPricer.linkRecipe(
                     recipe, book, LocalDate.now().toString(),
+                    defaultStoreId = database.storeDao().getAll().firstOrNull()?.id,
                 )
                 created.forEach {
                     database.priceItemDao().upsert(with(SeedMapper) { it.toEntity() })
@@ -1619,7 +1620,7 @@ private fun DinnerBotApp(
             onFinish = { saved ->
                 scope.launch {
                     withContext(Dispatchers.IO) {
-                        database.settingsDao().upsert(with(SeedMapper) { saved.toEntity() })
+                        persistSettings(database, saved)
                         SeedLoader(database).seedPantryIfEmpty(
                             OnboardingDefaults.DEFAULT_STAPLES, saved.pantryStaples,
                         )
@@ -1662,8 +1663,6 @@ private fun DinnerBotApp(
                         lines = groceryRows.map { it.line },
                         cashNeededCents = sp.cashNeededCents,
                         foodCostCents = sp.foodCostCents,
-                        samsMonthlySavingsCents = sp.samsMonthlySavingsCents,
-                        samsGateMet = sp.samsMonthlySavingsCents >= Costing.SAMS_MONTHLY_GATE_CENTS,
                         deferredRestocks = emptyList(),
                         notes = sp.notes,
                     )
@@ -1677,8 +1676,6 @@ private fun DinnerBotApp(
                         lines = groceryRows2.map { it.line },
                         cashNeededCents = sp.cashNeededCents,
                         foodCostCents = sp.foodCostCents,
-                        samsMonthlySavingsCents = sp.samsMonthlySavingsCents,
-                        samsGateMet = sp.samsMonthlySavingsCents >= Costing.SAMS_MONTHLY_GATE_CENTS,
                         deferredRestocks = emptyList(),
                         notes = sp.notes,
                     )
@@ -1696,7 +1693,7 @@ private fun DinnerBotApp(
                     null
                 }
             }
-            // The stored plans' not-yet-priced dinners of Andrea's
+            // The stored plans' not-yet-priced dinners of the user's
             // (Phase RI-3): computed live from the price book as it
             // stands, so a dinner's not-accurate note and the cash
             // card's guess label clear themselves the day its last
@@ -1740,7 +1737,7 @@ private fun DinnerBotApp(
              * The same protection for scan substitutions (PR v0.4.4): a
              * recost knows nothing about a this-week swap, so without
              * this fold repricing would quietly put the planned line
-             * back and drop the item Andrea actually bought. The pure
+             * back and drop the item the user actually bought. The pure
              * fold lives with the scan logic; this applies its lines
              * and money deltas.
              */
@@ -1781,7 +1778,6 @@ private fun DinnerBotApp(
                     val dinners = (view.nights + view2.nights)
                         .filterNot { it.notCooking }
                         .mapNotNull { recipesById[it.recipeId] }
-                    val gate = WeekPlanner.fortnightGateForDinners(currentSettings, dinners, priceItems)
                     val repriced1 = WeekPlanner.recost(
                         settings = currentSettings,
                         current = view,
@@ -1789,14 +1785,13 @@ private fun DinnerBotApp(
                         priceItems = priceItems,
                         stockOnHand = stock,
                         pantryOwnedNames = owned,
-                        gateOverride = gate,
                     )
                     val merged1 = keepMergedLines(view, repriced1)
                     val kept1 = keepSubstitutedLines(view, merged1)
                     val stock1 = WeekPlanner.projectedStockAfter(
-                        currentSettings, repriced1, adaptation.recipes, priceItems, stock, owned, gate,
+                        currentSettings, repriced1, adaptation.recipes, priceItems, stock, owned,
                     )
-                    // Merged Sam's packs folded back into week 1 are real
+                    // Merged bulk packs folded back into week 1 are real
                     // packs coming home, but the projection derives stock
                     // from recipe needs and cannot see them; week 2 must
                     // not buy the same pack twice (Codex review, PR #23).
@@ -1815,7 +1810,6 @@ private fun DinnerBotApp(
                         priceItems = priceItems,
                         stockOnHand = stockForWeek2,
                         pantryOwnedNames = owned,
-                        gateOverride = gate,
                     )
                     val kept2 = keepSubstitutedLines(view2, keepMergedLines(view2, repriced2))
                     val changed = kept1.lines != view.lines ||
@@ -1889,7 +1883,6 @@ private fun DinnerBotApp(
                     val dinners = EffectiveRecipes.resolveDinners(
                         editedView1.nights + editedView2.nights, recipesById,
                     )
-                    val gate = WeekPlanner.fortnightGateForDinners(currentSettings, dinners, priceItems)
                     val repriced1 = WeekPlanner.recost(
                         settings = currentSettings,
                         current = editedView1,
@@ -1897,13 +1890,12 @@ private fun DinnerBotApp(
                         priceItems = priceItems,
                         stockOnHand = stock,
                         pantryOwnedNames = owned,
-                        gateOverride = gate,
                     )
                     val kept1 = keepSubstitutedLines(
                         editedView1, keepMergedLines(editedView1, repriced1),
                     )
                     val stock1 = WeekPlanner.projectedStockAfter(
-                        currentSettings, repriced1, adaptation.recipes, priceItems, stock, owned, gate,
+                        currentSettings, repriced1, adaptation.recipes, priceItems, stock, owned,
                     )
                     val stockForWeek2 = WeekPlanner.stockWithMergedPacks(
                         stock1, kept1.lines, repriced1.lines, priceItems,
@@ -1916,7 +1908,6 @@ private fun DinnerBotApp(
                         priceItems = priceItems,
                         stockOnHand = stockForWeek2,
                         pantryOwnedNames = owned,
-                        gateOverride = gate,
                     )
                     val kept2 = keepSubstitutedLines(
                         editedView2, keepMergedLines(editedView2, repriced2),
@@ -1948,7 +1939,7 @@ private fun DinnerBotApp(
             }
 
             /**
-             * Uncross one pantry-covered line (Phase RI-3, Battles's
+             * Uncross one pantry-covered line (Phase RI-3, the user's
              * weekly-list ruling): the item becomes a buy line for this
              * week at its book price. The pantry itself is never
              * written — the week's recost simply runs with the item in
@@ -1972,7 +1963,6 @@ private fun DinnerBotApp(
                     val dinners = EffectiveRecipes.resolveDinners(
                         view.nights + view2.nights, recipesById,
                     )
-                    val gate = WeekPlanner.fortnightGateForDinners(currentSettings, dinners, priceItems)
                     val repriced1 = WeekPlanner.recost(
                         settings = currentSettings,
                         current = view,
@@ -1980,14 +1970,13 @@ private fun DinnerBotApp(
                         priceItems = priceItems,
                         stockOnHand = stock,
                         pantryOwnedNames = owned,
-                        gateOverride = gate,
                         uncrossedItemIds = uncrossedFor(view, sp.id == planId),
                     )
                     val kept1 = keepSubstitutedLines(
                         view, keepMergedLines(view, repriced1),
                     )
                     val stock1 = WeekPlanner.projectedStockAfter(
-                        currentSettings, repriced1, adaptation.recipes, priceItems, stock, owned, gate,
+                        currentSettings, repriced1, adaptation.recipes, priceItems, stock, owned,
                     )
                     val stockForWeek2 = WeekPlanner.stockWithMergedPacks(
                         stock1, kept1.lines, repriced1.lines, priceItems,
@@ -2000,7 +1989,6 @@ private fun DinnerBotApp(
                         priceItems = priceItems,
                         stockOnHand = stockForWeek2,
                         pantryOwnedNames = owned,
-                        gateOverride = gate,
                         uncrossedItemIds = uncrossedFor(view2, sp2.id == planId),
                     )
                     val kept2 = keepSubstitutedLines(
@@ -2069,7 +2057,7 @@ private fun DinnerBotApp(
                 )
             }
             // The first-cook keep prompt (Phase RI-3): asked once per
-            // recipe of Andrea's, right after its first cook completes.
+            // recipe of the user's, right after its first cook completes.
             // A thumbs up keeps it in rotation (the UP rating); a
             // thumbs down takes it out through the same rating; closing
             // the prompt records nothing and it never asks again.
@@ -2110,7 +2098,7 @@ private fun DinnerBotApp(
                 )
             }
             // ---- Back navigation (v0.6.0 redesign) ----
-            // Battles: the system back button used to leave the app from
+            // the user: the system back button used to leave the app from
             // anywhere, because sub-screens were state, not destinations,
             // and nothing handled back. Now every sub-screen is one back
             // step, in the order a person would unwind them; only a tab's
@@ -2296,7 +2284,7 @@ private fun DinnerBotApp(
                                             // this toggle completes the
                                             // dinner — every ingredient
                                             // checked off — and the dinner
-                                            // is one of Andrea's own
+                                            // is one of the user's own
                                             // recipes, never rated and
                                             // never asked about, ask once
                                             // whether it stays in rotation.
@@ -2542,6 +2530,7 @@ private fun DinnerBotApp(
                             }
                             GroceryListScreen(
                             priceItems = priceItems,
+                            stores = currentSettings.stores,
                             rows = bigTripRows,
                             topUpRows = topUpRows,
                             twoWeekTrip = isFortnightList,
@@ -2709,7 +2698,7 @@ private fun DinnerBotApp(
                                 if (!pantryShowPrices) {
                                     PantryScreen(
                             pantryItems = pantryItems,
-                            bulkPriceItems = PantryLogic.bulkItems(priceItems),
+                            bulkPriceItems = PantryLogic.bulkItems(priceItems, bulkStocks),
                             stocks = bulkStocks,
                             onTogglePantry = { item ->
                                 val toggled = item.copy(owned = !item.owned)
@@ -2764,6 +2753,7 @@ private fun DinnerBotApp(
                                 } else {
                                     PriceBookScreen(
                                         priceItems = priceItems,
+                                        stores = currentSettings.stores,
                                         today = LocalDate.now().toString(),
                                         onItemAdded = { item -> createPriceItem(item) },
                                         existingItemForBarcode = existingItemForBarcode,
@@ -2809,9 +2799,7 @@ private fun DinnerBotApp(
                                     onSave = { saved ->
                                         scope.launch {
                                             withContext(Dispatchers.IO) {
-                                                database.settingsDao().upsert(
-                                                    with(SeedMapper) { saved.toEntity() },
-                                                )
+                                                persistSettings(database, saved)
                                             }
                                             statusMessage = "Settings saved."
                                             refresh()
@@ -2916,7 +2904,7 @@ private data class LoadedState(
     val scanSubstitutions: List<ScanSubstitution>,
     /** Household recipe edits by recipe id (Phase RI-1); the recipes above already carry them merged. */
     val recipeOverrides: Map<String, RecipeOverride>,
-    /** Andrea's own imported and hand-made recipes (Phase RI-2), also merged into the recipes above. */
+    /** the user's own imported and hand-made recipes (Phase RI-2), also merged into the recipes above. */
     val importedRecipes: List<ImportedRecipe>,
     /** Recipe ids whose first-cook keep prompt has already fired (Phase RI-3); it never fires twice. */
     val keepPromptAsked: Set<String>,
@@ -2962,16 +2950,29 @@ private fun hasNotificationPermission(context: Context): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
         PackageManager.PERMISSION_GRANTED
 
+/**
+ * Persist the household settings AND the user's stores (Phase C1): the
+ * stores live in their own table, replaced wholesale in chosen order, so
+ * every settings save path keeps them in step with the form's state.
+ */
+private suspend fun persistSettings(database: DinnerBotDatabase, settings: HouseholdSettings) {
+    database.settingsDao().upsert(with(SeedMapper) { settings.toEntity() })
+    database.storeDao().deleteAll()
+    database.storeDao().insertAll(
+        settings.stores.mapIndexed { index, store -> with(SeedMapper) { store.toEntity(index) } },
+    )
+}
+
 /** Keep settings.pantryStaples mirroring the pantry table's owned names. */
 private suspend fun syncPantryStaples(database: DinnerBotDatabase, settings: HouseholdSettings) {
     val owned = database.pantryDao().getAll().filter { it.owned }.map { it.name }
     if (owned.toSet() != settings.pantryStaples.toSet()) {
-        database.settingsDao().upsert(with(SeedMapper) { settings.copy(pantryStaples = owned).toEntity() })
+        persistSettings(database, settings.copy(pantryStaples = owned))
     }
 }
 
 /**
- * Andrea tapped a price on the shopping list. Her total for the line becomes
+ * the user tapped a price on the shopping list. The total for the line becomes
  * the price book's truth: a normal line updates the item's pack price; a
  * rerouted line (bought at a different store) updates that store's per-unit
  * alternate for the item.
@@ -3041,7 +3042,7 @@ private suspend fun saveScannedNewItem(database: DinnerBotDatabase, item: PriceI
 }
 
 /**
- * A this-week-only scan substitution (PR v0.4.4, Battles's drumsticks
+ * A this-week-only scan substitution (PR v0.4.4, the user's drumsticks
  * case). Writes, in order:
  *
  * 1. The substitute's price, store-aware like every scan write: the
@@ -3105,7 +3106,7 @@ private suspend fun applyScanSubstitution(
             // mislabel the store section, the price, or the schedule
             // (Codex, PR #24). A line already carrying a swap never
             // absorbs another.
-            it.itemId == priced.id && it.store == row.line.store.name &&
+            it.itemId == priced.id && it.store == row.line.store &&
                 it.substitutedForItemId == null &&
                 BarcodeScanLogic.isTopUpPurchase(
                     with(PlanMapper) { it.toModel() }, priced,
@@ -3157,7 +3158,7 @@ private suspend fun applyScanSubstitution(
 }
 
 private suspend fun applyBackup(database: DinnerBotDatabase, data: BackupData) {
-    database.settingsDao().upsert(with(SeedMapper) { data.settings.toEntity() })
+    persistSettings(database, data.settings)
     database.priceItemDao().deleteAll()
     database.priceItemDao().insertAll(data.priceItems.map { with(SeedMapper) { it.toEntity() } })
     database.pantryDao().deleteAll()
@@ -3242,7 +3243,7 @@ private suspend fun applyBackup(database: DinnerBotDatabase, data: BackupData) {
             },
         )
     }
-    // Andrea's own recipes replace wholesale (Phase RI-2): a pre-v7
+    // the user's own recipes replace wholesale (Phase RI-2): a pre-v7
     // backup has none, which clears them — the same semantics as every
     // other household section, since importing replaces this phone's
     // data.

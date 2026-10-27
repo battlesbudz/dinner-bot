@@ -4,7 +4,7 @@ import com.battlesbudz.dinnerbot.core.model.GroceryLine
 import com.battlesbudz.dinnerbot.core.model.MeasureUnit
 import com.battlesbudz.dinnerbot.core.model.PlannedNight
 import com.battlesbudz.dinnerbot.core.model.Quantity
-import com.battlesbudz.dinnerbot.core.model.Store
+import com.battlesbudz.dinnerbot.core.model.StoreIds
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -56,7 +56,7 @@ object PlanMapper {
         planId = planId,
         itemId = itemId,
         displayName = displayName,
-        store = store.name,
+        store = store,
         neededAmount = needed.amount,
         neededUnit = needed.unit.name,
         packsToBuy = packsToBuy,
@@ -73,7 +73,7 @@ object PlanMapper {
     fun GroceryItemEntity.toModel(): GroceryLine = GroceryLine(
         itemId = itemId,
         displayName = displayName,
-        store = Store.valueOf(store),
+        store = StoreIds.normalize(store),
         needed = Quantity(neededAmount, MeasureUnit.valueOf(neededUnit)),
         packsToBuy = packsToBuy,
         estimatedPackPriceCents = packPriceCents,

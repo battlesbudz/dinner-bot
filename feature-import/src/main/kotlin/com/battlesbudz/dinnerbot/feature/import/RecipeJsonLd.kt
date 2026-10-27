@@ -77,7 +77,7 @@ object RecipeJsonLd {
             ?: emptyList()
         // A node with no name or no ingredients is not a usable recipe:
         // the import falls back to paste text rather than opening a
-        // review Andrea cannot save.
+        // review the user cannot save.
         if (title.isEmpty() || ingredientLines.isEmpty()) return null
         val ingredients = ingredientLines.flatMap { IngredientLineParser.parse(it) }
         val steps = instructionTexts(node["recipeInstructions"])

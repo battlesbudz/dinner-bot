@@ -31,7 +31,7 @@ class SeedDataParserTest {
     @Test fun parsesPriceBook() {
         val items = SeedDataParser.parsePriceBook(priceJson)
         assertEquals(1, items.size)
-        assertEquals(Store.WALMART, items[0].homeStore)
+        assertEquals("walmart", items[0].homeStore)
         assertEquals(198, items[0].packPriceCents)
         assertEquals(MeasureUnit.POUND, items[0].packQuantity.unit)
     }

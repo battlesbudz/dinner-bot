@@ -35,6 +35,7 @@ import com.battlesbudz.dinnerbot.core.model.NewBookItem
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.RecipePricing
 import com.battlesbudz.dinnerbot.core.model.Quantity
+import com.battlesbudz.dinnerbot.core.model.PresetStores
 import com.battlesbudz.dinnerbot.core.model.Store
 import com.battlesbudz.dinnerbot.feature.barcode.BarcodeScannerDialog
 import com.battlesbudz.dinnerbot.feature.barcode.OffPackParser
@@ -48,7 +49,7 @@ import kotlinx.coroutines.launch
  * recipe creation, editing, the cook view, and import review; the
  * price book's own add button; and a barcode scan of a product the
  * book does not have. Every field and every outcome is the same
- * wherever Andrea meets it.
+ * wherever the user meets it.
  *
  * The price is OPTIONAL — that is the fix. Leaving it blank creates
  * the item anyway at a guessed price marked as a guess
@@ -84,7 +85,10 @@ fun AddPriceItemDialog(
     onConfirm: (PriceItem) -> Unit,
     onDismiss: () -> Unit,
     initialName: String = "",
-    initialStore: Store = Store.ALDI,
+    /** Store id the item starts at; blank resolves to the user's first store. */
+    initialStore: String = "",
+    /** The user's stores, offered in the store picker (Phase C1). */
+    stores: List<Store> = emptyList(),
     title: String = "Add an ingredient",
     intro: String = "Anything not in the price book yet can start here. " +
         "The price can be left blank — Dinner Bot will guess it and mark it as a guess " +
@@ -116,10 +120,17 @@ fun AddPriceItemDialog(
         (book.map { it.category }.distinct().sorted() + "Other").distinct()
     }
     var name by remember { mutableStateOf(initialName) }
-    var store by remember { mutableStateOf(initialStore) }
+    val storeOptions = remember(stores) { stores.ifEmpty { PresetStores.ALL } }
+    var store by remember {
+        mutableStateOf(
+            initialStore.ifBlank {
+                stores.firstOrNull()?.id ?: book.firstOrNull()?.homeStore ?: storeOptions.first().id
+            },
+        )
+    }
     var pickedCategory by remember { mutableStateOf<String?>(null) }
-    // The category the form will save: Andrea's own pick once she
-    // makes one. Before that, the category of a book item this name
+    // The category the form will save: the user's own pick once they
+    // make one. Before that, the category of a book item this name
     // is equivalent to — a new kind of onion lands in Produce, not
     // Other — so perishability and the fresh top-up trip treat the
     // item right from the start; with no equivalent, the standing
@@ -301,7 +312,7 @@ fun AddPriceItemDialog(
                     TextButton(
                         onClick = { picker = "store" },
                         modifier = Modifier.testTag("add-item-store"),
-                    ) { Text("Store: ${storeDisplayName(store)}") }
+                    ) { Text("Store: ${storeDisplayName(store, stores)}") }
                     TextButton(
                         onClick = { picker = "category" },
                         modifier = Modifier.testTag("add-item-category"),
@@ -383,9 +394,9 @@ fun AddPriceItemDialog(
     when (picker) {
         "store" -> AddItemOptionPicker(
             title = "Home store",
-            options = Store.entries.map { storeDisplayName(it) to it.name },
+            options = storeOptions.map { it.name to it.id },
             onPick = { picked ->
-                store = Store.valueOf(picked)
+                store = picked
                 picker = null
             },
             onDismiss = { picker = null },

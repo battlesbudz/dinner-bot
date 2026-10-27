@@ -20,7 +20,7 @@ class CostingRi3Test {
         id: String, name: String, packAmount: Double, unit: MeasureUnit,
         packPrice: Int, perUnit: Double,
     ) = PriceItem(
-        id = id, name = name, category = "Test", homeStore = Store.ALDI,
+        id = id, name = name, category = "Test", homeStore = "aldi",
         packDescription = "pack", packQuantity = Quantity(packAmount, unit),
         packPriceCents = packPrice, pricePerUnitCents = perUnit,
         checkedDate = "2026-10-24", source = "test",

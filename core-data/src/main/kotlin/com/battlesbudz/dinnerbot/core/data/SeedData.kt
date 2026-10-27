@@ -24,6 +24,7 @@ import com.battlesbudz.dinnerbot.core.model.RecipePhoto
 import com.battlesbudz.dinnerbot.core.model.RecipesFile
 import com.battlesbudz.dinnerbot.core.model.ReminderSettings
 import com.battlesbudz.dinnerbot.core.model.Store
+import com.battlesbudz.dinnerbot.core.model.StoreIds
 import com.battlesbudz.dinnerbot.core.model.StorePrice
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
@@ -34,7 +35,15 @@ import kotlinx.serialization.json.Json
 object SeedDataParser {
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun parsePriceBook(text: String): List<PriceItem> = json.decodeFromString<PriceBookFile>(text).items
+    fun parsePriceBook(text: String): List<PriceItem> =
+        json.decodeFromString<PriceBookFile>(text).items.map { item ->
+            // Store values normalize to ids at the door (Phase C1), so a
+            // price book written with legacy enum names still loads.
+            item.copy(
+                homeStore = StoreIds.normalize(item.homeStore),
+                alternates = item.alternates.map { it.copy(store = StoreIds.normalize(it.store)) },
+            )
+        }
     fun parseRecipes(text: String): List<Recipe> = json.decodeFromString<RecipesFile>(text).recipes
     fun parseDietPresets(text: String): List<DietPreset> =
         json.decodeFromString<DietPresetsFile>(text).presets
@@ -52,7 +61,7 @@ object SeedMapper {
         id = id,
         name = name,
         category = category,
-        homeStore = homeStore.name,
+        homeStore = homeStore,
         packDescription = packDescription,
         packAmount = packQuantity.amount,
         packUnit = packQuantity.unit.name,
@@ -71,7 +80,7 @@ object SeedMapper {
         id = id,
         name = name,
         category = category,
-        homeStore = Store.valueOf(homeStore),
+        homeStore = StoreIds.normalize(homeStore),
         packDescription = packDescription,
         packQuantity = Quantity(packAmount, MeasureUnit.valueOf(packUnit)),
         packPriceCents = packPriceCents,
@@ -80,7 +89,8 @@ object SeedMapper {
         source = source,
         userCorrected = userCorrected,
         alternates = runCatching { json.decodeFromString(storePriceList, alternatesJson) }
-            .getOrDefault(emptyList()),
+            .getOrDefault(emptyList())
+            .map { it.copy(store = StoreIds.normalize(it.store)) },
         freezeNote = freezeNote,
         staple = staple,
         guessPriced = guessPriced,
@@ -333,6 +343,15 @@ object SeedMapper {
         reconciledPlanIds = runCatching { json.decodeFromString(stringList, reconciledPlanIdsJson) }
             .getOrDefault(emptyList()),
     )
+
+    /** A user's store to its row (Phase C1); [sortOrder] is the shopping order. */
+    fun Store.toEntity(sortOrder: Int): StoreEntity = StoreEntity(
+        id = id,
+        name = name,
+        sortOrder = sortOrder,
+    )
+
+    fun StoreEntity.toModel(): Store = Store(id = id, name = name)
 }
 
 /** First-launch seeding: fills an empty database from the bundled seed JSON. Called by the app. */
@@ -357,7 +376,7 @@ class SeedLoader(private val db: DinnerBotDatabase) {
 
     /**
      * Keep the stored seed recipes in step with the bundled seed file,
-     * under Battles's refresh rule (Phase RI-1): a recipe Andrea has
+     * under the user's refresh rule (Phase RI-1): a recipe the user has
      * changed is NEVER refreshed, and refresh delivers additions only for
      * it. Concretely:
      *
@@ -372,7 +391,7 @@ class SeedLoader(private val db: DinnerBotDatabase) {
      *   override it leaves behind is orphaned and cleaned up here.
      *
      * This touches ONLY the recipes table and orphaned override rows:
-     * settings, price items (including Andrea's corrections), pantry,
+     * settings, price items (including the user's corrections), pantry,
      * stock, and plans are user data and are never touched here. Returns
      * how many recipes were written (0 when nothing changed).
      */
@@ -403,9 +422,9 @@ class SeedLoader(private val db: DinnerBotDatabase) {
 
     /**
      * Keep the stored freeze notes identical to the bundled price book
-     * (Phase V2-2). Freeze notes are seed-owned guidance text on the Sam's
-     * bulk items; the refresh writes ONLY the freezeNote column per item,
-     * so Andrea's corrected prices and every other user row are untouched.
+     * (Phase V2-2). Freeze notes are seed-owned guidance text on bulk
+     * pack items; the refresh writes ONLY the freezeNote column per item,
+     * so the user's corrected prices and every other user row are untouched.
      * Returns how many stored notes actually changed.
      */
     suspend fun refreshSeedPriceNotes(priceBookJson: String): Int {
@@ -424,7 +443,7 @@ class SeedLoader(private val db: DinnerBotDatabase) {
     /**
      * Add bundled price book items the stored book does not have yet
      * (v0.4.3: the eleven pantry staples became priced items). Only ids
-     * absent from the stored table are inserted, so Andrea's corrected
+     * absent from the stored table are inserted, so the user's corrected
      * prices and every other stored row are untouched; existing rows are
      * never rewritten from the bundle. Runs on every start like the other
      * refreshes, and it also heals a database restored from an older

@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -29,7 +28,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.DietPreset
-import com.battlesbudz.dinnerbot.core.model.HouseholdRules
+import com.battlesbudz.dinnerbot.core.model.PresetStores
+import com.battlesbudz.dinnerbot.core.model.Store
+import com.battlesbudz.dinnerbot.core.model.StoreIds
 import com.battlesbudz.dinnerbot.core.model.HouseholdSettings
 import com.battlesbudz.dinnerbot.core.model.ReminderLogic
 import com.battlesbudz.dinnerbot.core.model.ReminderSettings
@@ -42,18 +43,42 @@ object OnboardingDefaults {
         "FRI" to "Fri", "SAT" to "Sat", "SUN" to "Sun",
     )
 
+    /**
+     * The generic staples list the pantry step OFFERS (Phase C1). It is a
+     * catalogue of common staples, not a household's pantry: nothing on
+     * it is pre-ticked, in onboarding or anywhere else.
+     */
     val DEFAULT_STAPLES: List<String> = listOf(
         "Vegetable oil", "Butter", "Salt", "Black pepper", "Garlic powder",
         "Onion powder", "Chili powder", "Ground cumin", "Paprika", "Soy sauce",
         "Long grain white rice", "Flour", "Sugar",
     )
 
-    /** First-run starting point: household of 4, weekday cooking, all staples pre-ticked. */
+    /**
+     * The budget suggestion heuristic (Phase C1): $3.50 per person per
+     * cook night covers a home-cooked dinner's ingredients at national
+     * average prices, rounded to the nearest $5 so the prefilled figure
+     * reads like a budget, not a calculation.
+     */
+    const val SUGGESTED_CENTS_PER_PERSON_PER_NIGHT: Int = 350
+
+    /** The suggested weekly budget for a household, in cents. */
+    fun suggestedBudgetCents(householdSize: Int, cookNights: Int): Int {
+        val raw = householdSize.coerceAtLeast(0) * cookNights.coerceAtLeast(0) *
+            SUGGESTED_CENTS_PER_PERSON_PER_NIGHT
+        return ((raw + 250) / 500) * 500
+    }
+
+    /**
+     * First-run starting point: household of 4, weekday cooking, the
+     * suggested budget prefilled (editable in the form), and NO staples
+     * pre-ticked.
+     */
     fun initialSettings(): HouseholdSettings = HouseholdSettings(
         householdSize = 4,
         cookNights = listOf("MON", "TUE", "WED", "THU", "FRI"),
-        weeklyBudgetCents = 0,
-        pantryStaples = DEFAULT_STAPLES,
+        weeklyBudgetCents = suggestedBudgetCents(4, 5),
+        pantryStaples = emptyList(),
         onboardingComplete = false,
     )
 }
@@ -85,9 +110,25 @@ fun OnboardingForm(
 ) {
     var householdSize by remember { mutableStateOf(initial.householdSize) }
     var cookNights by remember { mutableStateOf(initial.cookNights.toSet()) }
-    var budgetText by remember {
-        mutableStateOf(if (initial.weeklyBudgetCents > 0) (initial.weeklyBudgetCents / 100).toString() else "")
+    // The budget field follows the suggested budget (Phase C1) until
+    // the user types their own figure; a saved budget that differs
+    // from the suggestion starts as the user's own figure.
+    var budgetOverride by remember {
+        mutableStateOf(
+            if (initial.weeklyBudgetCents > 0 &&
+                initial.weeklyBudgetCents !=
+                OnboardingDefaults.suggestedBudgetCents(initial.householdSize, initial.cookNights.size)
+            ) {
+                (initial.weeklyBudgetCents / 100).toString()
+            } else {
+                null
+            },
+        )
     }
+    val budgetText: String = budgetOverride
+        ?: (OnboardingDefaults.suggestedBudgetCents(householdSize, cookNights.size) / 100).toString()
+    var stores by remember { mutableStateOf(initial.stores) }
+    var customStoreName by remember { mutableStateOf("") }
     var wontEatText by remember { mutableStateOf(initial.wontEat.joinToString(", ")) }
     var dietNotes by remember { mutableStateOf(initial.dietNotes) }
     var selectedPresets by remember { mutableStateOf(initial.dietPresets.toSet()) }
@@ -136,16 +177,67 @@ fun OnboardingForm(
         Text("Weekly dinner budget (cash, across all stores)", style = MaterialTheme.typography.titleMedium)
         OutlinedTextField(
             value = budgetText,
-            onValueChange = { budgetText = it.filter { ch -> ch.isDigit() } },
+            onValueChange = { budgetOverride = it.filter { ch -> ch.isDigit() } },
             label = { Text("Dollars per week") },
             prefix = { Text("$") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         Text(
-            "The budget caps the cash spent each week at Aldi, Walmart, and Sam's Club combined.",
+            "Pre-filled with a suggestion for your household size and cook nights — " +
+                "change it to whatever fits. The budget caps the cash spent each week " +
+                "across all your stores combined.",
             style = MaterialTheme.typography.bodySmall,
         )
+
+        Text("Your stores", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Pick the stores you shop at, or add your own. Lists group by these " +
+                "stores, and the first one is the default when a store is needed.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PresetStores.ALL.forEach { preset ->
+                FilterChip(
+                    selected = stores.any { it.id == preset.id },
+                    onClick = {
+                        stores = if (stores.any { it.id == preset.id }) {
+                            stores.filterNot { it.id == preset.id }
+                        } else {
+                            stores + preset
+                        }
+                    },
+                    label = { Text(preset.name) },
+                )
+            }
+        }
+        stores.filter { store -> PresetStores.ALL.none { it.id == store.id } }.forEach { store ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(store.name, modifier = Modifier.weight(1f))
+                TextButton(onClick = { stores = stores - store }) { Text("Remove") }
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = customStoreName,
+                onValueChange = { customStoreName = it },
+                label = { Text("Add your own store") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                onClick = {
+                    val name = customStoreName.trim()
+                    if (name.isNotEmpty()) {
+                        stores = stores + StoreIds.customStore(
+                            name,
+                            stores.map { it.id } + PresetStores.ALL.map { it.id },
+                        )
+                        customStoreName = ""
+                    }
+                },
+            ) { Text("Add") }
+        }
 
         Text("Anything you won't eat?", style = MaterialTheme.typography.titleMedium)
         OutlinedTextField(
@@ -170,7 +262,7 @@ fun OnboardingForm(
             Text(
                 "Named bundles that sit on top of your own list: each preset adds won't-eat " +
                     "entries and recipe filters of its own. A preset never removes anything you " +
-                    "listed yourself, and never changes the household substitution rule below. " +
+                    "listed yourself. " +
                     "Like the list, presets are planning filters only, not medical or allergen guarantees.",
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -252,7 +344,7 @@ fun OnboardingForm(
 
         ReminderRow(
             title = "Defrost reminder",
-            detail = "The evening before a dinner that uses frozen Sam's Club stock, " +
+            detail = "The evening before a dinner that uses frozen bulk stock, " +
                 "naming what to move to the fridge.",
             checked = reminders.defrostEnabled,
             switchTag = "reminder-defrost-switch",
@@ -266,13 +358,6 @@ fun OnboardingForm(
                 fallback = LocalTime.of(20, 0),
                 onChange = { reminders = reminders.copy(defrostTime = it) },
             )
-        }
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text("Household substitution rule", style = MaterialTheme.typography.titleSmall)
-                Text(HouseholdRules.GROUND_MEAT_SUBSTITUTION, style = MaterialTheme.typography.bodyMedium)
-            }
         }
 
         Text("Pantry staples you already have", style = MaterialTheme.typography.titleMedium)
@@ -297,6 +382,7 @@ fun OnboardingForm(
                         householdSize = householdSize,
                         cookNights = OnboardingDefaults.NIGHTS.map { it.first }.filter { it in cookNights },
                         weeklyBudgetCents = (budgetText.toIntOrNull() ?: 0) * 100,
+                        stores = stores,
                         wontEat = wontEatText.split(",").map { it.trim() }.filter { it.isNotEmpty() },
                         dietPresets = dietPresets.map { it.id }.filter { it in selectedPresets },
                         dietNotes = dietNotes.trim(),

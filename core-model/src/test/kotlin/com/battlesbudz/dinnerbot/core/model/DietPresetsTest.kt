@@ -97,13 +97,13 @@ class DietPresetsTest {
     @Test fun presetWontEatEntriesFlowThroughAdaptationEssentialAndRemovable() {
         val cheddar = PriceItem(
             id = "cheddar", name = "Shredded cheddar cheese", category = "Dairy",
-            homeStore = Store.ALDI, packDescription = "8 oz bag",
+            homeStore = "aldi", packDescription = "8 oz bag",
             packQuantity = Quantity(8.0, MeasureUnit.OUNCE), packPriceCents = 195,
             pricePerUnitCents = 24.4, checkedDate = "2026-10-22", source = "test",
         )
         val eggs = PriceItem(
             id = "eggs", name = "Eggs", category = "Dairy",
-            homeStore = Store.ALDI, packDescription = "12 ct",
+            homeStore = "aldi", packDescription = "12 ct",
             packQuantity = Quantity.count(12.0), packPriceCents = 185,
             pricePerUnitCents = 15.4, checkedDate = "2026-10-22", source = "test",
         )

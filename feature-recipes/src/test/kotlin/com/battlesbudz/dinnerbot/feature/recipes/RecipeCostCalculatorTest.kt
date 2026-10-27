@@ -11,7 +11,7 @@ import org.junit.Test
 class RecipeCostCalculatorTest {
     private val turkey = PriceItem(
         id = "ground-turkey", name = "Ground turkey", category = "Meat",
-        homeStore = Store.WALMART, packDescription = "per lb",
+        homeStore = "walmart", packDescription = "per lb",
         packQuantity = Quantity.pounds(1.0), packPriceCents = 198,
         pricePerUnitCents = 198.0, checkedDate = "2026-10-22", source = "test",
     )
@@ -50,7 +50,7 @@ class RecipeCostCalculatorTest {
         // the portion is 1.0 pack units at 98.3 cents.
         val rice = PriceItem(
             id = "long-grain-white-rice", name = "Long grain white rice",
-            category = "Dry and canned", homeStore = Store.ALDI,
+            category = "Dry and canned", homeStore = "aldi",
             packDescription = "3 lb bag",
             packQuantity = Quantity.pounds(3.0), packPriceCents = 295,
             pricePerUnitCents = 98.3, checkedDate = "2026-10-23", source = "test",

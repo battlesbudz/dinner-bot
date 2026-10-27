@@ -36,7 +36,7 @@ import com.battlesbudz.dinnerbot.feature.pricebook.PriceCorrection
 
 /**
  * A scanned code resolved to [item]: show the price currently held and
- * take the shelf price Andrea is looking at. [headerText] and
+ * take the shelf price the user is looking at. [headerText] and
  * [initialCents] carry whichever context applies: the book's pack price
  * for a general scan, or the scanned line's total when the scan came
  * from that very item's shopping line (the caller then runs that line's
@@ -94,7 +94,7 @@ fun ScanPriceDialog(
 }
 
 /**
- * A scanned code with no link yet: Andrea picks the price book item it
+ * A scanned code with no link yet: the user picks the price book item it
  * belongs to, adds the product as a NEW price book item when the book
  * does not have it (PR v0.4.4; [onAddNew] gets the lookup's name hint,
  * or null, to prefill the form), or skips and carries on with
@@ -209,7 +209,7 @@ fun LinkBarcodeDialog(
 fun NewItemFormDialog(
     barcode: String,
     suggestedName: String?,
-    initialStore: Store,
+    initialStore: String,
     today: String,
     book: List<PriceItem>,
     onConfirm: (PriceItem) -> Unit,
@@ -245,7 +245,7 @@ fun NewItemFormDialog(
 
 /**
  * A scan from a shopping line that named a DIFFERENT item than the
- * line's (PR v0.4.4, Battles's drumsticks case: the line buys skinless
+ * line's (PR v0.4.4, the user's drumsticks case: the line buys skinless
  * chicken breasts, the package in hand is drumsticks). She can buy this
  * instead — onto THIS week's list at the typed per-pack price, as many
  * packs as the dinner takes, the planned line off this week only, the

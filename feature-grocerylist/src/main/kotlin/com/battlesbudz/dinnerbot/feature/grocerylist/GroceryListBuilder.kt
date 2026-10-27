@@ -7,18 +7,17 @@ import com.battlesbudz.dinnerbot.core.model.Perishables
 import com.battlesbudz.dinnerbot.core.model.PriceItem
 import com.battlesbudz.dinnerbot.core.model.Quantity
 import com.battlesbudz.dinnerbot.core.model.Recipe
-import com.battlesbudz.dinnerbot.core.model.Store
 
 /**
  * Builds the shopping list for a plan: aggregates the planned dinners'
- * ingredients scaled to the household size, lets tracked Sam's bulk stock
+ * ingredients scaled to the household size, lets tracked bulk stock
  * cover what it can ($0 cash), splits the rest into per-store lines priced
  * from the price book. The pantry staples are priced book items like
  * everything else (v0.4.3), so an unowned staple appears as a normal
  * priced line. A priced item an owned pantry entry matches by name
  * (see [Costing.pantryCoveredItemIds]) is already home: since Phase RI-3
  * it stays ON the list as a crossed-out $0 line naming the covering
- * pantry entry (Battles's weekly-list ruling), unless Andrea uncrossed
+ * pantry entry (the user's weekly-list ruling), unless the user uncrossed
  * it for this week, when it is a buy line at book price. An ingredient
  * no book item prices (an imported recipe's as-written line) appears
  * with a labeled placeholder guess in place of a price. The decisions
@@ -29,7 +28,8 @@ object GroceryListBuilder {
 
     data class BuiltList(
         val lines: List<GroceryLine>,
-        val cashByStoreCents: Map<Store, Int>,
+        /** Cash per store id (see Store). */
+        val cashByStoreCents: Map<String, Int>,
         val totalCashCents: Int,
         val foodCostCents: Int,
     )
@@ -69,7 +69,7 @@ object GroceryListBuilder {
      * Estimated cash for one line: packs times the per-pack estimate.
      * A pantry-covered line (Phase RI-3) is $0 — it is already home. A
      * guess-priced item's price is its book price, so it needs no
-     * special case (Battles's correction, 2026-10-24).
+     * special case (the user's correction, 2026-10-24).
      */
     fun lineCashCents(line: GroceryLine): Int =
         if (line.coveredByPantryName != null) {
@@ -85,7 +85,7 @@ object GroceryListBuilder {
      * combined cash.
      */
     data class FortnightSections(
-        /** All of week 1, plus week 2's shelf-stable, frozen, and Sam's stock lines. */
+        /** All of week 1, plus week 2's shelf-stable, frozen, and bulk stock lines. */
         val bigTripLines: List<GroceryLine>,
         /** Week 2's perishable lines ([Perishables.isTopUpLine]), bought at the start of week 2. */
         val topUpLines: List<GroceryLine>,
@@ -98,7 +98,7 @@ object GroceryListBuilder {
     /**
      * Split two weeks' lines into the big trip and the fresh top-up. The
      * rule is [Perishables]: category-based (Produce, Dairy and eggs, and
-     * Meat are perishable), with a Sam's Club stock purchase never
+     * Meat are perishable), with a bulk stock purchase never
      * splitting. Week 1 lines never split: the big trip is when week 1 is
      * bought anyway.
      */

@@ -24,14 +24,14 @@ class WeekPlannerStaplesTest {
 
     private val salt = PriceItem(
         id = "salt", name = "Salt", category = "Dry and canned",
-        homeStore = Store.ALDI, packDescription = "26 oz canister, iodized",
+        homeStore = "aldi", packDescription = "26 oz canister, iodized",
         packQuantity = Quantity(26.0, MeasureUnit.OUNCE), packPriceCents = 89,
         pricePerUnitCents = 3.4, checkedDate = "2026-10-23", source = "test",
         staple = true,
     )
     private val rice = PriceItem(
         id = "long-grain-white-rice", name = "Long grain white rice",
-        category = "Dry and canned", homeStore = Store.ALDI,
+        category = "Dry and canned", homeStore = "aldi",
         packDescription = "3 lb bag",
         packQuantity = Quantity(3.0, MeasureUnit.POUND), packPriceCents = 295,
         pricePerUnitCents = 98.3, checkedDate = "2026-10-23", source = "test",
@@ -39,7 +39,7 @@ class WeekPlannerStaplesTest {
     )
     private val eggs = PriceItem(
         id = "eggs", name = "Eggs", category = "Dairy and eggs",
-        homeStore = Store.ALDI, packDescription = "12 ct",
+        homeStore = "aldi", packDescription = "12 ct",
         packQuantity = Quantity(12.0, MeasureUnit.COUNT), packPriceCents = 185,
         pricePerUnitCents = 15.4, checkedDate = "2026-10-23", source = "test",
     )

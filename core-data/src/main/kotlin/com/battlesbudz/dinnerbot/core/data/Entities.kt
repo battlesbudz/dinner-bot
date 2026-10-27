@@ -26,7 +26,7 @@ data class PriceItemEntity(
     @ColumnInfo(defaultValue = "0")
     val staple: Boolean = false,
     /**
-     * Guess-priced mark (Battles's correction, 2026-10-24): the item
+     * Guess-priced mark (the user's correction, 2026-10-24): the item
      * entered the book from a recipe import at a guessed price; the
      * first real price write clears it. Database v15.
      */
@@ -57,7 +57,7 @@ data class PantryItemEntity(
     val owned: Boolean,
 )
 
-/** Quantity-tracked stock for Sam's Club bulk items only. One row per price item. */
+/** Quantity-tracked stock for bulk items. One row per price item. */
 @Entity(tableName = "bulk_stock")
 data class BulkStockEntity(
     @PrimaryKey val itemId: String,
@@ -73,6 +73,11 @@ data class PlanEntity(
     val budgetCents: Int,
     val cashNeededCents: Int,
     val foodCostCents: Int,
+    /**
+     * Legacy column, always 0 since Phase C1 deleted the warehouse
+     * savings gate. Kept so existing databases need no table rebuild;
+     * nothing reads it.
+     */
     val samsMonthlySavingsCents: Int,
     /** JSON-encoded List<PlannedNight>. */
     val nightsJson: String,
@@ -112,7 +117,7 @@ data class GroceryItemEntity(
      * null.
      */
     val coveredByPantryName: String? = null,
-    /** Phase RI-3: this buy line exists because Andrea uncrossed a covered line for this week. */
+    /** Phase RI-3: this buy line exists because the user uncrossed a covered line for this week. */
     @ColumnInfo(defaultValue = "0")
     val uncrossed: Boolean = false,
     /** Phase RI-3: the placeholder price guess carried by a priced-less line; null on priced lines. */
@@ -204,7 +209,7 @@ data class RecipePhotoEntity(
 )
 
 /**
- * Andrea's saved household version of one library recipe (Phase RI-1,
+ * the user's saved household version of one library recipe (Phase RI-1,
  * steps column added v0.6.3): the full ingredient list as she last saved
  * it, JSON-encoded, plus her edited steps once she has saved a steps
  * edit ([stepsJson] stays null until then, so the seed steps stand).
@@ -247,7 +252,7 @@ data class LabelNutritionEntity(
 )
 
 /**
- * One recipe Andrea brought into the app herself (Phase RI-2): imported
+ * One recipe the user brought into the app herself (Phase RI-2): imported
  * from a page or a paste, or created by hand. The recipe fields mirror
  * [RecipeEntity]'s shape, but this is household data, not seed content:
  * the seed refresh never reads or writes this table, and the rows ride
@@ -338,4 +343,16 @@ data class CookCheckoffEntity(
     val day: String,
     val itemKey: String,
     val checked: Boolean,
+)
+
+/**
+ * One of the user's stores (Phase C1): stores are user data, kept in
+ * their own table so onboarding and settings can reorder them. The
+ * row order is the user's shopping order; [sortOrder] carries it.
+ */
+@Entity(tableName = "stores")
+data class StoreEntity(
+    @PrimaryKey val id: String,
+    val name: String,
+    val sortOrder: Int,
 )

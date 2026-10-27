@@ -1,13 +1,12 @@
 package com.battlesbudz.dinnerbot.feature.pricebook
 
 import com.battlesbudz.dinnerbot.core.model.PriceItem
-import com.battlesbudz.dinnerbot.core.model.Store
 import kotlin.math.roundToInt
 
 /**
- * Price book editing rules. Andrea's corrections always win over seed data:
- * applying one flags the item userCorrected and recomputes its per-unit price
- * from the pack, so portion costing and the Sam's gate use her number.
+ * Price book editing rules. The user's corrections always win over seed
+ * data: applying one flags the item userCorrected and recomputes its
+ * per-unit price from the pack, so portion costing uses their number.
  */
 object PriceCorrection {
 
@@ -21,11 +20,12 @@ object PriceCorrection {
     }
 
     /**
-     * A copy of [item] carrying Andrea's corrected pack price. [source]
+     * A copy of [item] carrying the user's corrected pack price. [source]
      * records which door the correction came through: a typed correction
      * by default, "Corrected by barcode scan" for Phase V2-5 scans. The
-     * write itself is identical either way: her number wins, the per-unit
-     * price is recomputed, and the item is flagged user-corrected.
+     * write itself is identical either way: their number wins, the
+     * per-unit price is recomputed, and the item is flagged
+     * user-corrected.
      */
     fun applyPackPrice(item: PriceItem, newPackPriceCents: Int, source: String = "Corrected in app"): PriceItem {
         require(newPackPriceCents > 0) { "price must be positive" }
@@ -35,24 +35,25 @@ object PriceCorrection {
             source = source,
             userCorrected = true,
             // A real price replaces an import guess for good
-            // (Battles's correction, 2026-10-24).
+            // (user correction, 2026-10-24).
             guessPriced = false,
         )
     }
 
     /** A copy of [item] moved to a different home store. */
-    fun applyHomeStore(item: PriceItem, store: Store): PriceItem =
+    fun applyHomeStore(item: PriceItem, store: String): PriceItem =
         item.copy(homeStore = store, userCorrected = true)
 
     /**
      * Record what an item actually cost per unit at a non-home store (the
-     * shopping-list correction for a rerouted Sam's item). Replaces any
-     * existing alternate for that store. [source] records which door the
-     * correction came through, exactly as on [applyPackPrice].
+     * shopping-list correction for a line bought at another of the
+     * user's stores). Replaces any existing alternate for that store.
+     * [source] records which door the correction came through, exactly
+     * as on [applyPackPrice].
      */
     fun applyAlternatePrice(
         item: PriceItem,
-        store: Store,
+        store: String,
         pricePerUnitCents: Double,
         source: String = "Corrected in app",
     ): PriceItem {

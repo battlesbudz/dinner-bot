@@ -25,7 +25,7 @@ class GroceryListBuilderRi3Test {
 
     private fun item(id: String, name: String, packAmount: Double, unit: MeasureUnit, packPrice: Int) =
         PriceItem(
-            id = id, name = name, category = "Test", homeStore = Store.ALDI,
+            id = id, name = name, category = "Test", homeStore = "aldi",
             packDescription = "pack", packQuantity = Quantity(packAmount, unit),
             packPriceCents = packPrice, pricePerUnitCents = packPrice / packAmount,
             checkedDate = "2026-10-24", source = "test",

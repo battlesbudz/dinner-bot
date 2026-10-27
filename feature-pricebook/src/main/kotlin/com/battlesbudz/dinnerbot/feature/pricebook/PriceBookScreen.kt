@@ -28,13 +28,14 @@ import androidx.compose.ui.unit.dp
 import com.battlesbudz.dinnerbot.core.model.LabelNutrition
 import com.battlesbudz.dinnerbot.core.model.Money
 import com.battlesbudz.dinnerbot.core.model.PriceItem
+import com.battlesbudz.dinnerbot.core.model.PresetStores
+import com.battlesbudz.dinnerbot.core.model.SeedPrices
 import com.battlesbudz.dinnerbot.core.model.Store
+import com.battlesbudz.dinnerbot.core.model.StoreIds
 
-fun storeDisplayName(store: Store): String = when (store) {
-    Store.ALDI -> "Aldi"
-    Store.WALMART -> "Walmart"
-    Store.SAMS_CLUB -> "Sam's Club"
-}
+/** Display name for a store id, resolved against the user's stores (Phase C1). */
+fun storeDisplayName(storeId: String, stores: List<Store> = emptyList()): String =
+    StoreIds.displayName(storeId, stores)
 
 /**
  * The price book: every priced item with its store and pack price. Tap a
@@ -56,6 +57,8 @@ fun PriceBookScreen(
     onBarcodeLinked: (barcode: String, itemId: String) -> Unit = { _, _ -> },
     /** Label facts captured by a scan in the add form. */
     onLabelFacts: (itemId: String, facts: LabelNutrition) -> Unit = { _, _ -> },
+    /** The user's stores, for store names and the home-store picker (Phase C1). */
+    stores: List<Store> = emptyList(),
 ) {
     var editingPrice by remember { mutableStateOf<PriceItem?>(null) }
     var editingStore by remember { mutableStateOf<PriceItem?>(null) }
@@ -72,6 +75,13 @@ fun PriceBookScreen(
                     "something different; your number wins from then on.",
                 style = MaterialTheme.typography.bodyMedium,
             )
+            // Phase C1 disclosure: seed prices are national averages
+            // until the user corrects them locally.
+            Text(
+                SeedPrices.DISCLOSURE,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp).testTag("seed-price-disclosure"),
+            )
             Button(
                 onClick = { addingItem = true },
                 modifier = Modifier.padding(top = 8.dp).testTag("pricebook-add"),
@@ -87,7 +97,7 @@ fun PriceBookScreen(
                     )
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(
-                            storeDisplayName(item.homeStore),
+                            storeDisplayName(item.homeStore, stores),
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.clickable { editingStore = item }.padding(4.dp),
                         )
@@ -147,11 +157,11 @@ fun PriceBookScreen(
             title = { Text("Home store for ${item.name}") },
             text = {
                 Column {
-                    Store.entries.forEach { store ->
+                    stores.ifEmpty { PresetStores.ALL }.forEach { store ->
                         DropdownMenuItem(
-                            text = { Text(storeDisplayName(store)) },
+                            text = { Text(store.name) },
                             onClick = {
-                                onItemEdited(PriceCorrection.applyHomeStore(item, store))
+                                onItemEdited(PriceCorrection.applyHomeStore(item, store.id))
                                 editingStore = null
                             },
                         )
@@ -173,6 +183,7 @@ fun PriceBookScreen(
             },
             onDismiss = { addingItem = false },
             existingItemForBarcode = existingItemForBarcode,
+            stores = stores,
             onExistingItemScanned = { addingItem = false },
             onBarcodeLinked = onBarcodeLinked,
             onLabelFacts = onLabelFacts,

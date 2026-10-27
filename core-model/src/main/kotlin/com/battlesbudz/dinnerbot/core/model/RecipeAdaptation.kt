@@ -1,7 +1,7 @@
 package com.battlesbudz.dinnerbot.core.model
 
 /**
- * The won't-eat rule, exactly as Battles defined it (2026-10-22).
+ * The won't-eat rule, exactly as the user defined it (2026-10-22).
  *
  * Every ingredient in a recipe is marked [RecipeIngredient.essential] (the
  * dish cannot be made without it) or removable (the dish works without it).
@@ -16,8 +16,8 @@ package com.battlesbudz.dinnerbot.core.model
  *   id lands in [Result.blockedFromPlanning] and the planner never sees it.
  *   Recipe browsing is otherwise unchanged.
  *
- * The rule above governs LIBRARY recipes. A recipe Andrea added herself
- * (imported or hand-made, Phase RI-2) is exempt under Battles's ruling 3:
+ * The rule above governs LIBRARY recipes. A recipe the user added herself
+ * (imported or hand-made, Phase RI-2) is exempt under the user's ruling 3:
  * it passes through untouched, never blocked and never stripped, and
  * cooks as written; her ingredient editing is its adaptation path.
  *
@@ -46,7 +46,7 @@ object RecipeAdaptation {
 
         val blocked = mutableSetOf<String>()
         val adapted = recipes.map { recipe ->
-            // Ruling 3 (Recipe Import epic): a recipe Andrea added
+            // Ruling 3 (Recipe Import epic): a recipe the user added
             // herself — imported or hand-made — is exempt from the
             // won't-eat planner entirely. It is never blocked and none
             // of its ingredients are stripped at read time; it cooks
@@ -78,13 +78,13 @@ object RecipeAdaptation {
 
     /**
      * The name a won't-eat entry is matched against: the pantry staple name,
-     * or the price book name of the priced item (after the household ground
-     * meat substitution, so names line up with what costing will buy).
+     * or the price book name of the priced item (items name themselves
+     * since Phase C1: there is no substitution layer to resolve through).
      */
     fun ingredientName(ingredient: RecipeIngredient, itemsById: Map<String, PriceItem>): String? {
         ingredient.pantryItem?.let { return it }
         val rawId = ingredient.priceItemId ?: return null
-        val item = itemsById[Costing.substituteItemId(rawId)] ?: itemsById[rawId]
+        val item = itemsById[rawId]
         return item?.name ?: rawId
     }
 

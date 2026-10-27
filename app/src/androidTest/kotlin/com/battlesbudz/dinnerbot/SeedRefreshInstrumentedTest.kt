@@ -79,7 +79,8 @@ class SeedRefreshInstrumentedTest {
     }
 
     /**
-     * The v0.4.3 upgrade: a book stored by v0.4.2 (31 items, no staples)
+     * The v0.4.3 upgrade: a book stored by v0.4.2 (no staples; 32 of the
+     * current 43 seed items)
      * gains the eleven priced staples on the next start, flagged staple,
      * while a corrected price and an owned pantry mark are untouched.
      */
@@ -111,7 +112,7 @@ class SeedRefreshInstrumentedTest {
 
             val loader = SeedLoader(db)
             loader.seedIfEmpty(root.toString(), recipesJson)
-            assertEquals(31, db.priceItemDao().getAll().size)
+            assertEquals(32, db.priceItemDao().getAll().size)
 
             // User data that must survive: a corrected price and an
             // owned staple mark in the pantry.
@@ -122,7 +123,7 @@ class SeedRefreshInstrumentedTest {
 
             val added = loader.addMissingSeedPriceItems(priceJson)
             assertEquals(11, added)
-            assertEquals(42, db.priceItemDao().getAll().size)
+            assertEquals(43, db.priceItemDao().getAll().size)
 
             val salt = db.priceItemDao().getById("salt")!!
             assertTrue("the inserted staple carries its flag", salt.staple)
@@ -159,7 +160,7 @@ class SeedRefreshInstrumentedTest {
             val recipesJson = appContext.assets.open("recipes.json").bufferedReader().use { it.readText() }
             val loader = SeedLoader(db)
             loader.seedIfEmpty(priceJson, recipesJson)
-            assertEquals(42, db.priceItemDao().getAll().size)
+            assertEquals(43, db.priceItemDao().getAll().size)
 
             // The scan-created item and its link, as the write path saves them.
             db.priceItemDao().upsert(
@@ -187,7 +188,7 @@ class SeedRefreshInstrumentedTest {
             assertEquals(342, sugar.packPriceCents)
             assertEquals("WALMART", sugar.homeStore)
             assertTrue(sugar.userCorrected)
-            assertEquals(43, db.priceItemDao().getAll().size)
+            assertEquals(44, db.priceItemDao().getAll().size)
             val link = db.barcodeLinkDao().getByBarcode("036800123456")!!
             assertEquals("user-granulated-sugar", link.itemId)
         } finally {

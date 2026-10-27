@@ -18,13 +18,13 @@ import org.junit.Test
  * Two-week planning (Phase V2-3): the fortnight is generated as one event.
  * No dinner repeats across the two weeks, each week reports its own cash
  * against the weekly cap and the trip total is their sum, Sam's stock is
- * drawn across the weeks in order under a gate evaluated on the combined
+ * drawn across the weeks in order, every purchase at its home store,
  * horizon, and week 2's perishables split to the fresh top-up list.
  */
 class WeekPlannerFortnightTest {
 
     private fun item(
-        id: String, category: String, store: Store, packAmount: Double, unit: MeasureUnit,
+        id: String, category: String, store: String, packAmount: Double, unit: MeasureUnit,
         packPrice: Int, perUnit: Double? = null, alternates: List<StorePrice> = emptyList(),
     ) = PriceItem(
         id = id, name = id, category = category, homeStore = store, packDescription = "pack",
@@ -33,15 +33,15 @@ class WeekPlannerFortnightTest {
         checkedDate = "2026-10-22", source = "test", alternates = alternates,
     )
 
-    private val turkey = item("ground-turkey", "Meat", Store.WALMART, 1.0, MeasureUnit.POUND, 198)
+    private val turkey = item("ground-turkey", "Meat", "walmart", 1.0, MeasureUnit.POUND, 198)
     private val tenderloin = item(
-        "pork-tenderloin", "Meat", Store.SAMS_CLUB, 9.0, MeasureUnit.POUND, 2168,
-        perUnit = 240.9, alternates = listOf(StorePrice(Store.ALDI, 297.0)),
+        "pork-tenderloin", "Meat", "sams-club", 9.0, MeasureUnit.POUND, 2168,
+        perUnit = 240.9, alternates = listOf(StorePrice("aldi", 297.0)),
     )
-    private val spaghetti = item("spaghetti", "Dry and canned", Store.ALDI, 32.0, MeasureUnit.OUNCE, 209, perUnit = 6.53)
-    private val eggs = item("eggs", "Dairy and eggs", Store.ALDI, 12.0, MeasureUnit.COUNT, 185, perUnit = 15.4)
-    private val milk = item("milk", "Dairy and eggs", Store.ALDI, 64.0, MeasureUnit.FLUID_OUNCE, 299, perUnit = 4.67)
-    private val potatoes = item("russet-potatoes", "Produce", Store.ALDI, 5.0, MeasureUnit.POUND, 329, perUnit = 65.8)
+    private val spaghetti = item("spaghetti", "Dry and canned", "aldi", 32.0, MeasureUnit.OUNCE, 209, perUnit = 6.53)
+    private val eggs = item("eggs", "Dairy and eggs", "aldi", 12.0, MeasureUnit.COUNT, 185, perUnit = 15.4)
+    private val milk = item("milk", "Dairy and eggs", "aldi", 64.0, MeasureUnit.FLUID_OUNCE, 299, perUnit = 4.67)
+    private val potatoes = item("russet-potatoes", "Produce", "aldi", 5.0, MeasureUnit.POUND, 329, perUnit = 65.8)
     private val book = listOf(turkey, tenderloin, spaghetti, eggs, milk, potatoes)
 
     private fun recipe(id: String, vararg ingredients: RecipeIngredient) = Recipe(
@@ -128,10 +128,10 @@ class WeekPlannerFortnightTest {
         val recipes = (1..10).map { porkDinner("p$it", 2.0) }
         val plan = fortnight(recipes)
         val week1Pork = plan.week1.lines.single { it.itemId == "pork-tenderloin" }
-        assertEquals(Store.SAMS_CLUB, week1Pork.store)
+        assertEquals("sams-club", week1Pork.store)
         assertEquals(2, week1Pork.packsToBuy)
         val week2Pork = plan.week2.lines.single { it.itemId == "pork-tenderloin" }
-        assertEquals(Store.SAMS_CLUB, week2Pork.store)
+        assertEquals("sams-club", week2Pork.store)
         assertEquals(1, week2Pork.packsToBuy)
 
         val stockAfterWeek1 = WeekPlanner.projectedStockAfter(
@@ -161,22 +161,15 @@ class WeekPlannerFortnightTest {
         assertEquals(Quantity.pounds(4.0), stockAfterWeek2["pork-tenderloin"])
     }
 
-    @Test fun gateIsEvaluatedOnTheCombinedHorizon() {
-        // Combined dinners use 20 lb of pork: the average week is 10 lb,
-        // projected monthly 40 lb at 56.1c saved per lb clears the $15 gate.
-        val dinners = (1..10).map { porkDinner("p$it", 2.0) }
-        val gate = WeekPlanner.fortnightGateForDinners(settings(0, fiveNights), dinners, book)
-        assertTrue(gate.useSams)
-        assertTrue(gate.projectedMonthlySavingsCents >= Costing.SAMS_MONTHLY_GATE_CENTS)
-        // A light fortnight (4 lb combined) does not clear it.
-        val light = WeekPlanner.fortnightGateForDinners(
-            settings(0, fiveNights), (1..4).map { porkDinner("l$it", 1.0) }, book,
-        )
-        assertFalse(light.useSams)
-        // And with the gate met on the horizon, both weeks buy at Sam's.
-        val plan = fortnight(dinners)
-        assertTrue(plan.week1.lines.any { it.itemId == "pork-tenderloin" && it.store == Store.SAMS_CLUB })
-        assertTrue(plan.week2.lines.any { it.itemId == "pork-tenderloin" && it.store == Store.SAMS_CLUB })
+    @Test fun bulkItemsAreBoughtAtTheirHomeStoreInBothWeeks() {
+        // Phase C1: no gate, no horizon evaluation, no rerouting. Every
+        // week buys the bulk pack at the item's own home store, however
+        // light or heavy the usage is.
+        val plan = fortnight((1..10).map { porkDinner("p$it", 2.0) })
+        assertTrue(plan.week1.lines.any { it.itemId == "pork-tenderloin" && it.store == "sams-club" })
+        assertTrue(plan.week2.lines.any { it.itemId == "pork-tenderloin" && it.store == "sams-club" })
+        val light = fortnight((1..4).map { porkDinner("l$it", 1.0) })
+        assertTrue(light.week1.lines.any { it.itemId == "pork-tenderloin" && it.store == "sams-club" })
     }
 
     @Test fun weekTwoPerishablesSplitToTheTopUpAndShelfStableRidesTheBigTrip() {

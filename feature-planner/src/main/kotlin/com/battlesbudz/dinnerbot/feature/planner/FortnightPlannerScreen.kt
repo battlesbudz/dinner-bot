@@ -103,15 +103,15 @@ fun FortnightPlannerScreen(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                Text(
-                    if (plan.week1.samsGateMet) {
-                        "Sam's Club saves about ${Money(plan.week1.samsMonthlySavingsCents).format()} this month"
-                    } else {
-                        "Sam's Club would save about ${Money(plan.week1.samsMonthlySavingsCents).format()} this month, " +
-                            "under the $15 mark, so bulk items are planned at regular stores"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                // Phase C1: each week's cash against the weekly budget.
+                if (budgetCents > 0) {
+                    Text(
+                        "Week 1 cash ${Money(plan.week1.cashNeededCents).format()}, week 2 cash " +
+                            "${Money(plan.week2.cashNeededCents).format()}, each against your " +
+                            "${Money(budgetCents).format()} weekly budget.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         }
 

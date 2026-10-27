@@ -67,7 +67,7 @@ class ScanAnywhereInstrumentedTest {
 
     private val eggsItem = PriceItem(
         id = "eggs", name = "Eggs", category = "Dairy & Eggs",
-        homeStore = Store.ALDI, packDescription = "12 ct carton",
+        homeStore = "aldi", packDescription = "12 ct carton",
         packQuantity = Quantity(12.0, MeasureUnit.COUNT),
         packPriceCents = 289, pricePerUnitCents = 24.08,
         checkedDate = "2026-10-25", source = "seed",

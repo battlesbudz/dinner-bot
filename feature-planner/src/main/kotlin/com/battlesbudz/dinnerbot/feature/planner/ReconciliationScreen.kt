@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.dp
 
 /**
  * The Sunday reconciliation screens (Phase V2-7, scope B4 step 1): three
- * steps in Battles's exact order, shown before a new week is planned.
+ * steps in the user's exact order, shown before a new week is planned.
  * Step 1: "These are the things you indicated you ran out of." Step 2:
  * "Did you run out of these also?" Step 3, full checks only: the pantry
  * she owns, checking off what is actually missing. The lighter top-up
@@ -161,7 +161,7 @@ fun ReconciliationScreen(
                     }
                 }
                 if (session.bulkChecklist.isNotEmpty()) {
-                    Text("Sam's Club bulk stock", style = MaterialTheme.typography.titleLarge)
+                    Text("Bulk stock", style = MaterialTheme.typography.titleLarge)
                     session.bulkChecklist.forEach { item ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,

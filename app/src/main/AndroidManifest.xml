@@ -14,7 +14,7 @@
         android:name="android.hardware.camera"
         android:required="false" />
 
-    <!-- Phase V2-5: INTERNET exists for exactly one purpose, Battles's
+    <!-- Phase V2-5: INTERNET exists for exactly one purpose, the
          D-V2-3 decision: when a connection is available, a scanned barcode
          may be looked up in Open Food Facts (a public database, contacted
          directly by the phone) to suggest the product's name while it is
@@ -31,8 +31,8 @@
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
         <!-- Epic issue #9: serves the backup file to the system share
-             sheet when Andrea shares her backup. Not exported; read
-             access is granted per share to the app she picks. -->
+             sheet when the user shares a backup. Not exported; read
+             access is granted per share to the app the user picks. -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -55,7 +55,7 @@
                  Another app (a browser above all) can share plain text
                  — a recipe page link or the recipe text itself — to
                  Dinner Bot, which opens its import review on it. The
-                 text is read once, on this phone, at Andrea's action;
+                 text is read once, on this phone, at the user's action;
                  nothing is uploaded anywhere. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />

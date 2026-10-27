@@ -22,13 +22,13 @@ class WeekPlannerPantryCoverageTest {
 
     private val potatoes = PriceItem(
         id = "russet-potatoes", name = "Russet potatoes", category = "Produce",
-        homeStore = Store.ALDI, packDescription = "5 lb bag",
+        homeStore = "aldi", packDescription = "5 lb bag",
         packQuantity = Quantity(5.0, MeasureUnit.POUND), packPriceCents = 349,
         pricePerUnitCents = 69.8, checkedDate = "2026-10-22", source = "test",
     )
     private val eggs = PriceItem(
         id = "eggs", name = "Eggs", category = "Dairy",
-        homeStore = Store.ALDI, packDescription = "12 ct",
+        homeStore = "aldi", packDescription = "12 ct",
         packQuantity = Quantity(12.0, MeasureUnit.COUNT), packPriceCents = 185,
         pricePerUnitCents = 15.4, checkedDate = "2026-10-22", source = "test",
     )

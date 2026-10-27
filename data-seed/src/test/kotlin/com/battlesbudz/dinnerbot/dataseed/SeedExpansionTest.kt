@@ -63,7 +63,7 @@ class SeedExpansionTest {
     @Test fun libraryGrewTo36RecipesAnd31PriceItems() {
         assertEquals(36, recipesFile.recipes.size)
         // v0.4.3: the eleven pantry staples became priced items, 31 + 11.
-        assertEquals(42, priceBook.items.size)
+        assertEquals(43, priceBook.items.size)
         val recipeIds = recipesFile.recipes.map { it.id }.toSet()
         for (id in newRecipeIds) assertTrue("missing new recipe $id", id in recipeIds)
         val itemIds = priceBook.items.map { it.id }.toSet()
