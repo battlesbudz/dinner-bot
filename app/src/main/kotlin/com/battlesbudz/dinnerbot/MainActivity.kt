@@ -681,14 +681,6 @@ private fun DinnerBotApp(
         onSharedTextConsumed()
     }
 
-    // Billing (Phase C3): configure RevenueCat once and let its
-    // entitlement reports correct the on-device cache as they arrive.
-    // In an unconfigured build this never fires and the cache simply
-    // stands, which is the fail-soft rule every gate relies on.
-    LaunchedEffect(Unit) {
-        billing.start { active -> notePremiumStatus(active) }
-    }
-
     /**
      * Re-read the Sunday gate's inputs from the store and adopt them.
      * A generate request must judge the week that is actually stored;
@@ -966,6 +958,16 @@ private fun DinnerBotApp(
                 current.copy(counters = PremiumRules.afterImport(current.counters, LocalDate.now()))
             }
         }
+    }
+
+    // Billing (Phase C3): configure RevenueCat once and let its
+    // entitlement reports correct the on-device cache as they arrive.
+    // In an unconfigured build this never fires and the cache simply
+    // stands, which is the fail-soft rule every gate relies on. (This
+    // sits below the helpers it calls: Kotlin does not let a lambda
+    // reference a local function declared further down.)
+    LaunchedEffect(Unit) {
+        billing.start { active -> notePremiumStatus(active) }
     }
 
     /** Plan two weeks on one trip (Phase V2-3). */
