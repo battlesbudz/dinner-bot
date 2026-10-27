@@ -3,6 +3,7 @@ package com.battlesbudz.dinnerbot.feature.premium
 import android.app.Activity
 import android.content.Context
 import com.revenuecat.purchases.CustomerInfo
+import com.revenuecat.purchases.Offering
 import com.revenuecat.purchases.Package
 import com.revenuecat.purchases.PackageType
 import com.revenuecat.purchases.PurchaseParams
@@ -78,7 +79,7 @@ class RevenueCatBilling(context: Context) : PremiumBilling {
 
     override suspend fun loadProducts(): List<PaywallProduct> {
         if (!ready()) return emptyList()
-        val offering = suspendCancellableCoroutine { continuation ->
+        val offering = suspendCancellableCoroutine<Offering?> { continuation ->
             runCatching {
                 Purchases.sharedInstance.getOfferingsWith(
                     onError = { if (continuation.isActive) continuation.resume(null) },
