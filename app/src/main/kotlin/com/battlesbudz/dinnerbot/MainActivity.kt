@@ -603,13 +603,35 @@ private fun DinnerBotApp(
                 .map { it.recipeId }.toSet()
             // The premium record (Phase C3): created on first sight
             // with its first-seen stamp, which anchors the periodic
-            // prompt's settle-in interval. Absence is the only write
-            // the load path ever makes to it.
-            val loadedPremium = database.premiumStateDao().get()
+            // prompt's settle-in interval.
+            val storedPremium = database.premiumStateDao().get()
                 ?.let { with(SeedMapper) { it.toModel() } }
                 ?: PremiumLocalState(firstSeenAtMillis = System.currentTimeMillis()).also { fresh ->
                     database.premiumStateDao().upsert(with(SeedMapper) { fresh.toEntity() })
                 }
+            // A premium update can land while this load is still
+            // reading (the billing listener's first report, a counted
+            // scan or import, a prompt dismissal): updates write the
+            // live holder, and adopting this slightly older snapshot
+            // over it would silently undo the update for the session.
+            // When the live record differs from the snapshot the live
+            // record wins; the snapshot only supplies the first-seen
+            // stamp the untouched composition default never had, and
+            // the merged record is written back so the disk agrees.
+            val livePremium = premiumStateHolder.value
+            val loadedPremium = if (livePremium == storedPremium) {
+                storedPremium
+            } else {
+                livePremium.copy(
+                    firstSeenAtMillis = if (livePremium.firstSeenAtMillis != 0L) {
+                        livePremium.firstSeenAtMillis
+                    } else {
+                        storedPremium.firstSeenAtMillis
+                    },
+                ).also { merged ->
+                    database.premiumStateDao().upsert(with(SeedMapper) { merged.toEntity() })
+                }
+            }
             val loadedSavings = database.savingsRecordDao().getAll()
                 .map { with(SeedMapper) { it.toModel() } }
             LoadedState(
@@ -898,7 +920,13 @@ private fun DinnerBotApp(
     /** Apply one transform to the premium record, in state and on disk together. */
     fun updatePremiumState(transform: (PremiumLocalState) -> PremiumLocalState) {
         val current = premiumStateHolder.value
-        val updated = transform(current)
+        var updated = transform(current)
+        // An update can arrive before the first load has stamped the
+        // record (the billing listener fires on its own schedule): a
+        // persisted record always carries its first-seen stamp.
+        if (updated.firstSeenAtMillis == 0L) {
+            updated = updated.copy(firstSeenAtMillis = System.currentTimeMillis())
+        }
         if (updated == current) return
         premiumStateHolder.value = updated
         scope.launch {
@@ -1522,6 +1550,13 @@ private fun DinnerBotApp(
             gateFeature = PremiumFeature.RECIPE_IMPORT
             return
         }
+        // Reserve the import against the cap BEFORE the save starts:
+        // the state update is synchronous, so a second save tapped
+        // while this one is still writing sees the allowance already
+        // spent and meets the gate instead of slipping a second
+        // recipe past it. The count stays spent even if the write
+        // were to fail — the safe direction for a quota.
+        if (isNewImport) recordImportUse()
         scope.launch {
             withContext(Dispatchers.IO) {
                 val existing = updateExistingId?.let { database.importedRecipeDao().getById(it) }
@@ -1540,7 +1575,6 @@ private fun DinnerBotApp(
                 )
                 database.importedRecipeDao().upsert(with(SeedMapper) { record.toEntity() })
             }
-            if (isNewImport) recordImportUse()
             importStart = null
             tab = Tab.RECIPES
             openRecipeId = recipe.id

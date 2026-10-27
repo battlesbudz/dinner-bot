@@ -8,7 +8,11 @@ import com.revenuecat.purchases.PackageType
 import com.revenuecat.purchases.PurchaseParams
 import com.revenuecat.purchases.Purchases
 import com.revenuecat.purchases.PurchasesConfiguration
-import com.revenuecat.purchases.UpdatedCustomerInfoListener
+import com.revenuecat.purchases.getCustomerInfoWith
+import com.revenuecat.purchases.getOfferingsWith
+import com.revenuecat.purchases.interfaces.UpdatedCustomerInfoListener
+import com.revenuecat.purchases.purchaseWith
+import com.revenuecat.purchases.restorePurchasesWith
 import com.revenuecat.purchases.models.StoreProduct
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
