@@ -23,6 +23,7 @@ class WeekPlannerMergedStockTest {
         homeStore = "sams-club", packDescription = "9 lb pack",
         packQuantity = Quantity(9.0, MeasureUnit.POUND), packPriceCents = 2168,
         pricePerUnitCents = 240.9, checkedDate = "2026-10-23", source = "test",
+        freezeNote = "Freeze the rest.",
     )
     private val salt = PriceItem(
         id = "salt", name = "Salt", category = "Dry and canned",

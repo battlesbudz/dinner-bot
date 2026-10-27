@@ -23,18 +23,23 @@ import org.junit.Test
  */
 class WeekPlannerTonightEditsTest {
 
-    private fun item(id: String, store: String, packAmount: Double, unit: MeasureUnit, packPrice: Int) =
-        PriceItem(
-            id = id, name = id, category = "Test", homeStore = store, packDescription = "pack",
-            packQuantity = Quantity(packAmount, unit), packPriceCents = packPrice,
-            pricePerUnitCents = packPrice / packAmount,
-            checkedDate = "2026-10-23", source = "test",
-        )
+    private fun item(
+        id: String, store: String, packAmount: Double, unit: MeasureUnit, packPrice: Int,
+        freezeNote: String? = null,
+    ) = PriceItem(
+        id = id, name = id, category = "Test", homeStore = store, packDescription = "pack",
+        packQuantity = Quantity(packAmount, unit), packPriceCents = packPrice,
+        pricePerUnitCents = packPrice / packAmount,
+        checkedDate = "2026-10-23", source = "test", freezeNote = freezeNote,
+    )
 
     private val eggs = item("eggs", "aldi", 12.0, MeasureUnit.COUNT, 185)
     private val spaghetti = item("spaghetti", "aldi", 32.0, MeasureUnit.OUNCE, 209)
     private val broccoli = item("broccoli", "aldi", 16.0, MeasureUnit.OUNCE, 130)
-    private val pork = item("pork-tenderloin", "sams-club", 9.0, MeasureUnit.POUND, 2168)
+    private val pork = item(
+        "pork-tenderloin", "sams-club", 9.0, MeasureUnit.POUND, 2168,
+        freezeNote = "Freeze the rest.",
+    )
     private val book = listOf(eggs, spaghetti, broccoli, pork)
 
     private fun recipe(id: String, vararg ingredients: RecipeIngredient) = Recipe(
