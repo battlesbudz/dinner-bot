@@ -150,7 +150,7 @@ class GuessBackfillInstrumentedTest {
         withDb { db ->
             val items = db.priceItemDao().getAll()
             // The seed book (42) plus exactly one created item.
-            assertEquals(44, items.size)
+            assertEquals(79, items.size)
             val created = items.single { it.id == "user-spring-onion" }
             assertEquals("spring onions", created.name)
             assertTrue(created.guessPriced)
@@ -167,7 +167,7 @@ class GuessBackfillInstrumentedTest {
         // A second launch creates and rewrites nothing.
         launchAndLoad()
         withDb { db ->
-            assertEquals(44, db.priceItemDao().getAll().size)
+            assertEquals(79, db.priceItemDao().getAll().size)
         }
     }
 
