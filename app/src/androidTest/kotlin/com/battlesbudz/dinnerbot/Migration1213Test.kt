@@ -160,7 +160,7 @@ class Migration1213Test {
             val loader = SeedLoader(db)
             db.recipeDao().deleteAll()
             loader.seedIfEmpty(priceJson, recipesJson)
-            assertEquals(36, db.recipeDao().count())
+            assertEquals(100, db.recipeDao().count())
 
             val hers = ImportedRecipe(
                 recipe = Recipe(

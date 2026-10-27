@@ -56,7 +56,7 @@ class SeedRefreshInstrumentedTest {
             db.priceItemDao().updatePrice("yellow-onions", 999, 333.0)
 
             val refreshed = loader.refreshSeedRecipes(recipesJson)
-            assertEquals(36, refreshed)
+            assertEquals(100, refreshed)
 
             val after = db.recipeDao().getAll().map { with(SeedMapper) { it.toModel() } }
             val spaghetti = after.single { it.id == "turkey-spaghetti" }
@@ -112,7 +112,7 @@ class SeedRefreshInstrumentedTest {
 
             val loader = SeedLoader(db)
             loader.seedIfEmpty(root.toString(), recipesJson)
-            assertEquals(32, db.priceItemDao().getAll().size)
+            assertEquals(67, db.priceItemDao().getAll().size)
 
             // User data that must survive: a corrected price and an
             // owned staple mark in the pantry.
@@ -123,7 +123,7 @@ class SeedRefreshInstrumentedTest {
 
             val added = loader.addMissingSeedPriceItems(priceJson)
             assertEquals(11, added)
-            assertEquals(43, db.priceItemDao().getAll().size)
+            assertEquals(78, db.priceItemDao().getAll().size)
 
             val salt = db.priceItemDao().getById("salt")!!
             assertTrue("the inserted staple carries its flag", salt.staple)
@@ -160,7 +160,7 @@ class SeedRefreshInstrumentedTest {
             val recipesJson = appContext.assets.open("recipes.json").bufferedReader().use { it.readText() }
             val loader = SeedLoader(db)
             loader.seedIfEmpty(priceJson, recipesJson)
-            assertEquals(43, db.priceItemDao().getAll().size)
+            assertEquals(78, db.priceItemDao().getAll().size)
 
             // The scan-created item and its link, as the write path saves them.
             db.priceItemDao().upsert(

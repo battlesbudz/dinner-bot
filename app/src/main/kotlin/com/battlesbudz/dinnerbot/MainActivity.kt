@@ -451,6 +451,16 @@ private fun DinnerBotApp(
             val addedStaples = SeedLoader(database)
                 .addMissingSeedPriceItems(loadAsset("pricebook.json"))
             SeedLoader(database).refreshSeedNutrition(loadAsset("nutrition.json"))
+            // Phase C2: on first install, copy the bundled starter
+            // photos into local storage and record them with their
+            // credits, so every seed recipe shows its photo through
+            // the ordinary photo plumbing below. A failure here must
+            // never block loading; the seeder retries on a later start.
+            runCatching {
+                BundledPhotoSeeder.seedIfNeeded(context, database) { name ->
+                    context.assets.open(name)
+                }
+            }
             val loadedPresets = runCatching {
                 SeedDataParser.parseDietPresets(loadAsset("diet-presets.json"))
             }.getOrDefault(emptyList())

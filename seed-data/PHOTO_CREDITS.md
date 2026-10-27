@@ -1,0 +1,108 @@
+# Photo credits — starter library (Phase C2)
+
+Every starter recipe ships with one bundled photo. Stock photos are
+openly licensed and credited below with their source page; the rest
+are AI generated, and their credits say so. This file is generated
+from seed-data/photo-credits.json, the same manifest the app reads
+at first install to record each photo's credit.
+
+- turkey-spaghetti: AI generated
+- turkey-tacos: Photo by Missvain via Wikimedia Commons (CC BY 4.0) — https://commons.wikimedia.org/wiki/File:Tacos_with_ground_turkey_-_May_2023_-_Sarah_Stierch.jpg (CC BY 4.0)
+- cubed-pork-potato-skillet: AI generated
+- pork-green-bean-skillet: Photo by Ceeseven via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:Green_Beans_with_Minced_Pork.jpg (CC BY-SA 4.0)
+- chicken-rice-skillet: AI generated
+- egg-fried-rice: Photo by Thamizhpparithi Maari via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:%22Egg_Fried_Rice%22.jpg (CC BY-SA 4.0)
+- tomato-soup-grilled-cheese: Photo by Neil Conway from Oakland, USA via Wikimedia Commons (CC BY 2.0) — https://commons.wikimedia.org/wiki/File:Grilled_Cheese_and_Tomato_Soup_(5899244194).jpg (CC BY 2.0)
+- turkey-chili: Photo by Carstor via Wikimedia Commons (CC BY-SA 2.5) — https://commons.wikimedia.org/wiki/File:Bowl_of_chili.jpg (CC BY-SA 2.5)
+- cheesy-turkey-pasta-bake: Photo by Scott Veg via Wikimedia Commons (CC BY 2.0) — https://commons.wikimedia.org/wiki/File:Baked_macaroni_and_cheese.jpg (CC BY 2.0)
+- chicken-stir-fry: Photo by Visits to visit via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:Just_10_munits_Chicken_Ricotta_Meatballs_with_Risoni_in_Tomato_Basil_Sauce.jpg (CC BY-SA 4.0)
+- pork-stir-fry: Photo by Ralff Nestor Nacor via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:Pork_Stir_Fry_Meal_%2B_Corn_%2B_Carrots.jpg (CC BY-SA 4.0)
+- turkey-meatloaf: Photo by Renee Comet (Photographer) via Wikimedia Commons (Public domain) — https://commons.wikimedia.org/wiki/File:Meatloaf_(1).jpg (Public domain)
+- turkey-burgers: Photo by Jorge Franganillo via Wikimedia Commons (CC BY 2.0) — https://commons.wikimedia.org/wiki/File:Burger_(15132396349).jpg (CC BY 2.0)
+- turkey-chili-rotini: Photo by Daderot via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:Ground_beef,_cherry_tomatoes,_tomato_sauce,_and_black_pepper_on_rotini_-_Massachusetts.jpg (CC BY-SA 4.0)
+- turkey-bean-chili: AI generated
+- turkey-shepherds-pie: Photo by Tomwsulcer via Wikimedia Commons (CC0) — https://commons.wikimedia.org/wiki/File:Bermuda_(UK)_image_number_123_Shepherds_Pie_dinner_dish_at_restaurant.jpg (CC0)
+- turkey-meatballs-spaghetti: Photo by HaJunkiyada via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:Liat_Portal_for_Foodie_Disorder_-_Spaghetti_and_meatballs.jpg (CC BY-SA 4.0)
+- chicken-fajitas: Photo by jeffreyw via Wikimedia Commons (CC BY 2.0) — https://commons.wikimedia.org/wiki/File:Chicken_fajitas.jpg (CC BY 2.0)
+- chicken-quesadillas: Photo by Tomwsulcer via Wikimedia Commons (CC0) — https://commons.wikimedia.org/wiki/File:Chicken_Quesadilla_dish_at_Latin_Bistro_restaurant_Summit_NJ.JPG (CC0)
+- cheesy-chicken-broccoli-rice: AI generated
+- chicken-noodle-skillet: AI generated
+- sloppy-chicken-sandwiches: Photo by Anagoria via Wikimedia Commons (CC BY 3.0) — https://commons.wikimedia.org/wiki/File:2015-04-06_Pulled_Chicken_Burger_anagoria.JPG (CC BY 3.0)
+- pork-fried-rice: AI generated
+- sheet-pan-pork-potatoes: Photo by Armineaghayan via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:Pork_meat_with_roasted_potatoes_and_vegetables_in_a_creamy_sauce.jpg (CC BY-SA 4.0)
+- pork-fajitas: AI generated
+- saucy-pork-sandwiches: Photo by Marshall Astor via Wikimedia Commons (CC BY-SA 2.0) — https://commons.wikimedia.org/wiki/File:Buckingham_Brand_Smokehouse_BBQ_-_Pulled_Pork,_Beans_and_Potato_Salad.jpg (CC BY-SA 2.0)
+- cheesy-pork-rotini-skillet: AI generated
+- potato-egg-skillet: AI generated
+- breakfast-burritos: Photo by Daderot via Wikimedia Commons (CC0) — https://commons.wikimedia.org/wiki/File:Breakfast_burrito_and_toast_-_Bakersfield,_CA.jpg (CC0)
+- veggie-frittata: Photo by Dedda 71 via Wikimedia Commons (CC BY 3.0) — https://commons.wikimedia.org/wiki/File:Frittata_slice.jpg (CC BY 3.0)
+- cheese-omelets-home-fries: AI generated
+- rotini-mac-and-cheese: Photo by Valereee via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:Edna_Lewis%27s_Macaroni_%26_Cheese.jpg (CC BY-SA 4.0)
+- cheese-quesadillas: Photo by Gerardolagunes via Wikimedia Commons (CC0) — https://commons.wikimedia.org/wiki/File:Mexican_Food_Cheese_quesadillas_Levelland_Texas_20260512_164230_(3).jpg (CC0)
+- veggie-pasta-bake: AI generated
+- cheesy-potato-skillet: AI generated
+- bean-cheese-burritos: Photo by Roy Zuo via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:(20251114)_Chicken_burrito_01.jpg (CC BY-SA 4.0)
+- beef-pot-roast: Photo by Mark Miller via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:American_pot_roast_and_parsley_potatoes.jpg (CC BY-SA 4.0)
+- beef-stew: AI generated
+- beef-chili: Photo by Agentseven at en.wikipedia via Wikimedia Commons (Public domain) — https://commons.wikimedia.org/wiki/File:Bowl_of_Chili_No_Beans.jpg (Public domain)
+- beef-tacos: Photo by Larry Miller via Wikimedia Commons (CC BY-SA 2.0) — https://commons.wikimedia.org/wiki/File:001_Tacos_de_carnitas,_carne_asada_y_al_pastor.jpg (CC BY-SA 2.0)
+- spaghetti-bolognese: Photo by MOs810 via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:Food_in_Lichen_Stary_(spaghetti_bolognese).jpg (CC BY-SA 4.0)
+- beef-burgers: Photo by Bahnfrend via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:Beef_Burger,_Inglewood_Hotel,_Western_Australia,_2025_(01).jpg (CC BY-SA 4.0)
+- beef-stroganoff: Photo by V 2 via Wikimedia Commons (CC BY 2.0) — https://commons.wikimedia.org/wiki/File:Beef_Stroganoff-03.jpg (CC BY 2.0)
+- beef-lasagna: Photo by jules / stonesoup via Wikimedia Commons (CC BY 2.0) — https://commons.wikimedia.org/wiki/File:Lasagne_-_stonesoup.jpg (CC BY 2.0)
+- meatballs-noodles-gravy: AI generated
+- beef-fajitas: Photo by JIP via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:Fajitas_at_Antell_Martintalo.jpg (CC BY-SA 4.0)
+- beef-cabbage-skillet: AI generated
+- sloppy-joes: AI generated
+- beef-and-broccoli: AI generated
+- chicken-parmesan: AI generated
+- chicken-alfredo-penne: Photo by BrokenSphere via Wikimedia Commons (CC BY-SA 3.0) — https://commons.wikimedia.org/wiki/File:Chicken_penne_alfredo.JPG (CC BY-SA 3.0)
+- chicken-peanut-noodles: Photo by Daderot via Wikimedia Commons (CC0) — https://commons.wikimedia.org/wiki/File:Chicken_and_peanuts_on_hokkien_noodles,_with_peanut_sauce_and_sesame_seeds_-_Massachusetts.jpg (CC0)
+- chicken-pot-pie-skillet: Photo by MonicaVereanaWilliams via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:Chicken_Pot_Pie,_cut_open.jpg (CC BY-SA 4.0)
+- oven-bbq-chicken: AI generated
+- chicken-wraps: Photo by Daderot via Wikimedia Commons (CC0) — https://commons.wikimedia.org/wiki/File:Buffalo_chicken_wrap_-_Dunedin,_New_Zealand.jpg (CC0)
+- chicken-teriyaki-bowls: Photo by CNEcija12345 via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:Bowl_of_Teriyaki_chicken_and_beef_YakinikuCNE.jpg (CC BY-SA 4.0)
+- chicken-vegetable-soup: Photo by PattayaPatrol via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:DFC_3982_A_steaming_bowl_of_homemade_vegetable_soup_garnished_with_chopped_parsley_served_with_a_slice_of_rustic_brown_bread.jpg (CC BY-SA 4.0)
+- spicy-chicken-sandwiches: Photo by Famartin via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:2020-03-25_20_29_59_A_Spicy_Chicken_Sandwich_from_Wendy%27s_in_the_Franklin_Farm_section_of_Oak_Hill,_Fairfax_County,_Virginia.jpg (CC BY-SA 4.0)
+- chicken-gyro-wraps: Photo by Andy Li via Wikimedia Commons (CC0) — https://commons.wikimedia.org/wiki/File:Mix_Gyros_(Chicken_%26_Pork)_Pitta_Wrap_-_Montague_Gyros_2025-12-06.jpg (CC0)
+- lemon-butter-chicken: AI generated
+- turkey-meatball-subs: AI generated
+- turkey-tetrazzini: AI generated
+- stuffed-bell-peppers: Photo by Tess Mattew via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:2025.09.02_Stuffed_Peppers_Paprika_in_Belarus_by_Dina_Panayotis.jpg (CC BY-SA 4.0)
+- turkey-sweet-potato-skillet: AI generated
+- sausage-and-peppers-penne: Photo by Peachyeung316 via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:Penne_with_sausage_and_bell_pepper_in_tomato_cream_sauce_from_Savour_Cafe.jpg (CC BY-SA 4.0)
+- sausage-lentil-soup: Photo by Lablascovegmenu from London via Wikimedia Commons (CC BY 2.0) — https://commons.wikimedia.org/wiki/File:Widowed_lentils_soup_with_carrot_and_cavolo_nero_(8424513624).jpg (CC BY 2.0)
+- smothered-pork-medallions: Photo by Don Crowley via Wikimedia Commons (CC0) — https://commons.wikimedia.org/wiki/File:Champ_with_pork_and_gravy.jpg (CC0)
+- pulled-pork-sandwiches: Photo by Michael J. Bennett via Wikimedia Commons (CC BY-SA 3.0) — https://commons.wikimedia.org/wiki/File:Pulled_Pork_Sandwich,_and_Caesar_Salad.jpg (CC BY-SA 3.0)
+- breakfast-skillet: Photo by Andy Li via Wikimedia Commons (CC0) — https://commons.wikimedia.org/wiki/File:BREAKFAST_SKILLET_-_T_@_The_Dials_2025-07-18.jpg (CC0)
+- sausage-gravy-biscuits: Photo by Gatorfan252525 via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:Biscuit_with_fried_chicken_thigh_%26_sausage_gravy_at_Biscuit_Love_in_Nashville,_TN.jpg (CC BY-SA 4.0)
+- pork-lo-mein: AI generated
+- blt-sandwiches: Photo by cyclonebill via Wikimedia Commons (CC BY-SA 2.0) — https://commons.wikimedia.org/wiki/File:BLT_sandwich_with_pommes_frites.jpg (CC BY-SA 2.0)
+- honey-garlic-pork: Photo by PattayaPatrol via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:DSCF0414_Four_bite-sized_bacon-wrapped_pork_medallions_served_with_a_side_of_creamy_pasta_coleslaw_greens_and_a_jug_of_savory_gravy.jpg (CC BY-SA 4.0)
+- sausage-potato-soup: AI generated
+- garlic-butter-salmon: Photo by Ewan Munro from London, UK via Wikimedia Commons (CC BY-SA 2.0) — https://commons.wikimedia.org/wiki/File:Salmon_with_Lime_%26_Garlic_Butter_(4437041010).jpg (CC BY-SA 2.0)
+- shrimp-scampi: Photo by Missvain via Wikimedia Commons (CC0) — https://commons.wikimedia.org/wiki/File:Mary%27s_Pizza_Shack_-_December_2025_-_Sarah_Stierch_04.jpg (CC0)
+- shrimp-tacos: Photo by Missvain via Wikimedia Commons (CC BY 4.0) — https://commons.wikimedia.org/wiki/File:Shrimp_tacos_at_Los_Gallitos_-_April_2023_-_Sarah_Stierch.jpg (CC BY 4.0)
+- crispy-baked-cod: AI generated
+- tuna-melts: Photo by Andy Li via Wikimedia Commons (CC0) — https://commons.wikimedia.org/wiki/File:Tuna_Melt_-_Cafe_de_la_mer_2024-04-17.jpg (CC0)
+- tuna-noodle-skillet: AI generated
+- shrimp-fried-rice: Photo by Geoffreyrabbit via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:Fried_rice_with_shrimp_paste.jpg (CC BY-SA 4.0)
+- cod-cakes: Photo by avlxyz via Wikimedia Commons (CC BY-SA 2.0) — https://commons.wikimedia.org/wiki/File:Thai_Fish_Cakes_-_Poppy_Thai.jpg (CC BY-SA 2.0)
+- cajun-shrimp-rice: Photo by Heironymous Rowe via Wikimedia Commons (CC BY-SA 3.0) — https://commons.wikimedia.org/wiki/File:Shrimp_and_Crab_%C3%89touff%C3%A9e_plate_lunch_Dwyers_Cafe_HRoe_2013.jpg (CC BY-SA 3.0)
+- veggie-lasagna: AI generated
+- lentil-vegetable-soup: Photo by Mx. Granger via Wikimedia Commons (CC0) — https://commons.wikimedia.org/wiki/File:Amy%27s_lentil_vegetable_soup.jpg (CC0)
+- chickpea-tacos: AI generated
+- black-bean-burgers: Photo by tomatoes and friends via Wikimedia Commons (CC BY 2.0) — https://commons.wikimedia.org/wiki/File:Black_Bean_Burger_with_Sugar_Snap_Peas_and_Blueberries_(4764569015).jpg (CC BY 2.0)
+- tofu-stir-fry: Photo by Brücke-Osteuropa via Wikimedia Commons (Public domain) — https://commons.wikimedia.org/wiki/File:Cuisine_of_China_0070.JPG (Public domain)
+- lasagna-roll-ups: AI generated
+- mushroom-stroganoff: AI generated
+- sweet-potato-chili: AI generated
+- veggie-lo-mein: AI generated
+- tomato-mozzarella-flatbreads: Photo by Ewan Munro from London, UK via Wikimedia Commons (CC BY-SA 2.0) — https://commons.wikimedia.org/wiki/File:Victoria_and_Albert,_Marylebone_Station,_London_(6944441436).jpg (CC BY-SA 2.0)
+- potato-corn-chowder: AI generated
+- broccoli-cheddar-soup: AI generated
+- rice-bean-bowls: Photo by ParentingPatch via Wikimedia Commons (CC BY-SA 3.0) — https://commons.wikimedia.org/wiki/File:Homemade_Rice_Bowl.jpg (CC BY-SA 3.0)
+- broccoli-cheddar-quiche: Photo by Michele Frazier from USA via Wikimedia Commons (CC BY 2.0) — https://commons.wikimedia.org/wiki/File:Broccoli_Quiche_(10508450915).jpg (CC BY 2.0)
+- shakshuka: Photo by HaJunkiyada via Wikimedia Commons (CC BY-SA 4.0) — https://commons.wikimedia.org/wiki/File:Liat_Portal_for_Foodie_Disorder_-_Tomato_Shakshuka_with_Spinach.jpg (CC BY-SA 4.0)
+- breakfast-hash-eggs: AI generated
+- cheese-enchiladas: AI generated

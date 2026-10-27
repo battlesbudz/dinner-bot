@@ -142,7 +142,7 @@ class SeedSurvivalInstrumentedTest {
             // one-row recipe table stands in for it until here.)
             db.recipeDao().deleteAll()
             loader.seedIfEmpty(priceJson, recipesJson)
-            assertEquals(36, db.recipeDao().count())
+            assertEquals(100, db.recipeDao().count())
 
             // Her household edit on Turkey Spaghetti, made the way the
             // editor saves it: onions and garlic toast out, turkey doubled.

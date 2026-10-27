@@ -28,6 +28,7 @@ class PerishablesTest {
         assertTrue(Perishables.isPerishable(item("russet-potatoes", "Produce", "aldi")))
         assertTrue(Perishables.isPerishable(item("milk", "Dairy and eggs", "aldi")))
         assertTrue(Perishables.isPerishable(item("chicken-breast", "Meat", "aldi")))
+        assertTrue(Perishables.isPerishable(item("salmon-fillets", "Seafood", "walmart")))
     }
 
     @Test fun shelfStableAndFrozenCategoriesAreNotPerishable() {
