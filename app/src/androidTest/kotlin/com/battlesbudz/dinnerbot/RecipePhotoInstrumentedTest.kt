@@ -82,25 +82,18 @@ class RecipePhotoInstrumentedTest {
             val photoRecipe = recipes.first()
             photoRecipeId = photoRecipe.id
             photoRecipeTitle = photoRecipe.title
+            plainRecipeTitle = recipes[1].title
 
-            // The no-photo case is a household recipe of her own: since
-            // Phase C2 every library recipe ships with a bundled photo
-            // (seeded by MainActivity on launch), so only a recipe that
-            // is not in the seed library can stand in for "no photo".
-            val seedModel = with(SeedMapper) { photoRecipe.toModel() }
-            val plain = com.battlesbudz.dinnerbot.core.model.Recipe(
-                id = "household-plain-skillet",
-                title = "Household Plain Skillet",
-                servings = 4,
-                activeMinutes = 20,
-                cuisine = "American",
-                mainProtein = seedModel.mainProtein,
-                ingredients = listOf(seedModel.ingredients.first()),
-                steps = listOf("Cook it through and serve."),
-                origin = com.battlesbudz.dinnerbot.core.model.RecipeOrigin.MANUAL,
-            )
-            db.recipeDao().insertAll(listOf(with(SeedMapper) { plain.toEntity() }))
-            plainRecipeTitle = plain.title
+            // Since Phase C2 every library recipe ships with a bundled
+            // photo, which MainActivity seeds on launch; that would hand
+            // the "no photo" recipe below a photo before the test can
+            // look at it. Pre-mark the bundled seeding as done so this
+            // test keeps covering the picked-photo and no-photo paths it
+            // was written for (BundledPhotoSeederTest covers the seeding
+            // itself).
+            val photoDir = RecipePhotoStore.directory(context)
+            photoDir.mkdirs()
+            File(photoDir, ".bundled-photos-seeded").writeText("seeded")
 
             // A "picked" photo: a real JPEG the store copies into place.
             val source = File(context.cacheDir, "picked-source.jpg")
