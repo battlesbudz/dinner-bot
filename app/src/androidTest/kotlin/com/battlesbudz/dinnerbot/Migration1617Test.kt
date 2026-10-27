@@ -57,13 +57,14 @@ class Migration1617Test {
                 DinnerBotDatabase.MIGRATION_14_15,
                 DinnerBotDatabase.MIGRATION_15_16,
                 DinnerBotDatabase.MIGRATION_16_17,
+                DinnerBotDatabase.MIGRATION_17_18,
             )
             .build()
 
     @Test fun populatedV16OpensAtV17WithEveryRowIntact() {
         val db = openMigrated()
         try {
-            assertEquals(17, db.openHelper.writableDatabase.version)
+            assertEquals(18, db.openHelper.writableDatabase.version)
             runBlocking {
                 // The price book survives with user data untouched; only
                 // the store values changed shape.

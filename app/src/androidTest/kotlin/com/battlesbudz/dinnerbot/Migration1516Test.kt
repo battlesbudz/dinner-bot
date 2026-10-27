@@ -58,13 +58,14 @@ class Migration1516Test {
                 DinnerBotDatabase.MIGRATION_14_15,
                 DinnerBotDatabase.MIGRATION_15_16,
                 DinnerBotDatabase.MIGRATION_16_17,
+                DinnerBotDatabase.MIGRATION_17_18,
             )
             .build()
 
     @Test fun populatedV15OpensAtV16WithEveryRowIntact() {
         val db = openMigrated()
         try {
-            assertEquals(17, db.openHelper.writableDatabase.version)
+            assertEquals(18, db.openHelper.writableDatabase.version)
             runBlocking {
                 // The price book, including the guess mark v15 added.
                 val items = db.priceItemDao().getAll()

@@ -148,10 +148,11 @@ class Migration45Test {
                 DinnerBotDatabase.MIGRATION_14_15,
                 DinnerBotDatabase.MIGRATION_15_16,
                 DinnerBotDatabase.MIGRATION_16_17,
+                DinnerBotDatabase.MIGRATION_17_18,
             )
             .build()
         try {
-            assertEquals(17, db.openHelper.readableDatabase.version)
+            assertEquals(18, db.openHelper.readableDatabase.version)
 
             // Corrected price, its flag, and its freeze note survive.
             val pork = db.priceItemDao().getById("pork-tenderloin")!!
